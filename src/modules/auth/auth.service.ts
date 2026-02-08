@@ -28,8 +28,8 @@ export class AuthService {
         email,
         name,
         picture,
-        plan: isAdmin ? Plan.PRO : Plan.FREE,
-        role: isAdmin ? Role.ADMIN : Role.USER,
+        plan: isAdmin ? Plan.full : Plan.free,
+        role: isAdmin ? Role.admin : Role.free,
       });
     } else {
       // Usuario existente: actualizar lastLogin
@@ -47,5 +47,9 @@ export class AuthService {
 
   generateJWT(payload: { userId: string; email: string }): string {
     return this.jwtService.sign(payload);
+  }
+
+  async validateUserFromToken(userId: string): Promise<User | null> {
+    return this.userRepository.findById(userId);
   }
 }

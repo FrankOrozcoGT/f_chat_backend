@@ -14,19 +14,20 @@ model User {
   email     String    @unique
   name      String
   picture   String?
-  plan      Plan      @default(FREE)
-  role      Role      @default(USER)
+  plan      Plan      @default(free)
+  role      Role      @default(free)
   lastLogin DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
 
 enum Plan {
-  FREE
-  PRO
+  free
+  full
 }
 
 enum Role {
-  USER
-  ADMIN
+  free
+  full
+  admin
 }

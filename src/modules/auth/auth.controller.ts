@@ -1,9 +1,12 @@
-import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
+import type { User } from '@prisma/client';
 import { AuthService } from './auth.service';
 import type { GoogleProfile } from './strategies/google.strategy';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -38,5 +41,31 @@ export class AuthController {
     // Redirect to frontend dashboard
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     return res.redirect(`${frontendUrl}/dashboard`);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  getMe(@CurrentUser() user: User) {
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        role: user.role,
+        plan: user.plan,
+      },
+    };
+  }
+
+  @Post('logout')
+  logout(@Res() res: Response) {
+    res.clearCookie('auth_token', {
+      httpOnly: true,
+      secure: this.configService.get<string>('NODE_ENV') === 'production',
+      sameSite: 'lax',
+    });
+
+    return res.status(200).json({ message: 'Logged out successfully' });
   }
 }
