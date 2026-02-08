@@ -3,7 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
-import { AppModule } from './app.module';
+import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
