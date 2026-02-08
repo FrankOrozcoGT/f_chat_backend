@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import type { User } from '@prisma/client';
-import { AuthService } from './auth.service';
-import type { GoogleProfile } from './strategies/google.strategy';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
+import { AuthService } from '@modules/auth/auth.service';
+import type { GoogleProfile } from '@modules/auth/strategies/google.strategy';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
