@@ -7,6 +7,7 @@ export class CreateInstanceResponseDto {
 }
 
 export class QrCodeResponseDto {
+  count?: number;
   pairingCode?: string;
   code?: string;
   base64?: string;
@@ -29,8 +30,9 @@ export class SendMessageResponseDto {
 }
 
 export class WebhookResponseDto {
-  webhook: {
-    url: string;
-    enabled: boolean;
-  };
+  url: string;
+  enabled: boolean;
+  events: string[];
+  webhookByEvents?: boolean;
+  webhookBase64?: boolean;
 }
