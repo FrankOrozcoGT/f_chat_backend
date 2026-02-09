@@ -1,0 +1,103 @@
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as cookie from 'cookie';
+
+@Injectable()
+@WebSocketGateway({
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true,
+  },
+})
+export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
+  server: Server;
+
+  private readonly logger = new Logger(WebSocketGateway.name);
+  private connections: Map<string, string> = new Map(); // socketId -> userId
+
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async handleConnection(client: Socket) {
+    try {
+      // Extraer JWT de cookie
+      const cookieHeader = client.handshake.headers.cookie;
+      if (!cookieHeader) {
+        this.logger.warn(`Connection rejected: No cookie header`);
+        client.disconnect();
+        return;
+      }
+
+      const cookies = cookie.parse(cookieHeader);
+      const token = cookies.jwt;
+
+      if (!token) {
+        this.logger.warn(`Connection rejected: No JWT token in cookie`);
+        client.disconnect();
+        return;
+      }
+
+      // Validar JWT
+      const secret = this.configService.get<string>('JWT_SECRET');
+      const payload = await this.jwtService.verifyAsync(token, { secret });
+
+      if (!payload || !payload.sub) {
+        this.logger.warn(`Connection rejected: Invalid JWT payload`);
+        client.disconnect();
+        return;
+      }
+
+      // Guardar userId en socket y en Map
+      const userId = payload.sub;
+      client.data.userId = userId;
+      this.connections.set(client.id, userId);
+
+      this.logger.log(`Client connected: ${client.id} (userId: ${userId})`);
+    } catch (error) {
+      this.logger.error(`Connection error: ${error.message}`);
+      client.disconnect();
+    }
+  }
+
+  handleDisconnect(client: Socket) {
+    const userId = this.connections.get(client.id);
+    this.connections.delete(client.id);
+    this.logger.log(`Client disconnected: ${client.id} (userId: ${userId})`);
+  }
+
+  /**
+   * Emite un evento a todos los clientes conectados o a un usuario específico
+   * @param event - Nombre del evento
+   * @param data - Datos a enviar
+   * @param targetUserId - ID del usuario objetivo (opcional, si no se provee es broadcast)
+   */
+  emit(event: string, data: any, targetUserId?: string) {
+    if (targetUserId) {
+      // Emitir solo a los sockets del usuario específico
+      const targetSockets = Array.from(this.connections.entries())
+        .filter(([_, userId]) => userId === targetUserId)
+        .map(([socketId]) => socketId);
+
+      targetSockets.forEach((socketId) => {
+        this.server.to(socketId).emit(event, data);
+      });
+
+      this.logger.debug(`Event ${event} emitted to user ${targetUserId} (${targetSockets.length} sockets)`);
+    } else {
+      // Broadcast a todos
+      this.server.emit(event, data);
+      this.logger.debug(`Event ${event} broadcasted to all clients`);
+    }
+  }
+}
