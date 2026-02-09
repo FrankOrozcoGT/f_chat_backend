@@ -25,4 +25,24 @@ export class PhoneRepository {
       data,
     });
   }
+
+  async findByEvolutionInstanceId(evolutionInstanceId: string): Promise<Phone | null> {
+    return this.prisma.phone.findUnique({
+      where: { evolutionInstanceId },
+    });
+  }
+
+  async updateStatus(
+    id: string,
+    status: PhoneStatus,
+    lastConnected?: Date,
+  ): Promise<Phone> {
+    return this.prisma.phone.update({
+      where: { id },
+      data: {
+        status,
+        ...(lastConnected && { lastConnected }),
+      },
+    });
+  }
 }
