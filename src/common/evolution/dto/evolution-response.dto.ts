@@ -4,6 +4,10 @@ export class CreateInstanceResponseDto {
     instanceId: string;
     status: string;
   };
+  qrcode?: {
+    code?: string;
+    base64?: string;
+  };
 }
 
 export class QrCodeResponseDto {

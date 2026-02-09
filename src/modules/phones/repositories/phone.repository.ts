@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { Phone } from '@prisma/client';
+import { Phone, PhoneStatus } from '@prisma/client';
 
 @Injectable()
 export class PhoneRepository {
@@ -10,6 +10,19 @@ export class PhoneRepository {
     return this.prisma.phone.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async create(data: {
+    userId: string;
+    instanceName: string;
+    evolutionInstanceId: string;
+    status: PhoneStatus;
+    phoneNumber: string;
+    qrCode?: string;
+  }): Promise<Phone> {
+    return this.prisma.phone.create({
+      data,
     });
   }
 }
