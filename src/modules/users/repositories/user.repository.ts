@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../common/prisma/prisma.service';
+import { PrismaService } from '@common/prisma/prisma.service';
 import { User, Plan, Role } from '@prisma/client';
 
 interface CreateUserData {
@@ -36,6 +36,12 @@ export class UserRepository {
     return this.prisma.user.update({
       where: { id: userId },
       data: { lastLogin: new Date() },
+    });
+  }
+
+  async findAll(): Promise<User[]> {
+    return this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

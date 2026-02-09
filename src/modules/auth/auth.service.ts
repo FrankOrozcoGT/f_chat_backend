@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserRepository } from './repositories/user.repository';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { User, Plan, Role } from '@prisma/client';
-import type { GoogleProfile } from './strategies/google.strategy';
+import type { GoogleProfile } from '@modules/auth/strategies/google.strategy';
 
 @Injectable()
 export class AuthService {

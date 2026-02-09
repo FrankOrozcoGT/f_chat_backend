@@ -3,13 +3,16 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
-import { AppModule } from './app.module';
+import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: console,
+    bufferLogs: true,
+  });
   const configService = app.get(ConfigService);
 
   // Cookie Parser
