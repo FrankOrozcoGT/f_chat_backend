@@ -6,6 +6,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { HealthModule } from '@modules/health/health.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { PhonesModule } from '@modules/phones/phones.module';
+import { WebhooksModule } from '@modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
     AuthModule,
     HealthModule,
     PhonesModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}
