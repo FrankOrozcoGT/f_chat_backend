@@ -7,6 +7,7 @@ import { HealthModule } from '@modules/health/health.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { PhonesModule } from '@modules/phones/phones.module';
 import { WebhooksModule } from '@modules/webhooks/webhooks.module';
+import { WebSocketModule } from '@common/websocket/websocket.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { WebhooksModule } from '@modules/webhooks/webhooks.module';
     }),
     PrismaModule,
     EvolutionModule,
+    WebSocketModule,
     UsersModule,
     AuthModule,
     HealthModule,

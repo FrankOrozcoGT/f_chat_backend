@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
+import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { PhoneRepository } from '../phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from './repositories/conversation.repository';
@@ -18,6 +19,7 @@ export class WebhooksController {
   constructor(
     private readonly webhooksService: WebhooksService,
     private readonly configService: ConfigService,
+    private readonly websocketGateway: AppWebSocketGateway,
     private readonly phoneRepository: PhoneRepository,
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
@@ -73,8 +75,8 @@ export class WebhooksController {
   private async handleQrCodeUpdated(phoneId: string, webhookData: any) {
     const qrCode = this.webhooksService.parseQrCode(webhookData);
 
-    // TODO: Emitir evento WebSocket cuando se implemente WebSocketModule
-    // websocketGateway.emit('phone:qr_updated', { phoneId, qrCode });
+    // Emitir evento WebSocket
+    this.websocketGateway.emit('phone:qr_updated', { phoneId, qrCode });
 
     console.log(`[Webhook] QR Code updated for phone ${phoneId}`);
   }
@@ -88,8 +90,8 @@ export class WebhooksController {
     const lastConnected = status === 'connected' ? new Date() : undefined;
     await this.phoneRepository.updateStatus(phoneId, status, lastConnected);
 
-    // TODO: Emitir evento WebSocket cuando se implemente WebSocketModule
-    // websocketGateway.emit('phone:status_changed', { phoneId, status });
+    // Emitir evento WebSocket
+    this.websocketGateway.emit('phone:status_changed', { phoneId, status });
 
     console.log(`[Webhook] Connection status updated for phone ${phoneId}: ${status}`);
   }
@@ -132,12 +134,11 @@ export class WebhooksController {
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
     // 6. Emitir eventos WebSocket
-    // TODO: Emitir según dirección cuando se implemente WebSocketModule
     if (fromMe) {
-      // websocketGateway.emit('message:sent', { ...message, fromExternal: true });
+      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       console.log(`[Webhook] Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
-      // websocketGateway.emit('message:incoming', message);
+      this.websocketGateway.emit('message:incoming', message);
       console.log(`[Webhook] Incoming message for conversation ${conversation.id}`);
     }
   }
