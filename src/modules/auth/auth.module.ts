@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -6,13 +6,14 @@ import type { StringValue } from 'ms';
 import { AuthController } from '@modules/auth/auth.controller';
 import { AuthService } from '@modules/auth/auth.service';
 import { GoogleStrategy } from '@modules/auth/strategies/google.strategy';
+import { JwtStrategy } from '@modules/auth/strategies/jwt.strategy';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { UsersModule } from '@modules/users/users.module';
 
 @Module({
   imports: [
     PassportModule,
-    UsersModule,
+    forwardRef(() => UsersModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -27,7 +28,7 @@ import { UsersModule } from '@modules/users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleStrategy, JwtAuthGuard],
+  providers: [AuthService, GoogleStrategy, JwtStrategy, JwtAuthGuard],
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}
