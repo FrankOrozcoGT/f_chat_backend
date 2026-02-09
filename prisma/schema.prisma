@@ -19,6 +19,7 @@ model User {
   lastLogin DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  phones    Phone[]
 }
 
 enum Plan {
@@ -30,4 +31,105 @@ enum Role {
   free
   full
   admin
+}
+
+// WhatsApp Models
+
+model Phone {
+  id                  String         @id @default(uuid())
+  userId              String
+  phoneNumber         String
+  instanceName        String
+  evolutionInstanceId String         @unique
+  status              PhoneStatus    @default(pending)
+  qrCode              String?
+  lastConnected       DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations       Conversation[]
+
+  @@index([userId])
+  @@index([evolutionInstanceId])
+}
+
+model Client {
+  id             String         @id @default(uuid())
+  phoneNumber    String         @unique
+  name           String?
+  metadata       Json?
+  firstContactAt DateTime       @default(now())
+  lastContactAt  DateTime       @updatedAt
+  conversations  Conversation[]
+
+  @@index([phoneNumber])
+}
+
+model Conversation {
+  id                 String   @id @default(uuid())
+  phoneId            String
+  clientId           String
+  lastMessageAt      DateTime @default(now())
+  lastMessagePreview String?
+  isActive           Boolean  @default(true)
+  summary            String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  phone              Phone    @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  messages           Message[]
+
+  @@unique([phoneId, clientId])
+  @@index([phoneId])
+  @@index([clientId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  conversationId String
+  type           MessageType
+  content        String
+  mediaUrl       String?
+  direction      MessageDirection
+  senderType     MessageSenderType
+  status         MessageStatus     @default(pending)
+  createdAt      DateTime          @default(now())
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+// WhatsApp Enums
+
+enum PhoneStatus {
+  connected
+  disconnected
+  pending
+}
+
+enum MessageType {
+  text
+  voice
+  image
+}
+
+enum MessageDirection {
+  incoming
+  outgoing
+}
+
+enum MessageSenderType {
+  client
+  agent
+  system
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
 }
