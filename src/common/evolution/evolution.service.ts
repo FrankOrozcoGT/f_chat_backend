@@ -4,7 +4,6 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import {
   CreateInstanceResponseDto,
-  QrCodeResponseDto,
   SendMessageResponseDto,
   WebhookResponseDto,
 } from './dto/evolution-response.dto';
@@ -41,17 +40,38 @@ export class EvolutionService {
    * Crear instancia - POST /instance/create
    * Timeout: 10s, NO retry
    */
-  async createInstance(instanceName: string): Promise<CreateInstanceResponseDto> {
+  async createInstance(
+    instanceName: string,
+    options?: {
+      qrcode?: boolean;
+      webhookUrl?: string;
+      webhookEvents?: string[];
+    },
+  ): Promise<CreateInstanceResponseDto> {
     try {
       this.logger.log(`Creating instance: ${instanceName}`);
+
+      const body: any = {
+        instanceName,
+        integration: 'WHATSAPP-BAILEYS',
+      };
+
+      if (options?.qrcode !== undefined) {
+        body.qrcode = options.qrcode;
+      }
+
+      if (options?.webhookUrl) {
+        body.webhook = {
+          url: options.webhookUrl,
+          enabled: true,
+          events: options.webhookEvents || ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+        };
+      }
 
       const response = await firstValueFrom(
         this.httpService.post(
           `${this.apiUrl}/instance/create`,
-          {
-            instanceName,
-            integration: 'WHATSAPP-BAILEYS',
-          },
+          body,
           {
             headers: this.getHeaders(),
             timeout: 10000,
@@ -67,42 +87,6 @@ export class EvolutionService {
     }
   }
 
-  /**
-   * Obtener QR Code - GET /instance/connect/:instanceName
-   * Timeout: 5s, retry x2 con delay 1s
-   */
-  async getQrCode(instanceName: string, attempt = 1): Promise<QrCodeResponseDto> {
-    const maxAttempts = 3; // 1 inicial + 2 retries
-    const retryDelay = 1000; // 1s
-
-    try {
-      this.logger.log(`Getting QR code for instance: ${instanceName} (attempt ${attempt}/${maxAttempts})`);
-
-      const response = await firstValueFrom(
-        this.httpService.get(`${this.apiUrl}/instance/connect/${instanceName}`, {
-          headers: this.getHeaders(),
-          timeout: 5000,
-        }),
-      );
-
-      this.logger.log(`QR code retrieved successfully: ${instanceName}`);
-      return response.data;
-    } catch (error) {
-      this.logger.warn(
-        `Attempt ${attempt}/${maxAttempts} failed for getQrCode: ${instanceName}`,
-        error.message,
-      );
-
-      if (attempt < maxAttempts) {
-        this.logger.log(`Retrying in ${retryDelay}ms...`);
-        await this.delay(retryDelay);
-        return this.getQrCode(instanceName, attempt + 1);
-      }
-
-      this.logger.error(`All attempts failed for getQrCode: ${instanceName}`);
-      throw new BadGatewayException('Failed to retrieve QR code after retries');
-    }
-  }
 
   /**
    * Enviar mensaje de texto - POST /message/sendText
@@ -234,7 +218,12 @@ export class EvolutionService {
             webhook: {
               url: webhookUrl,
               enabled: true,
-              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
+              events: [
+                'QRCODE_UPDATED',
+                'CONNECTION_UPDATE',
+                'MESSAGES_UPSERT',
+                'MESSAGES_UPDATE',
+              ],
             },
           },
           {
