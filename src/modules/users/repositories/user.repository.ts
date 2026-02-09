@@ -38,4 +38,10 @@ export class UserRepository {
       data: { lastLogin: new Date() },
     });
   }
+
+  async findAll(): Promise<User[]> {
+    return this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
