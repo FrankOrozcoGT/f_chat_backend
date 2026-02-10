@@ -29,6 +29,9 @@ export class MessageRepository {
     type: MessageType;
     content: string;
     mediaUrl: string | null;
+    fileName?: string | null;
+    fileSize?: number | null;
+    mimeType?: string | null;
     direction: MessageDirection;
     senderType: MessageSenderType;
     status: MessageStatus;
@@ -39,31 +42,13 @@ export class MessageRepository {
         type: data.type,
         content: data.content,
         mediaUrl: data.mediaUrl,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        mimeType: data.mimeType,
         direction: data.direction,
         senderType: data.senderType,
         status: data.status,
       },
-    });
-  }
-
-  /**
-   * Actualiza un mensaje existente
-   * @param id - ID del mensaje
-   * @param data - Datos a actualizar
-   * @returns Mensaje actualizado
-   */
-  async update(
-    id: string,
-    data: {
-      mediaUrl?: string;
-      fileName?: string;
-      fileSize?: number;
-      mimeType?: string;
-    },
-  ) {
-    return this.prisma.message.update({
-      where: { id },
-      data,
     });
   }
 }

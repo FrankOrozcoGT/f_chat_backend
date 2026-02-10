@@ -83,18 +83,37 @@ export class WebhooksService {
   }
 
   /**
+   * Detecta si el webhook contiene media
+   * @param webhookData - Datos del webhook
+   * @returns true si hay media
+   */
+  hasMedia(webhookData: any): boolean {
+    const messageData = webhookData?.data?.message || {};
+    return !!(
+      messageData.imageMessage ||
+      messageData.videoMessage ||
+      messageData.audioMessage ||
+      messageData.documentMessage
+    );
+  }
+
+  /**
    * Construye los datos de un mensaje entrante
    * @param webhookData - Datos del webhook
    * @param conversationId - ID de la conversación
+   * @param mediaData - Datos del archivo descargado (opcional)
    * @returns Datos del mensaje entrante
    */
-  buildIncomingMessageData(webhookData: any, conversationId: string) {
+  buildIncomingMessageData(
+    webhookData: any,
+    conversationId: string,
+    mediaData?: { localPath: string; fileName: string; fileSize: number; mimeType: string } | null,
+  ) {
     const messageData = webhookData?.data?.message || {};
 
     // Detectar tipo de mensaje
     let type: MessageType = MessageType.text;
     let content = '';
-    let mediaUrl: string | null = null;
 
     if (messageData.conversation) {
       type = MessageType.text;
@@ -105,26 +124,25 @@ export class WebhooksService {
     } else if (messageData.imageMessage) {
       type = MessageType.image;
       content = messageData.imageMessage.caption || '';
-      mediaUrl = messageData.imageMessage.url || null;
     } else if (messageData.videoMessage) {
       type = MessageType.image; // Video se mapea a image por ahora
       content = messageData.videoMessage.caption || '';
-      mediaUrl = messageData.videoMessage.url || null;
     } else if (messageData.audioMessage) {
       type = MessageType.voice;
       content = '';
-      mediaUrl = messageData.audioMessage.url || null;
     } else if (messageData.documentMessage) {
       type = MessageType.text; // Document se mapea a text por ahora
       content = messageData.documentMessage.fileName || '';
-      mediaUrl = messageData.documentMessage.url || null;
     }
 
     return {
       conversationId,
       type,
       content,
-      mediaUrl,
+      mediaUrl: mediaData?.localPath || null,
+      fileName: mediaData?.fileName || null,
+      fileSize: mediaData?.fileSize || null,
+      mimeType: mediaData?.mimeType || null,
       direction: MessageDirection.incoming,
       senderType: MessageSenderType.client,
       status: MessageStatus.delivered,
@@ -135,15 +153,19 @@ export class WebhooksService {
    * Construye los datos de un mensaje saliente desde WhatsApp Web
    * @param webhookData - Datos del webhook
    * @param conversationId - ID de la conversación
+   * @param mediaData - Datos del archivo descargado (opcional)
    * @returns Datos del mensaje saliente
    */
-  buildOutgoingMessageFromWebhook(webhookData: any, conversationId: string) {
+  buildOutgoingMessageFromWebhook(
+    webhookData: any,
+    conversationId: string,
+    mediaData?: { localPath: string; fileName: string; fileSize: number; mimeType: string } | null,
+  ) {
     const messageData = webhookData?.data?.message || {};
 
     // Detectar tipo de mensaje
     let type: MessageType = MessageType.text;
     let content = '';
-    let mediaUrl: string | null = null;
 
     if (messageData.conversation) {
       type = MessageType.text;
@@ -154,26 +176,25 @@ export class WebhooksService {
     } else if (messageData.imageMessage) {
       type = MessageType.image;
       content = messageData.imageMessage.caption || '';
-      mediaUrl = messageData.imageMessage.url || null;
     } else if (messageData.videoMessage) {
       type = MessageType.image; // Video se mapea a image por ahora
       content = messageData.videoMessage.caption || '';
-      mediaUrl = messageData.videoMessage.url || null;
     } else if (messageData.audioMessage) {
       type = MessageType.voice;
       content = '';
-      mediaUrl = messageData.audioMessage.url || null;
     } else if (messageData.documentMessage) {
       type = MessageType.text; // Document se mapea a text por ahora
       content = messageData.documentMessage.fileName || '';
-      mediaUrl = messageData.documentMessage.url || null;
     }
 
     return {
       conversationId,
       type,
       content,
-      mediaUrl,
+      mediaUrl: mediaData?.localPath || null,
+      fileName: mediaData?.fileName || null,
+      fileSize: mediaData?.fileSize || null,
+      mimeType: mediaData?.mimeType || null,
       direction: MessageDirection.outgoing,
       senderType: MessageSenderType.agent,
       status: MessageStatus.sent,
@@ -193,16 +214,16 @@ export class WebhooksService {
   }
 
   /**
-   * Descarga y guarda un archivo multimedia localmente
-   * @param mediaUrl - URL del archivo en Evolution API
+   * Descarga y guarda un archivo multimedia localmente usando Evolution API
+   * @param instanceName - Nombre de la instancia
    * @param userId - ID del usuario
    * @param conversationId - ID de la conversación
    * @param messageId - ID del mensaje
-   * @param webhookData - Datos del webhook para extraer metadata
+   * @param webhookData - Datos del webhook para extraer message key y metadata
    * @returns Ruta local del archivo y metadata
    */
   async downloadAndSaveMedia(
-    mediaUrl: string,
+    instanceName: string,
     userId: string,
     conversationId: string,
     messageId: string,
@@ -214,23 +235,28 @@ export class WebhooksService {
     mimeType: string;
   }> {
     try {
-      // 1. Descargar archivo desde Evolution API
-      const buffer = await this.evolutionService.downloadMedia(mediaUrl);
+      // 1. Extraer message key del webhook
+      const messageKey = webhookData?.data?.key;
+      if (!messageKey) {
+        throw new Error('Message key not found in webhook data');
+      }
 
-      // 2. Extraer metadata del webhook
-      const messageData = webhookData?.data?.message || {};
-      const mediaData =
-        messageData.imageMessage ||
-        messageData.videoMessage ||
-        messageData.audioMessage ||
-        messageData.documentMessage ||
-        {};
+      // 2. Obtener media en base64 desde Evolution API
+      const mediaData = await this.evolutionService.getBase64FromMediaMessage(
+        instanceName,
+        messageKey,
+      );
 
-      const originalFileName = mediaData.fileName || 'file';
-      const mimeType = mediaData.mimetype || 'application/octet-stream';
-      const fileExtension = this.getFileExtension(originalFileName, mimeType);
+      // 3. Convertir base64 a buffer
+      const buffer = Buffer.from(mediaData.base64, 'base64');
 
-      // 3. Construir ruta de almacenamiento
+      // 4. Extraer extensión del archivo
+      const fileExtension = this.getFileExtension(
+        mediaData.fileName,
+        mediaData.mimetype,
+      );
+
+      // 5. Construir ruta de almacenamiento
       const storageDir = path.join(
         process.cwd(),
         'storage',
@@ -239,34 +265,32 @@ export class WebhooksService {
         conversationId,
       );
 
-      // 4. Crear directorio si no existe
+      // 6. Crear directorio si no existe
       await fs.mkdir(storageDir, { recursive: true });
 
-      // 5. Nombre del archivo: messageId_timestamp.ext
+      // 7. Nombre del archivo: messageId_timestamp.ext
       const fileName = `${messageId}_${Date.now()}${fileExtension}`;
       const filePath = path.join(storageDir, fileName);
 
-      // 6. Guardar archivo
+      // 8. Guardar archivo
       await fs.writeFile(filePath, buffer);
 
-      // 7. Construir URL completa con BACKEND_URL
-      const backendUrl = this.configService.get<string>('BACKEND_URL');
+      // 9. Path relativo (sin dominio, se agregará al leer)
       const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
-      const fullUrl = `${backendUrl}${relativePath}`;
 
       this.logger.log(
-        `Media file saved: ${fullUrl} (${buffer.length} bytes)`,
+        `Media file saved: ${relativePath} (${buffer.length} bytes)`,
       );
 
       return {
-        localPath: fullUrl,  // URL completa
-        fileName: originalFileName,
-        fileSize: buffer.length,
-        mimeType,
+        localPath: relativePath, // Path relativo, sin dominio
+        fileName: mediaData.fileName,
+        fileSize: mediaData.size,
+        mimeType: mediaData.mimetype,
       };
     } catch (error) {
       this.logger.error(
-        `Failed to download and save media: ${mediaUrl}`,
+        `Failed to download and save media for message: ${messageId}`,
         error.message,
       );
       throw error;

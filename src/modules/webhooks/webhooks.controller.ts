@@ -56,7 +56,7 @@ export class WebhooksController {
         break;
 
       case 'messages.upsert':
-        await this.handleMessagesUpsert(phone.id, webhookData);
+        await this.handleMessagesUpsert(phone.id, instanceId, webhookData);
         break;
 
       default:
@@ -115,7 +115,7 @@ export class WebhooksController {
   /**
    * Maneja evento MESSAGES_UPSERT
    */
-  private async handleMessagesUpsert(phoneId: string, webhookData: any) {
+  private async handleMessagesUpsert(phoneId: string, instanceName: string, webhookData: any) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
 
     // DEBUG: Log completo del webhook para ver estructura
@@ -137,53 +137,39 @@ export class WebhooksController {
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 4. Construir mensaje según dirección
-    const messageData = fromMe
-      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id)
-      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id);
+    // 4. Si hay media, descargar ANTES de crear el mensaje
+    let mediaData: { localPath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+    const messageKey = webhookData?.data?.key;
+    const hasMedia = this.webhooksService.hasMedia(webhookData);
 
-    // 5. Crear mensaje (primero para obtener el ID)
-    const message = await this.messageRepository.create(messageData);
-
-    // 6. Si el mensaje tiene mediaUrl, descargar y guardar localmente
-    if (messageData.mediaUrl) {
+    if (hasMedia && messageKey) {
       try {
-        // Obtener phone para userId
         const phone = await this.phoneRepository.findById(phoneId);
         if (phone) {
-          const mediaData = await this.webhooksService.downloadAndSaveMedia(
-            messageData.mediaUrl,
+          mediaData = await this.webhooksService.downloadAndSaveMedia(
+            instanceName,
             phone.userId,
             conversation.id,
-            message.id,
+            messageKey.id, // Usar ID de WhatsApp para nombrar archivo
             webhookData,
           );
-
-          // Actualizar mensaje con datos locales del archivo
-          await this.messageRepository.update(message.id, {
-            mediaUrl: mediaData.localPath,
-            fileName: mediaData.fileName,
-            fileSize: mediaData.fileSize,
-            mimeType: mediaData.mimeType,
-          });
-
-          // Actualizar objeto message para WebSocket
-          Object.assign(message, {
-            mediaUrl: mediaData.localPath,
-            fileName: mediaData.fileName,
-            fileSize: mediaData.fileSize,
-            mimeType: mediaData.mimeType,
-          });
-
-          this.logger.log(`Media downloaded and saved for message ${message.id}`);
+          this.logger.log(`Media downloaded: ${mediaData.localPath}`);
         }
       } catch (error) {
-        this.logger.error(`Failed to download media for message ${message.id}`, error.message);
-        // Continuar aunque falle la descarga, el mensaje ya fue guardado
+        this.logger.error(`Failed to download media`, error.message);
+        // Continuar sin media si falla
       }
     }
 
-    // 6. Actualizar último mensaje de la conversación
+    // 5. Construir mensaje según dirección (con mediaData si existe)
+    const messageData = fromMe
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
+      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
+
+    // 6. Crear mensaje (ya con mediaUrl correcto)
+    const message = await this.messageRepository.create(messageData);
+
+    // 7. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
