@@ -39,11 +39,15 @@ export class WebhooksService {
   /**
    * Extrae y limpia los datos del cliente desde el webhook
    * @param webhookData - Datos del webhook
+   * @param fromMe - Indica si el mensaje fue enviado por mí
    * @returns Datos del cliente (phoneNumber, name)
    */
-  buildClientData(webhookData: any): { phoneNumber: string; name: string } {
+  buildClientData(webhookData: any, fromMe: boolean): { phoneNumber: string; name: string } {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
-    const pushName = webhookData?.data?.pushName || 'Unknown';
+
+    // Si fromMe=true, pushName es MI nombre (del número registrado), no del destinatario
+    // Solo usar pushName cuando fromMe=false (mensaje entrante del cliente)
+    const pushName = !fromMe ? (webhookData?.data?.pushName || 'Unknown') : 'Unknown';
 
     // Limpiar formato: 5521999999999@s.whatsapp.net -> 5521999999999
     const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');

@@ -9,7 +9,7 @@ import { WebhooksService } from './webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { PhoneRepository } from '../phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
-import { ConversationRepository } from './repositories/conversation.repository';
+import { ConversationRepository } from '../conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
 
 @Controller('whatsapp/webhook')
@@ -118,38 +118,38 @@ export class WebhooksController {
   private async handleMessagesUpsert(phoneId: string, webhookData: any) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
 
-    // 1. Construir y upsert Client
-    const clientData = this.webhooksService.buildClientData(webhookData);
+    // DEBUG: Log completo del webhook para ver estructura
+    this.logger.debug('Webhook data:', JSON.stringify(webhookData, null, 2));
+
+    // 1. Construir datos del Client (pasar fromMe para no usar pushName incorrecto)
+    const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
+
+    // Ignorar mensajes de grupos (terminan en @g.us)
+    if (clientData.phoneNumber.endsWith('@g.us')) {
+      this.logger.log(`Ignoring group message from ${clientData.phoneNumber}`);
+      return;
+    }
+
+    // 2. Upsert Client
     const client = await this.clientRepository.upsert(clientData);
 
-    // 2. Construir y upsert Conversation
+    // 3. Construir y upsert Conversation
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 3. Construir mensaje según dirección
-    let messageData;
-    if (fromMe) {
-      // Mensaje saliente desde WhatsApp Web
-      messageData = this.webhooksService.buildOutgoingMessageFromWebhook(
-        webhookData,
-        conversation.id,
-      );
-    } else {
-      // Mensaje entrante del cliente
-      messageData = this.webhooksService.buildIncomingMessageData(
-        webhookData,
-        conversation.id,
-      );
-    }
+    // 4. Construir mensaje según dirección
+    const messageData = fromMe
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id)
+      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id);
 
-    // 4. Crear mensaje
+    // 5. Crear mensaje
     const message = await this.messageRepository.create(messageData);
 
-    // 5. Actualizar último mensaje de la conversación
+    // 6. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 6. Emitir eventos WebSocket
+    // 7. Emitir eventos WebSocket
     if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       console.log(`[Webhook] Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
