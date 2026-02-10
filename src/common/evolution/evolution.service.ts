@@ -278,6 +278,58 @@ export class EvolutionService {
   }
 
   /**
+   * Obtener media en base64 desde Evolution API usando el message key
+   * @param instanceName - Nombre de la instancia
+   * @param messageKey - Key del mensaje (contiene id, remoteJid, fromMe)
+   * @returns Objeto con base64, mimetype, fileName, etc.
+   */
+  async getBase64FromMediaMessage(
+    instanceName: string,
+    messageKey: { id: string; remoteJid: string; fromMe: boolean },
+  ): Promise<{
+    base64: string;
+    mimetype: string;
+    fileName: string;
+    size: number;
+  }> {
+    try {
+      this.logger.log(`Getting base64 media for message: ${messageKey.id}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+          {
+            message: {
+              key: messageKey,
+            },
+            convertToMp4: false,
+          },
+          {
+            headers: this.getHeaders(),
+            timeout: 30000,
+          },
+        ),
+      );
+
+      // Evolution API devuelve size como objeto con fileLength, height, width
+      // Extraer solo el tamaño del archivo
+      const fileSize = response.data.size?.fileLength?.low || 0;
+
+      this.logger.log(`Media retrieved successfully: ${response.data.fileName} (${fileSize} bytes)`);
+
+      return {
+        base64: response.data.base64,
+        mimetype: response.data.mimetype,
+        fileName: response.data.fileName,
+        size: fileSize,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get base64 from media message: ${messageKey.id}`, error.message);
+      throw new BadGatewayException('Failed to download media file');
+    }
+  }
+
+  /**
    * Utility para delay en retries
    */
   private delay(ms: number): Promise<void> {

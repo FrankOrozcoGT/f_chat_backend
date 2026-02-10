@@ -91,6 +91,9 @@ model Message {
   type           MessageType
   content        String
   mediaUrl       String?
+  fileName       String?
+  fileSize       Int?
+  mimeType       String?
   direction      MessageDirection
   senderType     MessageSenderType
   status         MessageStatus     @default(pending)

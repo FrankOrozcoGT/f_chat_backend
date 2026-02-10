@@ -56,7 +56,7 @@ export class WebhooksController {
         break;
 
       case 'messages.upsert':
-        await this.handleMessagesUpsert(phone.id, webhookData);
+        await this.handleMessagesUpsert(phone.id, instanceId, webhookData);
         break;
 
       default:
@@ -115,7 +115,7 @@ export class WebhooksController {
   /**
    * Maneja evento MESSAGES_UPSERT
    */
-  private async handleMessagesUpsert(phoneId: string, webhookData: any) {
+  private async handleMessagesUpsert(phoneId: string, instanceName: string, webhookData: any) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
 
     // DEBUG: Log completo del webhook para ver estructura
@@ -137,15 +137,39 @@ export class WebhooksController {
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 4. Construir mensaje según dirección
-    const messageData = fromMe
-      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id)
-      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id);
+    // 4. Si hay media, descargar ANTES de crear el mensaje
+    let mediaData: { localPath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+    const messageKey = webhookData?.data?.key;
+    const hasMedia = this.webhooksService.hasMedia(webhookData);
 
-    // 5. Crear mensaje
+    if (hasMedia && messageKey) {
+      try {
+        const phone = await this.phoneRepository.findById(phoneId);
+        if (phone) {
+          mediaData = await this.webhooksService.downloadAndSaveMedia(
+            instanceName,
+            phone.userId,
+            conversation.id,
+            messageKey.id, // Usar ID de WhatsApp para nombrar archivo
+            webhookData,
+          );
+          this.logger.log(`Media downloaded: ${mediaData.localPath}`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to download media`, error.message);
+        // Continuar sin media si falla
+      }
+    }
+
+    // 5. Construir mensaje según dirección (con mediaData si existe)
+    const messageData = fromMe
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
+      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
+
+    // 6. Crear mensaje (ya con mediaUrl correcto)
     const message = await this.messageRepository.create(messageData);
 
-    // 6. Actualizar último mensaje de la conversación
+    // 7. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 

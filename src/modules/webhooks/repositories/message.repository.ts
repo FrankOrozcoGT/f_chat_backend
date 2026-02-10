@@ -8,6 +8,18 @@ export class MessageRepository {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Lista mensajes de una conversación
+   * @param conversationId - ID de la conversación
+   * @returns Mensajes ordenados cronológicamente
+   */
+  async findByConversationId(conversationId: string) {
+    return this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
    * Crea un nuevo mensaje
    * @param data - Datos del mensaje
    * @returns Mensaje creado
@@ -17,6 +29,9 @@ export class MessageRepository {
     type: MessageType;
     content: string;
     mediaUrl: string | null;
+    fileName?: string | null;
+    fileSize?: number | null;
+    mimeType?: string | null;
     direction: MessageDirection;
     senderType: MessageSenderType;
     status: MessageStatus;
@@ -27,6 +42,9 @@ export class MessageRepository {
         type: data.type,
         content: data.content,
         mediaUrl: data.mediaUrl,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        mimeType: data.mimeType,
         direction: data.direction,
         senderType: data.senderType,
         status: data.status,

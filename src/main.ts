@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
+import { join } from 'path';
 import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: console,
     bufferLogs: true,
   });
@@ -22,6 +24,11 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173',
     credentials: true,
+  });
+
+  // Servir archivos estáticos desde /storage
+  app.useStaticAssets(join(process.cwd(), 'storage'), {
+    prefix: '/storage/',
   });
 
   // Global Validation Pipe
