@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PhoneStatus, MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -8,7 +9,10 @@ import { EvolutionService } from '@common/evolution/evolution.service';
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
 
-  constructor(private readonly evolutionService: EvolutionService) {}
+  constructor(
+    private readonly evolutionService: EvolutionService,
+    private readonly configService: ConfigService,
+  ) {}
   /**
    * Parsea el estado de conexión desde el webhook data
    * @param webhookData - Datos del webhook
@@ -245,15 +249,17 @@ export class WebhooksService {
       // 6. Guardar archivo
       await fs.writeFile(filePath, buffer);
 
-      // 7. Ruta relativa para servir desde /storage/
-      const localPath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+      // 7. Construir URL completa con BACKEND_URL
+      const backendUrl = this.configService.get<string>('BACKEND_URL');
+      const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+      const fullUrl = `${backendUrl}${relativePath}`;
 
       this.logger.log(
-        `Media file saved: ${localPath} (${buffer.length} bytes)`,
+        `Media file saved: ${fullUrl} (${buffer.length} bytes)`,
       );
 
       return {
-        localPath,
+        localPath: fullUrl,  // URL completa
         fileName: originalFileName,
         fileSize: buffer.length,
         mimeType,
