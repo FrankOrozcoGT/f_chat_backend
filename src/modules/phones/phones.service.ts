@@ -23,7 +23,8 @@ export class PhonesService {
     return {
       userId,
       instanceName: dto.instanceName,
-      evolutionInstanceId: evolutionData.instance.instanceId || evolutionData.instance.instanceName,
+      // Use instanceName for webhook matching (Evolution sends instanceName in webhooks)
+      evolutionInstanceId: evolutionData.instance.instanceName || dto.instanceName,
       status: PhoneStatus.pending,
       phoneNumber: '',
       qrCode: evolutionData.qrcode?.code,

@@ -2,13 +2,16 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
+  Param,
   UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
   Req,
   Logger,
   BadGatewayException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
@@ -46,8 +49,9 @@ export class PhonesController {
     // 1. Validar instanceName
     this.phonesService.validateInstanceName(dto.instanceName);
 
-    // 2. Crear instancia en Evolution API con QR y webhook
+    // 2. Crear instancia en Evolution API con QR y configurar webhook automáticamente
     const webhookUrl = this.configService.get<string>('EVOLUTION_WEBHOOK_URL');
+    this.logger.log(`Webhook URL from env: ${webhookUrl}`);
 
     let evolutionData;
     try {
@@ -64,10 +68,19 @@ export class PhonesController {
       throw new BadGatewayException('Failed to create WhatsApp instance');
     }
 
-    // 3. Construir datos del phone con QR
+    // 3. Asegurar webhook con setWebhook (fallback por si createInstance no lo guardó)
+    if (webhookUrl) {
+      try {
+        await this.evolutionService.setWebhook(dto.instanceName, webhookUrl);
+      } catch (error) {
+        this.logger.warn(`Failed to set webhook: ${error.message}`);
+      }
+    }
+
+    // 4. Construir datos del phone con QR
     const phoneData = this.phonesService.buildPhoneData(dto, evolutionData, userId);
 
-    // 4. Guardar en DB
+    // 5. Guardar en DB
     const phone = await this.phoneRepository.create(phoneData);
 
     this.logger.log(`Phone instance created successfully: ${phone.id}`);
@@ -77,5 +90,36 @@ export class PhonesController {
       phone: new PhoneResponseDto(phone),
       qrCode: evolutionData.qrcode?.code || null,
     };
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  async delete(@Param('id') phoneId: string, @Req() req) {
+    const userId = req.user.id;
+
+    // 1. Buscar phone y verificar ownership
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      throw new NotFoundException('Phone not found');
+    }
+
+    if (phone.userId !== userId) {
+      throw new NotFoundException('Phone not found');
+    }
+
+    // 2. Eliminar instancia en Evolution API
+    try {
+      await this.evolutionService.deleteInstance(phone.instanceName);
+    } catch (error) {
+      this.logger.warn(`Failed to delete instance in Evolution API: ${error.message}`);
+      // Continuar con eliminación en DB aunque falle en Evolution
+    }
+
+    // 3. Eliminar de DB
+    await this.phoneRepository.delete(phoneId);
+
+    this.logger.log(`Phone deleted successfully: ${phoneId}`);
+
+    return { message: 'Phone deleted successfully' };
   }
 }

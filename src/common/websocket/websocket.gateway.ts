@@ -30,20 +30,25 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
   ) {}
 
   async handleConnection(client: Socket) {
+    this.logger.log(`[WebSocket] Connection attempt from ${client.id}`);
+
     try {
       // Extraer JWT de cookie
       const cookieHeader = client.handshake.headers.cookie;
+      this.logger.debug(`[WebSocket] Cookie header: ${cookieHeader ? 'present' : 'missing'}`);
+
       if (!cookieHeader) {
-        this.logger.warn(`Connection rejected: No cookie header`);
+        this.logger.warn(`[WebSocket] Connection rejected: No cookie header`);
         client.disconnect();
         return;
       }
 
       const cookies = cookie.parse(cookieHeader);
-      const token = cookies.jwt;
+      const token = cookies.auth_token;
+      this.logger.debug(`[WebSocket] JWT token: ${token ? 'present' : 'missing'}`);
 
       if (!token) {
-        this.logger.warn(`Connection rejected: No JWT token in cookie`);
+        this.logger.warn(`[WebSocket] Connection rejected: No JWT token in cookie`);
         client.disconnect();
         return;
       }
@@ -52,20 +57,20 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
       const secret = this.configService.get<string>('JWT_SECRET');
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
-      if (!payload || !payload.sub) {
-        this.logger.warn(`Connection rejected: Invalid JWT payload`);
+      if (!payload || !payload.userId) {
+        this.logger.warn(`[WebSocket] Connection rejected: Invalid JWT payload`);
         client.disconnect();
         return;
       }
 
       // Guardar userId en socket y en Map
-      const userId = payload.sub;
+      const userId = payload.userId;
       client.data.userId = userId;
       this.connections.set(client.id, userId);
 
-      this.logger.log(`Client connected: ${client.id} (userId: ${userId})`);
+      this.logger.log(`[WebSocket] Client connected: ${client.id} (userId: ${userId})`);
     } catch (error) {
-      this.logger.error(`Connection error: ${error.message}`);
+      this.logger.error(`[WebSocket] Connection error: ${error.message}`);
       client.disconnect();
     }
   }

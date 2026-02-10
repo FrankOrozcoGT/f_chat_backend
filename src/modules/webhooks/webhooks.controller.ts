@@ -2,11 +2,9 @@ import {
   Controller,
   Post,
   Body,
-  UnauthorizedException,
-  Headers,
   HttpCode,
+  Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { PhoneRepository } from '../phones/repositories/phone.repository';
@@ -16,9 +14,10 @@ import { MessageRepository } from './repositories/message.repository';
 
 @Controller('whatsapp/webhook')
 export class WebhooksController {
+  private readonly logger = new Logger(WebhooksController.name);
+
   constructor(
     private readonly webhooksService: WebhooksService,
-    private readonly configService: ConfigService,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly phoneRepository: PhoneRepository,
     private readonly clientRepository: ClientRepository,
@@ -29,14 +28,10 @@ export class WebhooksController {
   @Post()
   @HttpCode(200)
   async handleWebhook(
-    @Headers('x-api-key') apiKey: string,
     @Body() webhookData: any,
   ) {
-    // Validar x-api-key
-    const evolutionApiKey = this.configService.get<string>('EVOLUTION_API_KEY');
-    if (apiKey !== evolutionApiKey) {
-      throw new UnauthorizedException('Invalid API key');
-    }
+    // Log webhook received
+    this.logger.log(`Webhook received: ${webhookData.event} for instance ${webhookData.instance}`);
 
     const event = webhookData.event;
     const instanceId = webhookData.instance;
@@ -44,8 +39,11 @@ export class WebhooksController {
     // Buscar phone por evolutionInstanceId
     const phone = await this.phoneRepository.findByEvolutionInstanceId(instanceId);
     if (!phone) {
+      this.logger.warn(`Phone not found for instance ${instanceId}, ignoring webhook`);
       return { message: 'Phone not found, ignoring webhook' };
     }
+
+    this.logger.log(`Found phone ${phone.id} for instance ${instanceId}`);
 
     // Procesar según evento
     switch (event) {
@@ -75,8 +73,17 @@ export class WebhooksController {
   private async handleQrCodeUpdated(phoneId: string, webhookData: any) {
     const qrCode = this.webhooksService.parseQrCode(webhookData);
 
-    // Emitir evento WebSocket
-    this.websocketGateway.emit('phone:qr_updated', { phoneId, qrCode });
+    // Obtener phone para saber el userId
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      this.logger.warn(`Phone ${phoneId} not found, cannot emit WebSocket event`);
+      return;
+    }
+
+    this.logger.log(`Emitting phone:qr_updated for phone ${phoneId} to user ${phone.userId}`);
+
+    // Emitir evento WebSocket solo al usuario dueño del phone
+    this.websocketGateway.emit('phone:qr_updated', { phoneId, qrCode }, phone.userId);
 
     console.log(`[Webhook] QR Code updated for phone ${phoneId}`);
   }
@@ -90,8 +97,17 @@ export class WebhooksController {
     const lastConnected = status === 'connected' ? new Date() : undefined;
     await this.phoneRepository.updateStatus(phoneId, status, lastConnected);
 
-    // Emitir evento WebSocket
-    this.websocketGateway.emit('phone:status_changed', { phoneId, status });
+    // Obtener phone para saber el userId
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      this.logger.warn(`Phone ${phoneId} not found, cannot emit WebSocket event`);
+      return;
+    }
+
+    this.logger.log(`Emitting phone:status_changed for phone ${phoneId} to user ${phone.userId} with status ${status}`);
+
+    // Emitir evento WebSocket solo al usuario dueño del phone
+    this.websocketGateway.emit('phone:status_changed', { phoneId, status }, phone.userId);
 
     console.log(`[Webhook] Connection status updated for phone ${phoneId}: ${status}`);
   }
