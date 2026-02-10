@@ -8,6 +8,7 @@ import { EvolutionModule } from '@common/evolution/evolution.module';
 import { PhonesModule } from '@modules/phones/phones.module';
 import { WebhooksModule } from '@modules/webhooks/webhooks.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
+import { ConversationsModule } from '@modules/conversations/conversations.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { WebSocketModule } from '@common/websocket/websocket.module';
     AuthModule,
     HealthModule,
     PhonesModule,
+    ConversationsModule,
     WebhooksModule,
   ],
 })

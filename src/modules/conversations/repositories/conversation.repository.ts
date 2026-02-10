@@ -6,6 +6,41 @@ export class ConversationRepository {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Lista conversaciones por userId y opcionalmente por phoneId
+   * @param userId - ID del usuario
+   * @param phoneId - ID del teléfono (opcional)
+   * @returns Lista de conversaciones con datos de client y phone
+   */
+  async findByUserIdAndPhone(userId: string, phoneId?: string) {
+    return this.prisma.conversation.findMany({
+      where: {
+        phone: {
+          userId,
+          ...(phoneId && { id: phoneId }),
+        },
+      },
+      include: {
+        client: true,
+        phone: true,
+      },
+      orderBy: {
+        lastMessageAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Busca una conversación por ID
+   * @param id - ID de la conversación
+   * @returns Conversación o null
+   */
+  async findById(id: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id },
+    });
+  }
+
+  /**
    * Crea o actualiza una conversación por phoneId y clientId
    * @param data - Datos de la conversación
    * @returns Conversación creada o actualizada
@@ -44,17 +79,6 @@ export class ConversationRepository {
         lastMessageAt: data.lastMessageAt,
         lastMessagePreview: data.lastMessagePreview,
       },
-    });
-  }
-
-  /**
-   * Busca una conversación por ID
-   * @param id - ID de la conversación
-   * @returns Conversación o null
-   */
-  async findById(id: string) {
-    return this.prisma.conversation.findUnique({
-      where: { id },
     });
   }
 }
