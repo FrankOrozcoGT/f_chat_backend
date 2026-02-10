@@ -87,6 +87,31 @@ export class EvolutionService {
     }
   }
 
+  /**
+   * Eliminar instancia - DELETE /instance/delete/:instanceName
+   * Timeout: 10s, NO retry
+   */
+  async deleteInstance(instanceName: string): Promise<any> {
+    try {
+      this.logger.log(`Deleting instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.delete(
+          `${this.apiUrl}/instance/delete/${instanceName}`,
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      this.logger.log(`Instance deleted successfully: ${instanceName}`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to delete instance: ${instanceName}`, error.message);
+      throw new BadGatewayException('Failed to delete WhatsApp instance');
+    }
+  }
 
   /**
    * Enviar mensaje de texto - POST /message/sendText
