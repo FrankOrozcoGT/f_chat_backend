@@ -45,4 +45,25 @@ export class MessageRepository {
       },
     });
   }
+
+  /**
+   * Actualiza un mensaje existente
+   * @param id - ID del mensaje
+   * @param data - Datos a actualizar
+   * @returns Mensaje actualizado
+   */
+  async update(
+    id: string,
+    data: {
+      mediaUrl?: string;
+      fileName?: string;
+      fileSize?: number;
+      mimeType?: string;
+    },
+  ) {
+    return this.prisma.message.update({
+      where: { id },
+      data,
+    });
+  }
 }

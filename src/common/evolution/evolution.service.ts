@@ -278,6 +278,31 @@ export class EvolutionService {
   }
 
   /**
+   * Descargar archivo multimedia desde Evolution API
+   * @param mediaUrl - URL del archivo en Evolution API
+   * @returns Buffer del archivo
+   */
+  async downloadMedia(mediaUrl: string): Promise<Buffer> {
+    try {
+      this.logger.log(`Downloading media from: ${mediaUrl}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get(mediaUrl, {
+          headers: this.getHeaders(),
+          responseType: 'arraybuffer',
+          timeout: 30000, // 30s para archivos grandes
+        }),
+      );
+
+      this.logger.log(`Media downloaded successfully, size: ${response.data.length} bytes`);
+      return Buffer.from(response.data);
+    } catch (error) {
+      this.logger.error(`Failed to download media from: ${mediaUrl}`, error.message);
+      throw new BadGatewayException('Failed to download media file');
+    }
+  }
+
+  /**
    * Utility para delay en retries
    */
   private delay(ms: number): Promise<void> {

@@ -1,8 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PhoneStatus, MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Injectable()
 export class WebhooksService {
+  private readonly logger = new Logger(WebhooksService.name);
+
+  constructor(private readonly evolutionService: EvolutionService) {}
   /**
    * Parsea el estado de conexión desde el webhook data
    * @param webhookData - Datos del webhook
@@ -180,5 +186,107 @@ export class WebhooksService {
       lastMessageAt: message.createdAt || new Date(),
       lastMessagePreview: message.content.substring(0, 100),
     };
+  }
+
+  /**
+   * Descarga y guarda un archivo multimedia localmente
+   * @param mediaUrl - URL del archivo en Evolution API
+   * @param userId - ID del usuario
+   * @param conversationId - ID de la conversación
+   * @param messageId - ID del mensaje
+   * @param webhookData - Datos del webhook para extraer metadata
+   * @returns Ruta local del archivo y metadata
+   */
+  async downloadAndSaveMedia(
+    mediaUrl: string,
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    webhookData: any,
+  ): Promise<{
+    localPath: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+  }> {
+    try {
+      // 1. Descargar archivo desde Evolution API
+      const buffer = await this.evolutionService.downloadMedia(mediaUrl);
+
+      // 2. Extraer metadata del webhook
+      const messageData = webhookData?.data?.message || {};
+      const mediaData =
+        messageData.imageMessage ||
+        messageData.videoMessage ||
+        messageData.audioMessage ||
+        messageData.documentMessage ||
+        {};
+
+      const originalFileName = mediaData.fileName || 'file';
+      const mimeType = mediaData.mimetype || 'application/octet-stream';
+      const fileExtension = this.getFileExtension(originalFileName, mimeType);
+
+      // 3. Construir ruta de almacenamiento
+      const storageDir = path.join(
+        process.cwd(),
+        'storage',
+        'conversations',
+        userId,
+        conversationId,
+      );
+
+      // 4. Crear directorio si no existe
+      await fs.mkdir(storageDir, { recursive: true });
+
+      // 5. Nombre del archivo: messageId_timestamp.ext
+      const fileName = `${messageId}_${Date.now()}${fileExtension}`;
+      const filePath = path.join(storageDir, fileName);
+
+      // 6. Guardar archivo
+      await fs.writeFile(filePath, buffer);
+
+      // 7. Ruta relativa para servir desde /storage/
+      const localPath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+
+      this.logger.log(
+        `Media file saved: ${localPath} (${buffer.length} bytes)`,
+      );
+
+      return {
+        localPath,
+        fileName: originalFileName,
+        fileSize: buffer.length,
+        mimeType,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to download and save media: ${mediaUrl}`,
+        error.message,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Extrae la extensión del archivo desde nombre o mimeType
+   */
+  private getFileExtension(fileName: string, mimeType: string): string {
+    // Intentar desde fileName
+    const match = fileName.match(/\.[^.]+$/);
+    if (match) return match[0];
+
+    // Fallback: desde mimeType
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'video/mp4': '.mp4',
+      'audio/ogg': '.ogg',
+      'audio/mpeg': '.mp3',
+      'application/pdf': '.pdf',
+    };
+
+    return mimeToExt[mimeType] || '.bin';
   }
 }

@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
+import { join } from 'path';
 import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: console,
     bufferLogs: true,
   });
@@ -17,6 +19,11 @@ async function bootstrap() {
 
   // Cookie Parser
   app.use(cookieParser());
+
+  // Servir archivos estáticos desde /storage (protegido por JWT en producción)
+  app.useStaticAssets(join(__dirname, '..', 'storage'), {
+    prefix: '/storage/',
+  });
 
   // CORS
   app.enableCors({

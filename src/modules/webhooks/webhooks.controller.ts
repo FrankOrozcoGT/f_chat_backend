@@ -142,8 +142,46 @@ export class WebhooksController {
       ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id)
       : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id);
 
-    // 5. Crear mensaje
+    // 5. Crear mensaje (primero para obtener el ID)
     const message = await this.messageRepository.create(messageData);
+
+    // 6. Si el mensaje tiene mediaUrl, descargar y guardar localmente
+    if (messageData.mediaUrl) {
+      try {
+        // Obtener phone para userId
+        const phone = await this.phoneRepository.findById(phoneId);
+        if (phone) {
+          const mediaData = await this.webhooksService.downloadAndSaveMedia(
+            messageData.mediaUrl,
+            phone.userId,
+            conversation.id,
+            message.id,
+            webhookData,
+          );
+
+          // Actualizar mensaje con datos locales del archivo
+          await this.messageRepository.update(message.id, {
+            mediaUrl: mediaData.localPath,
+            fileName: mediaData.fileName,
+            fileSize: mediaData.fileSize,
+            mimeType: mediaData.mimeType,
+          });
+
+          // Actualizar objeto message para WebSocket
+          Object.assign(message, {
+            mediaUrl: mediaData.localPath,
+            fileName: mediaData.fileName,
+            fileSize: mediaData.fileSize,
+            mimeType: mediaData.mimeType,
+          });
+
+          this.logger.log(`Media downloaded and saved for message ${message.id}`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to download media for message ${message.id}`, error.message);
+        // Continuar aunque falle la descarga, el mensaje ya fue guardado
+      }
+    }
 
     // 6. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);

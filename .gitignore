@@ -45,3 +45,7 @@ prisma/migrations/**
 
 # fcoder
 .fcoder/terminals.json
+
+# Media files
+/storage/
+!/storage/.gitkeep
