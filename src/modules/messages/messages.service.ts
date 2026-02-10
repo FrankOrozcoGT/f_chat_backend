@@ -1,8 +1,10 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { Conversation, Phone } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { Conversation, Phone, Message } from '@prisma/client';
 
 @Injectable()
 export class MessagesService {
+  constructor(private readonly configService: ConfigService) {}
   /**
    * Valida que el usuario sea dueño de la conversación (vía phone)
    * @param conversation - Conversación a validar
@@ -20,5 +22,19 @@ export class MessagesService {
         'You do not have permission to access this conversation',
       );
     }
+  }
+
+  /**
+   * Construye URLs completas para los mediaUrl de los mensajes
+   * @param messages - Lista de mensajes con mediaUrl relativos
+   * @returns Mensajes con mediaUrl completos (con dominio)
+   */
+  buildMessagesWithFullUrls(messages: Message[]): Message[] {
+    const backendUrl = this.configService.get<string>('BACKEND_URL');
+
+    return messages.map(message => ({
+      ...message,
+      mediaUrl: message.mediaUrl ? `${backendUrl}${message.mediaUrl}` : null,
+    }));
   }
 }

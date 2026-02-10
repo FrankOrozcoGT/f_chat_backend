@@ -63,10 +63,13 @@ export class MessagesController {
       conversationId,
     );
 
+    // 6. Construir URLs completas para mediaUrl
+    const messagesWithFullUrls = this.messagesService.buildMessagesWithFullUrls(messages);
+
     this.logger.log(
       `Retrieved ${messages.length} messages for conversation ${conversationId}`,
     );
 
-    return messages;
+    return messagesWithFullUrls;
   }
 }
