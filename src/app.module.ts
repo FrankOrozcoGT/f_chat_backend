@@ -9,6 +9,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { WebhooksModule } from '@modules/webhooks/webhooks.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
+import { MessagesModule } from '@modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ConversationsModule } from '@modules/conversations/conversations.module
     HealthModule,
     PhonesModule,
     ConversationsModule,
+    MessagesModule,
     WebhooksModule,
   ],
 })

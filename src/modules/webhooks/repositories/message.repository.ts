@@ -8,6 +8,18 @@ export class MessageRepository {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Lista mensajes de una conversación
+   * @param conversationId - ID de la conversación
+   * @returns Mensajes ordenados cronológicamente
+   */
+  async findByConversationId(conversationId: string) {
+    return this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
    * Crea un nuevo mensaje
    * @param data - Datos del mensaje
    * @returns Mensaje creado
