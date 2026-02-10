@@ -20,15 +20,15 @@ async function bootstrap() {
   // Cookie Parser
   app.use(cookieParser());
 
-  // Servir archivos estáticos desde /storage (protegido por JWT en producción)
-  app.useStaticAssets(join(__dirname, '..', 'storage'), {
-    prefix: '/storage/',
-  });
-
   // CORS
   app.enableCors({
     origin: configService.get<string>('CORS_ORIGIN') || 'http://localhost:5173',
     credentials: true,
+  });
+
+  // Servir archivos estáticos desde /storage
+  app.useStaticAssets(join(process.cwd(), 'storage'), {
+    prefix: '/storage/',
   });
 
   // Global Validation Pipe
