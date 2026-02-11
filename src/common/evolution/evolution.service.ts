@@ -8,6 +8,13 @@ import {
   WebhookResponseDto,
 } from './dto/evolution-response.dto';
 
+export enum EvolutionMediaType {
+  IMAGE = 'image',
+  VIDEO = 'video',
+  AUDIO = 'audio',
+  DOCUMENT = 'document',
+}
+
 @Injectable()
 export class EvolutionService {
   private readonly logger = new Logger(EvolutionService.name);
@@ -167,32 +174,60 @@ export class EvolutionService {
 
   /**
    * Enviar mensaje con media - POST /message/sendMedia
+   * Para audio, delega a sendAudioMessage que usa el endpoint específico
    * Timeout: 8s, retry x3 con exponential backoff (1s, 2s, 4s)
    */
   async sendMediaMessage(
     instanceId: string,
     phoneNumber: string,
     mediaUrl: string,
+    mediatype: EvolutionMediaType,
     caption?: string,
+    mimeType?: string,
+    fileName?: string,
     attempt = 1,
   ): Promise<SendMessageResponseDto> {
+    // Si es audio, usar endpoint específico de audio
+    if (mediatype === EvolutionMediaType.AUDIO) {
+      return this.sendAudioMessage(instanceId, phoneNumber, mediaUrl, attempt);
+    }
+
     const maxAttempts = 4; // 1 inicial + 3 retries
     const baseDelay = 1000;
     const retryDelay = baseDelay * Math.pow(2, attempt - 1); // Exponential: 1s, 2s, 4s, 8s
+
+    const payload: any = {
+      number: phoneNumber,
+      mediatype,
+      media: mediaUrl,
+    };
+
+    if (caption) {
+      payload.caption = caption;
+    }
+
+    if (mimeType) {
+      payload.mimetype = mimeType;
+    }
+
+    if (fileName) {
+      payload.fileName = fileName;
+    }
 
     try {
       this.logger.log(
         `Sending media message to ${phoneNumber} via ${instanceId} (attempt ${attempt}/${maxAttempts})`,
       );
 
+      // Log del payload completo para debugging
+      this.logger.log(
+        `[EVOLUTION PAYLOAD] ${JSON.stringify(payload, null, 2)}`,
+      );
+
       const response = await firstValueFrom(
         this.httpService.post(
           `${this.apiUrl}/message/sendMedia/${instanceId}`,
-          {
-            number: phoneNumber,
-            mediaUrl,
-            caption,
-          },
+          payload,
           {
             headers: this.getHeaders(),
             timeout: 8000,
@@ -203,6 +238,19 @@ export class EvolutionService {
       this.logger.log(`Media message sent successfully to ${phoneNumber}`);
       return response.data;
     } catch (error) {
+      // Log detalles completos del error en el primer intento
+      if (attempt === 1) {
+        this.logger.error(
+          `Evolution API rejected sendMediaMessage: ${error.message}`,
+          JSON.stringify({
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            sentPayload: payload,
+          }, null, 2),
+        );
+      }
+
       this.logger.warn(
         `Attempt ${attempt}/${maxAttempts} failed for sendMediaMessage to ${phoneNumber}`,
         error.message,
@@ -211,11 +259,84 @@ export class EvolutionService {
       if (attempt < maxAttempts) {
         this.logger.log(`Retrying in ${retryDelay}ms...`);
         await this.delay(retryDelay);
-        return this.sendMediaMessage(instanceId, phoneNumber, mediaUrl, caption, attempt + 1);
+        return this.sendMediaMessage(instanceId, phoneNumber, mediaUrl, mediatype, caption, mimeType, fileName, attempt + 1);
       }
 
       this.logger.error(`All attempts failed for sendMediaMessage to ${phoneNumber}`);
       throw new BadGatewayException('Failed to send media message after retries');
+    }
+  }
+
+  /**
+   * Enviar mensaje de audio - POST /message/sendWhatsAppAudio
+   * Usa endpoint específico para audio de WhatsApp
+   * Timeout: 8s, retry x3 con exponential backoff (1s, 2s, 4s)
+   */
+  async sendAudioMessage(
+    instanceId: string,
+    phoneNumber: string,
+    audioUrl: string,
+    attempt = 1,
+  ): Promise<SendMessageResponseDto> {
+    const maxAttempts = 4; // 1 inicial + 3 retries
+    const baseDelay = 1000;
+    const retryDelay = baseDelay * Math.pow(2, attempt - 1); // Exponential: 1s, 2s, 4s, 8s
+
+    const payload = {
+      number: phoneNumber,
+      audio: audioUrl,
+    };
+
+    try {
+      this.logger.log(
+        `Sending audio message to ${phoneNumber} via ${instanceId} (attempt ${attempt}/${maxAttempts})`,
+      );
+
+      // Log del payload completo para debugging
+      this.logger.log(
+        `[EVOLUTION AUDIO PAYLOAD] ${JSON.stringify(payload, null, 2)}`,
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/message/sendWhatsAppAudio/${instanceId}`,
+          payload,
+          {
+            headers: this.getHeaders(),
+            timeout: 8000,
+          },
+        ),
+      );
+
+      this.logger.log(`Audio message sent successfully to ${phoneNumber}`);
+      return response.data;
+    } catch (error) {
+      // Log detalles completos del error en el primer intento
+      if (attempt === 1) {
+        this.logger.error(
+          `Evolution API rejected sendAudioMessage: ${error.message}`,
+          JSON.stringify({
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            sentPayload: payload,
+          }, null, 2),
+        );
+      }
+
+      this.logger.warn(
+        `Attempt ${attempt}/${maxAttempts} failed for sendAudioMessage to ${phoneNumber}`,
+        error.message,
+      );
+
+      if (attempt < maxAttempts) {
+        this.logger.log(`Retrying in ${retryDelay}ms...`);
+        await this.delay(retryDelay);
+        return this.sendAudioMessage(instanceId, phoneNumber, audioUrl, attempt + 1);
+      }
+
+      this.logger.error(`All attempts failed for sendAudioMessage to ${phoneNumber}`);
+      throw new BadGatewayException('Failed to send audio message after retries');
     }
   }
 
