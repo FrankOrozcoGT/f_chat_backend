@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
+import { join } from 'path';
 import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: console,
     bufferLogs: true,
   });
@@ -24,6 +26,11 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Servir archivos estáticos desde /storage
+  app.useStaticAssets(join(process.cwd(), 'storage'), {
+    prefix: '/storage/',
+  });
+
   // Global Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -34,6 +41,6 @@ async function bootstrap() {
   );
 
   const port = configService.get<number>('PORT', 3000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();
