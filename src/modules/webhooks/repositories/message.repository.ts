@@ -22,6 +22,7 @@ export class MessageRepository {
   /**
    * Crea un nuevo mensaje
    * @param data - Datos del mensaje
+   * @param messageId - ID opcional del mensaje (para nombres de archivo estandarizados)
    * @returns Mensaje creado
    */
   async create(data: {
@@ -36,9 +37,10 @@ export class MessageRepository {
     senderType: MessageSenderType;
     status: MessageStatus;
     metadata?: any;
-  }) {
+  }, messageId?: string) {
     return this.prisma.message.create({
       data: {
+        id: messageId, // Prisma usará este ID si se proporciona, sino generará uno
         conversationId: data.conversationId,
         type: data.type,
         content: data.content,
@@ -61,6 +63,7 @@ export class MessageRepository {
    * @param userId - ID del usuario (para referencia, validaciones ya hechas)
    * @param messageData - Datos del mensaje a crear
    * @param conversationUpdate - Datos para actualizar la conversación
+   * @param messageId - ID opcional del mensaje (para nombres de archivo estandarizados)
    * @returns Mensaje creado
    */
   async sendMessageTransaction(
@@ -70,6 +73,9 @@ export class MessageRepository {
       type: MessageType;
       content: string;
       mediaUrl: string | null;
+      fileName?: string | null;
+      fileSize?: number | null;
+      mimeType?: string | null;
       direction: MessageDirection;
       senderType: MessageSenderType;
       status: MessageStatus;
@@ -79,15 +85,21 @@ export class MessageRepository {
       lastMessageAt: Date;
       lastMessagePreview: string;
     },
+    messageId?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Crear mensaje con status 'pending' y metadata (keyId de Evolution)
+      // Si se proporciona messageId, usarlo (para nombre de archivo estandarizado)
       const message = await tx.message.create({
         data: {
+          id: messageId, // Prisma usará este ID si se proporciona, sino generará uno
           conversationId,
           type: messageData.type,
           content: messageData.content,
           mediaUrl: messageData.mediaUrl,
+          fileName: messageData.fileName,
+          fileSize: messageData.fileSize,
+          mimeType: messageData.mimeType,
           direction: messageData.direction,
           senderType: messageData.senderType,
           status: messageData.status,

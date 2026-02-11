@@ -215,7 +215,13 @@ export class MessagesController {
     // Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
 
-    // 4. Guardar archivo usando FileStorageService
+    // 4. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
+    const { randomUUID } = await import('crypto');
+    const messageId = randomUUID();
+
+    this.logger.log(`Generated messageId: ${messageId} for file upload`);
+
+    // 5. Guardar archivo usando FileStorageService con messageId
     this.logger.log(`Saving file: ${file.mimetype}, size: ${file.size} bytes`);
 
     let relativePath: string;
@@ -227,6 +233,7 @@ export class MessagesController {
         file,
         userId,
         dto.conversationId,
+        messageId,
       );
       relativePath = result.relativePath;
       fileName = result.fileName;
@@ -238,12 +245,12 @@ export class MessagesController {
       throw new BadGatewayException(`Failed to save file: ${error.message}`);
     }
 
-    // 5. Construir mediaUrl accesible desde Evolution API (Docker)
+    // 6. Construir mediaUrl accesible desde Evolution API (Docker)
     const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(relativePath);
 
     this.logger.log(`About to send - tipo: ${dto.tipo}, mimeType: ${finalMimeType}, fileName: ${fileName}, mediaUrl: ${mediaUrl}`);
 
-    // 6. Ejecutar envío común (Evolution API + DB + Cache)
+    // 7. Ejecutar envío común (Evolution API + DB + Cache)
     return this.executeMessageSend(
       dto.conversationId,
       userId,
@@ -252,6 +259,7 @@ export class MessagesController {
       relativePath,
       mediaUrl,
       conversation,
+      messageId,
       finalMimeType,
       fileName,
     );
@@ -269,6 +277,7 @@ export class MessagesController {
     relativePath: string | null,
     mediaUrlForEvolution: string | null,
     conversation: ConversationWithRelations,
+    messageId?: string,
     mimeType?: string,
     fileName?: string,
   ) {
@@ -342,6 +351,9 @@ export class MessagesController {
       'pending', // Webhook actualizará a sent/delivered/read
       relativePath,
       evolutionKeyId,
+      fileName || null,
+      null, // fileSize: se calculará después si es necesario
+      mimeType || null,
     );
 
     // 4. Guardar en DB
@@ -356,6 +368,7 @@ export class MessagesController {
         userId,
         messageData,
         conversationUpdate,
+        messageId, // Usar messageId predefinido si existe (para nombre archivo estandarizado)
       );
 
       this.logger.log(

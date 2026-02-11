@@ -19,12 +19,14 @@ export class FileStorageService {
    * @param file - Archivo de multer
    * @param userId - ID del usuario
    * @param conversationId - ID de la conversación
+   * @param messageId - ID del mensaje (para nombrar archivo con estándar)
    * @returns Path relativo, nombre, tamaño y tipo
    */
   async saveUploadedFile(
     file: Express.Multer.File,
     userId: string,
     conversationId: string,
+    messageId: string,
   ): Promise<{
     relativePath: string;
     fileName: string;
@@ -44,20 +46,15 @@ export class FileStorageService {
       // 2. Crear directorio si no existe
       await fs.mkdir(storageDir, { recursive: true });
 
-      // 3. Generar nombre único: timestamp_originalname
+      // 3. Generar nombre estandarizado: messageId_timestamp.ext
       const timestamp = Date.now();
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
 
       // Obtener extensión correcta del archivo
       const extension = this.getFileExtension(sanitizedFilename, file.mimetype);
 
-      // Si el filename no tiene extensión o tiene extensión incorrecta, agregarla
-      const hasValidExtension = sanitizedFilename.match(/\.[^.]+$/);
-      const baseFilename = hasValidExtension
-        ? sanitizedFilename
-        : `${sanitizedFilename}${extension}`;
-
-      let fileName = `${timestamp}_${baseFilename}`;
+      // Nombre físico estandarizado: messageId_timestamp.ext
+      let fileName = `${messageId}_${timestamp}${extension}`;
       let filePath = path.join(storageDir, fileName);
 
       // 4. Guardar archivo

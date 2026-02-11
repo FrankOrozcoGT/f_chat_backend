@@ -70,6 +70,9 @@ export class MessagesService {
    * @param status - Estado del mensaje
    * @param mediaUrl - URL del archivo multimedia (opcional)
    * @param evolutionKeyId - ID del mensaje en Evolution API (para tracking en webhooks)
+   * @param fileName - Nombre original del archivo (opcional)
+   * @param fileSize - Tamaño del archivo en bytes (opcional)
+   * @param mimeType - Tipo MIME del archivo (opcional)
    * @returns Datos para crear el mensaje
    */
   buildOutgoingMessageData(
@@ -79,12 +82,18 @@ export class MessagesService {
     status: MessageStatus,
     mediaUrl?: string | null,
     evolutionKeyId?: string,
+    fileName?: string | null,
+    fileSize?: number | null,
+    mimeType?: string | null,
   ) {
     return {
       conversationId,
       type,
       content,
       mediaUrl: mediaUrl || null,
+      fileName: fileName || null,
+      fileSize: fileSize || null,
+      mimeType: mimeType || null,
       direction: 'outgoing' as const,
       senderType: 'agent' as const,
       status,
