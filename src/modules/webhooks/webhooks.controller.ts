@@ -11,6 +11,9 @@ import { PhoneRepository } from '../phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from '../conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
+import { CacheService } from '@common/cache/cache.service';
+import { FileStorageService } from '@common/file-storage/file-storage.service';
+import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Controller('whatsapp/webhook')
 export class WebhooksController {
@@ -23,6 +26,9 @@ export class WebhooksController {
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
+    private readonly cacheService: CacheService,
+    private readonly fileStorageService: FileStorageService,
+    private readonly evolutionService: EvolutionService,
   ) {}
 
   @Post()
@@ -30,9 +36,6 @@ export class WebhooksController {
   async handleWebhook(
     @Body() webhookData: any,
   ) {
-    // Log webhook received
-    this.logger.log(`Webhook received: ${webhookData.event} for instance ${webhookData.instance}`);
-
     const event = webhookData.event;
     const instanceId = webhookData.instance;
 
@@ -42,8 +45,6 @@ export class WebhooksController {
       this.logger.warn(`Phone not found for instance ${instanceId}, ignoring webhook`);
       return { message: 'Phone not found, ignoring webhook' };
     }
-
-    this.logger.log(`Found phone ${phone.id} for instance ${instanceId}`);
 
     // Procesar según evento
     switch (event) {
@@ -57,6 +58,10 @@ export class WebhooksController {
 
       case 'messages.upsert':
         await this.handleMessagesUpsert(phone.id, instanceId, webhookData);
+        break;
+
+      case 'messages.update':
+        await this.handleMessagesUpdate(phone.id, instanceId, webhookData);
         break;
 
       default:
@@ -117,16 +122,27 @@ export class WebhooksController {
    */
   private async handleMessagesUpsert(phoneId: string, instanceName: string, webhookData: any) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
+    const messageKey = webhookData?.data?.key;
 
-    // DEBUG: Log completo del webhook para ver estructura
-    this.logger.debug('Webhook data:', JSON.stringify(webhookData, null, 2));
+    // NUEVO: Verificar cache si es mensaje saliente (fromMe=true)
+    if (fromMe && messageKey) {
+      const wasSentByAPI = this.cacheService.has(`sent_message:${messageKey.id}`);
+
+      if (wasSentByAPI) {
+        this.logger.log(`Message ${messageKey.id} sent via API, skipping webhook creation`);
+        return; // Skip - mensaje ya fue creado por POST /send
+      }
+
+      // Si NO está en cache, es mensaje desde WhatsApp Web
+      this.logger.log(`Message ${messageKey.id} sent from WhatsApp Web, saving`);
+    }
 
     // 1. Construir datos del Client (pasar fromMe para no usar pushName incorrecto)
     const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
 
     // Ignorar mensajes de grupos (terminan en @g.us)
     if (clientData.phoneNumber.endsWith('@g.us')) {
-      this.logger.log(`Ignoring group message from ${clientData.phoneNumber}`);
+      // Silently ignore group messages
       return;
     }
 
@@ -137,23 +153,23 @@ export class WebhooksController {
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 4. Si hay media, descargar ANTES de crear el mensaje
-    let mediaData: { localPath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
-    const messageKey = webhookData?.data?.key;
+    // 4. Si hay media, descargar ANTES de crear el mensaje (usando FileStorageService)
+    let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
     if (hasMedia && messageKey) {
       try {
         const phone = await this.phoneRepository.findById(phoneId);
         if (phone) {
-          mediaData = await this.webhooksService.downloadAndSaveMedia(
+          mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+            this.evolutionService,
             instanceName,
             phone.userId,
             conversation.id,
             messageKey.id, // Usar ID de WhatsApp para nombrar archivo
-            webhookData,
+            messageKey,
           );
-          this.logger.log(`Media downloaded: ${mediaData.localPath}`);
+          this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
         }
       } catch (error) {
         this.logger.error(`Failed to download media`, error.message);
@@ -173,13 +189,94 @@ export class WebhooksController {
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 7. Emitir eventos WebSocket
+    // 8. Emitir eventos WebSocket
     if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       console.log(`[Webhook] Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
       this.websocketGateway.emit('message:incoming', message);
       console.log(`[Webhook] Incoming message for conversation ${conversation.id}`);
+    }
+  }
+
+  /**
+   * Maneja evento MESSAGES_UPDATE
+   * Actualiza el status de mensajes (sent, delivered, read, failed)
+   */
+  private async handleMessagesUpdate(phoneId: string, instanceName: string, webhookData: any) {
+    const data = webhookData?.data;
+
+    if (!data) {
+      this.logger.warn('messages.update: missing data');
+      return;
+    }
+
+    const keyId = data.keyId; // ID del mensaje de WhatsApp (Evolution API)
+    const status = data.status; // STRING: "SERVER_ACK", "DELIVERY_ACK", "READ", etc.
+    const fromMe = data.fromMe;
+
+    this.logger.log(`messages.update: keyId=${keyId}, status=${status}, fromMe=${fromMe}`);
+
+    // Solo procesar mensajes salientes (fromMe: true)
+    if (!fromMe) {
+      return;
+    }
+
+    // Mapear status de Evolution API (STRING) a nuestro enum
+    let mappedStatus: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+
+    switch (status) {
+      case 'ERROR':
+      case 'PENDING':
+        mappedStatus = 'failed';
+        break;
+      case 'SERVER_ACK':
+        mappedStatus = 'sent';
+        break;
+      case 'DELIVERY_ACK':
+        mappedStatus = 'delivered';
+        break;
+      case 'READ':
+      case 'PLAYED':
+        mappedStatus = 'read';
+        break;
+      default:
+        this.logger.warn(`Unknown status string: ${status}`);
+        return;
+    }
+
+    this.logger.log(`Mapped status '${status}' to '${mappedStatus}'`);
+
+    // Buscar mensaje por keyId en metadata
+    try {
+      const updatedMessage = await this.messageRepository.updateStatusByKeyId(keyId, mappedStatus);
+
+      if (!updatedMessage) {
+        this.logger.warn(`Message with keyId ${keyId} not found in database`);
+        return;
+      }
+
+      // Obtener phone para saber el userId
+      const phone = await this.phoneRepository.findById(phoneId);
+      if (!phone) {
+        this.logger.warn(`Phone ${phoneId} not found, cannot emit WebSocket`);
+        return;
+      }
+
+      // Emitir evento WebSocket al usuario dueño del phone
+      this.websocketGateway.emit(
+        'message:status_updated',
+        {
+          messageId: updatedMessage.id,
+          conversationId: updatedMessage.conversationId,
+          status: mappedStatus,
+        },
+        phone.userId,
+      );
+
+      this.logger.log(`Message ${updatedMessage.id} updated to '${mappedStatus}' and WebSocket emitted`);
+    } catch (error) {
+      this.logger.error(`Failed to update message with keyId ${keyId}: ${error.message}`);
     }
   }
 }

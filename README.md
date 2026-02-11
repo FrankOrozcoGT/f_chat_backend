@@ -1,98 +1,272 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# F-Chat Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend API for F-Chat - WhatsApp Business messaging platform built with NestJS, Prisma, and Evolution API.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Features
 
-## Description
+- **Authentication**: Google OAuth 2.0 with JWT
+- **WhatsApp Integration**: Evolution API for Business messaging
+- **Real-time**: WebSocket (Socket.io) for live updates
+- **File Upload**: Multipart file upload with automatic conversion (webm→ogg)
+- **Media Storage**: Local file storage with Docker volume support
+- **Anti-Duplication**: In-memory cache with TTL for sent messages
+- **Database**: PostgreSQL with Prisma ORM
+- **Webhooks**: Real-time message status updates from Evolution API
+- **Health Check**: `/health` endpoint for monitoring
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📦 Tech Stack
 
-## Project setup
+- **Framework**: NestJS 11
+- **Runtime**: Node.js 24 LTS
+- **Database**: PostgreSQL 16 + Prisma ORM
+- **WebSocket**: Socket.io
+- **File Conversion**: ffmpeg (audio webm→ogg)
+- **Validation**: class-validator + class-transformer
+- **Authentication**: Passport.js (Google OAuth + JWT)
 
-```bash
-$ npm install
+## 🏗️ Architecture
+
+```
+src/
+├── main.ts                    # Application entry point
+├── app.module.ts              # Root module
+├── common/                    # Shared services
+│   ├── prisma/               # Database service
+│   ├── evolution/            # Evolution API integration
+│   ├── cache/                # In-memory TTL cache
+│   ├── file-storage/         # File I/O and conversion
+│   └── websocket/            # Socket.io gateway
+└── modules/                   # Feature modules
+    ├── auth/                 # Google OAuth + JWT
+    ├── users/                # User management
+    ├── phones/               # WhatsApp phone instances
+    ├── conversations/        # Conversation management
+    ├── messages/             # Message CRUD + sending
+    ├── webhooks/             # Evolution API webhooks
+    └── health/               # Health check endpoint
 ```
 
-## Compile and run the project
+## 🐳 Quick Start (Docker - Recommended)
 
+### 1. Clone and Setup
 ```bash
-# development
-$ npm run start
+git clone <repository-url>
+cd backend
 
-# watch mode
-$ npm run start:dev
+# Copy environment file
+cp .env.example .env
 
-# production mode
-$ npm run start:prod
+# Edit .env with your credentials
+nano .env
 ```
 
-## Run tests
-
+### 2. Run with Docker Compose
 ```bash
-# unit tests
-$ npm run test
+# Build and start all services
+docker-compose up -d
 
-# e2e tests
-$ npm run test:e2e
+# View logs
+docker-compose logs -f backend
 
-# test coverage
-$ npm run test:cov
+# Check health
+curl http://localhost:3000/health
 ```
 
-## Deployment
+**Docker includes:**
+- ✅ Backend API (Node.js 24 + ffmpeg)
+- ✅ PostgreSQL 16
+- ✅ Automatic migrations
+- ✅ Volume persistence for media files
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+📖 **Detailed Docker guide**: See [DOCKER.md](./DOCKER.md)
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 💻 Local Development (without Docker)
 
+### Prerequisites
+- Node.js 24 LTS
+- PostgreSQL 16
+- ffmpeg (for audio conversion)
+
+### Installation
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Install dependencies
+npm install
+
+# Setup database
+npx prisma migrate dev
+
+# Generate Prisma Client
+npx prisma generate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Run
+```bash
+# Development (watch mode)
+npm run start:dev
 
-## Resources
+# Production mode
+npm run build
+npm run start:prod
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## 🔧 Environment Variables
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Required variables (see `.env.example`):
 
-## Support
+```env
+# Server
+NODE_ENV=development
+PORT=3000
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/fchat
 
-## Stay in touch
+# JWT
+JWT_SECRET=your-secret-min-32-chars
+JWT_EXPIRES_IN=7d
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
 
-## License
+# Admin
+ADMIN_EMAILS=admin@example.com
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# Frontend
+FRONTEND_URL=http://localhost:5173
+CORS_ORIGIN=http://localhost:5173
+
+# Backend URLs
+BACKEND_URL=http://localhost:3000
+BACKEND_URL_FOR_DOCKER=http://172.17.0.1:3000
+
+# Evolution API
+EVOLUTION_API_URL=http://localhost:8080
+EVOLUTION_GLOBAL_API_KEY=your-evolution-key
+```
+
+## 📡 API Endpoints
+
+### Authentication
+- `GET /auth/google` - Initiate Google OAuth
+- `GET /auth/google/callback` - OAuth callback
+- `GET /auth/profile` - Get current user
+
+### Messages
+- `GET /api/messages` - List messages (with pagination)
+- `POST /api/messages/send` - Send text message
+- `POST /api/messages/send-with-file` - Send media message (multipart/form-data)
+
+### Conversations
+- `GET /api/conversations` - List conversations
+- `GET /api/conversations/:id` - Get conversation details
+
+### Phones
+- `GET /api/phones` - List WhatsApp instances
+- `POST /api/phones/create` - Create new instance
+- `DELETE /api/phones/:id` - Delete instance
+
+### Webhooks
+- `POST /whatsapp/webhook` - Evolution API webhook receiver
+
+### Health
+- `GET /health` - Health check endpoint
+
+## 🔌 WebSocket Events
+
+**Client → Server:**
+- `join_rooms` - Join user-specific rooms
+
+**Server → Client:**
+- `message:new` - New incoming message
+- `message:status_updated` - Message status changed (sent/delivered/read)
+- `phone:qr_updated` - QR code updated (for pairing)
+- `phone:status_changed` - Phone instance status changed
+
+## 🎯 Message Flow
+
+### Sending Messages (API → WhatsApp)
+1. Frontend: `POST /api/messages/send-with-file`
+2. Backend: Validate + save file
+3. Backend: Convert webm→ogg (if audio)
+4. Backend: Send to Evolution API
+5. Backend: Save to database with `pending` status
+6. Backend: Cache keyId (anti-duplication)
+7. Webhook: Receive status update from Evolution
+8. Backend: Update message status → Emit WebSocket event
+9. Frontend: Display updated status
+
+### Receiving Messages (WhatsApp → API)
+1. Evolution API: Webhook `POST /whatsapp/webhook`
+2. Backend: Check if sent via API (cache lookup)
+3. Backend: Download media (if exists)
+4. Backend: Save message to database
+5. Backend: Emit WebSocket event `message:new`
+6. Frontend: Display new message
+
+## 🛠️ Development Scripts
+
+```bash
+# Development
+npm run start:dev          # Watch mode
+
+# Build
+npm run build             # Compile TypeScript
+
+# Production
+npm run start:prod        # Run compiled code
+
+# Database
+npx prisma migrate dev    # Create migration
+npx prisma migrate deploy # Apply migrations
+npx prisma generate       # Generate Prisma Client
+npx prisma studio         # GUI for database
+
+# Linting
+npm run lint              # Run ESLint
+npm run format            # Format with Prettier
+```
+
+## 🐛 Troubleshooting
+
+### Audio files not sending
+- ✅ Check ffmpeg is installed: `ffmpeg -version`
+- ✅ Check `audio/webm` is in allowed MIME types
+- ✅ Verify conversion logs in console
+
+### Evolution API 400 errors
+- ✅ Check `EVOLUTION_API_URL` is correct
+- ✅ Verify `EVOLUTION_GLOBAL_API_KEY` is valid
+- ✅ Check Evolution API logs: `docker logs evolution_api`
+
+### Database connection failed
+- ✅ Verify PostgreSQL is running
+- ✅ Check `DATABASE_URL` format
+- ✅ Run migrations: `npx prisma migrate deploy`
+
+### WebSocket not connecting
+- ✅ Check CORS settings (`CORS_ORIGIN`)
+- ✅ Verify frontend URL matches
+- ✅ Check firewall/network rules
+
+## 📚 Related Documentation
+
+- [NestJS Documentation](https://docs.nestjs.com)
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [Evolution API Documentation](https://doc.evolution-api.com)
+- [Docker Setup Guide](./DOCKER.md)
+
+## 📄 License
+
+[MIT License](LICENSE)
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue first to discuss changes.
+
+---
+
+**Sources:**
+- [Node.js 24 LTS](https://nodejs.org/en/about/previous-releases)
+- Built with ❤️ using NestJS
