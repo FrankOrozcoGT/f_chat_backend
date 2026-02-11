@@ -41,6 +41,21 @@ export class ConversationRepository {
   }
 
   /**
+   * Busca una conversación por ID con relaciones (phone y client)
+   * @param id - ID de la conversación
+   * @returns Conversación con phone y client o null
+   */
+  async findByIdWithRelations(id: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        phone: true,
+        client: true,
+      },
+    });
+  }
+
+  /**
    * Crea o actualiza una conversación por phoneId y clientId
    * @param data - Datos de la conversación
    * @returns Conversación creada o actualizada

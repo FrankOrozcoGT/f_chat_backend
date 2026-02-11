@@ -5,9 +5,17 @@ import { PrismaModule } from '@common/prisma/prisma.module';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { PhonesModule } from '@modules/phones/phones.module';
+import { EvolutionModule } from '@common/evolution/evolution.module';
+import { WebSocketModule } from '@common/websocket/websocket.module';
 
 @Module({
-  imports: [PrismaModule, ConversationsModule, PhonesModule],
+  imports: [
+    PrismaModule,
+    ConversationsModule,
+    PhonesModule,
+    EvolutionModule,
+    WebSocketModule,
+  ],
   controllers: [MessagesController],
   providers: [MessagesService, MessageRepository],
   exports: [MessageRepository],

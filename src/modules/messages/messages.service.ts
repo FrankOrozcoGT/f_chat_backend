@@ -1,6 +1,6 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Conversation, Phone, Message } from '@prisma/client';
+import { Conversation, Phone, Message, MessageType, MessageStatus } from '@prisma/client';
 
 @Injectable()
 export class MessagesService {
@@ -36,5 +36,71 @@ export class MessagesService {
       ...message,
       mediaUrl: message.mediaUrl ? `${backendUrl}${message.mediaUrl}` : null,
     }));
+  }
+
+  /**
+   * Valida que el contenido del mensaje sea válido según su tipo
+   * @param type - Tipo de mensaje
+   * @param content - Contenido del mensaje
+   * @throws BadRequestException si el contenido no es válido
+   */
+  validateMessageContent(type: MessageType, content: string): void {
+    // Para mensajes multimedia, el contenido puede estar vacío (solo caption)
+    if (type === 'text') {
+      if (!content || content.trim().length === 0) {
+        throw new BadRequestException('Text message content cannot be empty');
+      }
+
+      if (content.length > 4096) {
+        throw new BadRequestException('Text message exceeds maximum length of 4096 characters');
+      }
+    }
+
+    // Para multimedia (image, video, audio, voice, document), el contenido es opcional (caption)
+    if (content && content.length > 1024) {
+      throw new BadRequestException('Media caption exceeds maximum length of 1024 characters');
+    }
+  }
+
+  /**
+   * Construye los datos de un mensaje saliente (outgoing)
+   * @param conversationId - ID de la conversación
+   * @param type - Tipo de mensaje
+   * @param content - Contenido del mensaje
+   * @param status - Estado del mensaje
+   * @param mediaUrl - URL del archivo multimedia (opcional)
+   * @param evolutionKeyId - ID del mensaje en Evolution API (para tracking en webhooks)
+   * @returns Datos para crear el mensaje
+   */
+  buildOutgoingMessageData(
+    conversationId: string,
+    type: MessageType,
+    content: string,
+    status: MessageStatus,
+    mediaUrl?: string | null,
+    evolutionKeyId?: string,
+  ) {
+    return {
+      conversationId,
+      type,
+      content,
+      mediaUrl: mediaUrl || null,
+      direction: 'outgoing' as const,
+      senderType: 'agent' as const,
+      status,
+      metadata: evolutionKeyId ? { keyId: evolutionKeyId } : null,
+    };
+  }
+
+  /**
+   * Construye los datos de actualización de la conversación
+   * @param message - Mensaje creado
+   * @returns Datos para actualizar la conversación
+   */
+  buildConversationUpdate(message: Message) {
+    return {
+      lastMessageAt: message.createdAt,
+      lastMessagePreview: message.content.substring(0, 100),
+    };
   }
 }
