@@ -44,6 +44,7 @@ WORKDIR /app
 # Copiar package files
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY .env ./
 
 # Instalar solo dependencias de producción
 RUN npm ci --only=production
