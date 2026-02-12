@@ -15,6 +15,7 @@ WORKDIR /app
 # Copiar package files
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY .env* ./
 
 # Instalar dependencias
 RUN npm ci
@@ -41,13 +42,15 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copiar package files
+# Copiar package files y .env
 COPY package*.json ./
 COPY prisma ./prisma/
-COPY .env ./
 
 # Instalar solo dependencias de producción
 RUN npm ci --only=production
+
+# Copiar .env antes de generar Prisma
+COPY .env* ./
 
 # Generar Prisma Client
 RUN npx prisma generate
