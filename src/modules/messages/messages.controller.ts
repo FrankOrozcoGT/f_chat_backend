@@ -19,18 +19,12 @@ import { MessageRepository } from '@modules/webhooks/repositories/message.reposi
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { MessagesService } from './messages.service';
+import { MessageSendService } from './message-send.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SendWithFileDto } from './dto/send-with-file.dto';
-import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { CacheService } from '@common/cache/cache.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
-import { MessageType, Conversation, Phone, Client } from '@prisma/client';
-
-type ConversationWithRelations = Conversation & {
-  phone: Phone;
-  client: Client;
-};
+import { MessageType } from '@prisma/client';
 
 @Controller('api/messages')
 export class MessagesController {
@@ -41,9 +35,8 @@ export class MessagesController {
     private readonly conversationRepository: ConversationRepository,
     private readonly phoneRepository: PhoneRepository,
     private readonly messagesService: MessagesService,
-    private readonly evolutionService: EvolutionService,
+    private readonly messageSendService: MessageSendService,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly cacheService: CacheService,
     private readonly fileStorageService: FileStorageService,
   ) {}
 
@@ -127,16 +120,26 @@ export class MessagesController {
       ? this.fileStorageService.buildDockerAccessibleUrl(relativePath)
       : null;
 
-    // 4. Ejecutar envío común (Evolution API + DB + Cache)
-    return this.executeMessageSend(
-      dto.conversationId,
-      userId,
-      dto.tipo,
-      dto.contenido,
-      relativePath,
-      mediaUrlForEvolution,
-      conversation,
-    );
+    // 4. Enviar usando flujo centralizado
+    try {
+      return await this.messageSendService.send({
+        conversationId: dto.conversationId,
+        userId,
+        instanceId: conversation.phone.evolutionInstanceId,
+        clientPhone: conversation.client.phoneNumber,
+        tipo: dto.tipo,
+        contenido: dto.contenido,
+        relativePath,
+        mediaUrlForEvolution,
+      });
+    } catch (error) {
+      this.websocketGateway.emit(
+        'message:error',
+        { conversationId: dto.conversationId, error: 'Failed to send message via WhatsApp' },
+        userId,
+      );
+      throw error;
+    }
   }
 
   @Post('send-with-file')
@@ -201,7 +204,7 @@ export class MessagesController {
     // 3. Validar que tipo coincida con mimeType del archivo
     this.validateFileTypeMatchesMimeType(dto.tipo, file.mimetype);
 
-    // 3. Obtener conversación con relaciones y validar permisos
+    // 4. Obtener conversación con relaciones y validar permisos
     const conversation = await this.conversationRepository.findByIdWithRelations(
       dto.conversationId,
     );
@@ -215,13 +218,13 @@ export class MessagesController {
     // Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
 
-    // 4. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
+    // 5. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
     const { randomUUID } = await import('crypto');
     const messageId = randomUUID();
 
     this.logger.log(`Generated messageId: ${messageId} for file upload`);
 
-    // 5. Guardar archivo usando FileStorageService con messageId
+    // 6. Guardar archivo usando FileStorageService con messageId
     this.logger.log(`Saving file: ${file.mimetype}, size: ${file.size} bytes`);
 
     let relativePath: string;
@@ -245,159 +248,33 @@ export class MessagesController {
       throw new BadGatewayException(`Failed to save file: ${error.message}`);
     }
 
-    // 6. Construir mediaUrl accesible desde Evolution API (Docker)
+    // 7. Construir mediaUrl accesible desde Evolution API (Docker)
     const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(relativePath);
 
     this.logger.log(`About to send - tipo: ${dto.tipo}, mimeType: ${finalMimeType}, fileName: ${fileName}, mediaUrl: ${mediaUrl}`);
 
-    // 7. Ejecutar envío común (Evolution API + DB + Cache)
-    return this.executeMessageSend(
-      dto.conversationId,
-      userId,
-      dto.tipo,
-      dto.contenido || '',
-      relativePath,
-      mediaUrl,
-      conversation,
-      messageId,
-      finalMimeType,
-      fileName,
-    );
-  }
-
-  /**
-   * Método privado que centraliza la lógica de envío de mensajes
-   * Usado tanto por POST /send como POST /send-with-file
-   */
-  private async executeMessageSend(
-    conversationId: string,
-    userId: string,
-    tipo: MessageType,
-    contenido: string,
-    relativePath: string | null,
-    mediaUrlForEvolution: string | null,
-    conversation: ConversationWithRelations,
-    messageId?: string,
-    mimeType?: string,
-    fileName?: string,
-  ) {
-    const { phone, client } = conversation;
-
-    // 1. Enviar vía Evolution API PRIMERO
-    let evolutionKeyId: string;
+    // 8. Enviar usando flujo centralizado
     try {
-      let response: { key: { id: string } };
-      if (tipo === MessageType.text) {
-        response = await this.evolutionService.sendTextMessage(
-          phone.evolutionInstanceId,
-          client.phoneNumber,
-          contenido,
-        );
-      } else if (mediaUrlForEvolution) {
-        // Mapear MessageType a EvolutionMediaType
-        const mediatype = this.mapMessageTypeToMediaType(tipo);
-
-        response = await this.evolutionService.sendMediaMessage(
-          phone.evolutionInstanceId,
-          client.phoneNumber,
-          mediaUrlForEvolution,
-          mediatype,
-          contenido || undefined,
-          mimeType,
-          fileName,
-        );
-      } else {
-        throw new BadRequestException(
-          'mediaUrl is required for multimedia messages',
-        );
-      }
-
-      // Capturar keyId
-      evolutionKeyId = response.key.id;
-
-      this.logger.log(
-        `Evolution API accepted message for ${client.phoneNumber}, keyId: ${evolutionKeyId}`,
-      );
+      return await this.messageSendService.send({
+        conversationId: dto.conversationId,
+        userId,
+        instanceId: conversation.phone.evolutionInstanceId,
+        clientPhone: conversation.client.phoneNumber,
+        tipo: dto.tipo,
+        contenido: dto.contenido || '',
+        relativePath,
+        mediaUrlForEvolution: mediaUrl,
+        messageId,
+        mimeType: finalMimeType,
+        fileName,
+      });
     } catch (error) {
-      this.logger.error(`Evolution API rejected message: ${error.message}`);
-
-      // Emitir evento WebSocket de error
       this.websocketGateway.emit(
         'message:error',
-        {
-          conversationId,
-          error: 'Failed to send message via WhatsApp',
-        },
+        { conversationId: dto.conversationId, error: 'Failed to send message via WhatsApp' },
         userId,
       );
-
-      throw new BadGatewayException('Failed to send message via WhatsApp');
-    }
-
-    // 2. Guardar keyId en cache ANTES de DB (para evitar duplicación en webhook)
-    this.cacheService.set(
-      `sent_message:${evolutionKeyId}`,
-      { userId, conversationId },
-      300, // 5 minutos TTL
-    );
-
-    this.logger.log(`Cache SET: sent_message:${evolutionKeyId}`);
-
-    // 3. Build messageData con metadata.keyId (usar relativePath para DB)
-    const messageData = this.messagesService.buildOutgoingMessageData(
-      conversationId,
-      tipo,
-      contenido,
-      'pending', // Webhook actualizará a sent/delivered/read
-      relativePath,
-      evolutionKeyId,
-      fileName || null,
-      null, // fileSize: se calculará después si es necesario
-      mimeType || null,
-    );
-
-    // 4. Guardar en DB
-    const conversationUpdate = {
-      lastMessageAt: new Date(),
-      lastMessagePreview: contenido.substring(0, 100),
-    };
-
-    try {
-      const { message } = await this.messageRepository.sendMessageTransaction(
-        conversationId,
-        userId,
-        messageData,
-        conversationUpdate,
-        messageId, // Usar messageId predefinido si existe (para nombre archivo estandarizado)
-      );
-
-      this.logger.log(
-        `Message saved with status 'pending', webhook will update status`,
-      );
-
-      return message;
-    } catch (error) {
-      this.logger.error(`Failed to save message in DB: ${error.message}`);
-      throw new BadGatewayException('Message sent but failed to save in database');
-    }
-  }
-
-  /**
-   * Mapea MessageType a EvolutionMediaType
-   */
-  private mapMessageTypeToMediaType(tipo: MessageType): EvolutionMediaType {
-    switch (tipo) {
-      case MessageType.image:
-        return EvolutionMediaType.IMAGE;
-      case MessageType.video:
-        return EvolutionMediaType.VIDEO;
-      case MessageType.voice:
-      case MessageType.audio:
-        return EvolutionMediaType.AUDIO;
-      case MessageType.document:
-        return EvolutionMediaType.DOCUMENT;
-      default:
-        throw new BadRequestException(`Unsupported media type: ${tipo}`);
+      throw error;
     }
   }
 
