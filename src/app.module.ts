@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { CacheModule } from '@common/cache/cache.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
@@ -12,6 +13,8 @@ import { WebhooksModule } from '@modules/webhooks/webhooks.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { MessagesModule } from '@modules/messages/messages.module';
+import { LangSmithModule } from '@common/langsmith/langsmith.module';
+import { AiModule } from '@modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -19,17 +22,20 @@ import { MessagesModule } from '@modules/messages/messages.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     CacheModule,
     FileStorageModule,
     EvolutionModule,
     WebSocketModule,
+    LangSmithModule,
     UsersModule,
     AuthModule,
     HealthModule,
     PhonesModule,
     ConversationsModule,
     MessagesModule,
+    AiModule,
     WebhooksModule,
   ],
 })
