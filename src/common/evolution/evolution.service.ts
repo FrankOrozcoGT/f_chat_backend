@@ -341,6 +341,20 @@ export class EvolutionService {
   }
 
   /**
+   * Enviar audio desde un Buffer (base64) - POST /message/sendWhatsAppAudio
+   */
+  async sendAudioBuffer(
+    instanceId: string,
+    phoneNumber: string,
+    audioBuffer: Buffer,
+    attempt = 1,
+  ): Promise<SendMessageResponseDto> {
+    const base64Audio = audioBuffer.toString('base64');
+    const audioDataUrl = `data:audio/ogg;base64,${base64Audio}`;
+    return this.sendAudioMessage(instanceId, phoneNumber, audioDataUrl, attempt);
+  }
+
+  /**
    * Configurar webhook - POST /webhook/set/:instanceName
    * Timeout: 5s, retry x2 con delay 2s
    */
