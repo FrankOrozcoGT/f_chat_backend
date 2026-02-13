@@ -41,12 +41,18 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
+# DEBUG: Listar archivos del contexto de build
+RUN echo "=== BUILD CONTEXT CHECK ===" && ls -la /
+
 # Copiar package files y .env
 COPY package*.json ./
 COPY prisma ./prisma/
 
 # Instalar solo dependencias de producción
 RUN npm ci --only=production
+
+# DEBUG: Ver qué archivos hay disponibles antes de copiar .env
+RUN echo "=== PWD ===" && pwd && echo "=== LS -LA ===" && ls -la
 
 # Copiar .env antes de generar Prisma
 COPY .env ./
