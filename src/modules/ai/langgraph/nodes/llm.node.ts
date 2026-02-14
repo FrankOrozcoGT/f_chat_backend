@@ -51,13 +51,20 @@ export class LlmNode {
 
     let llmResult: LlmResponse;
 
+    const traceMessages = [
+      ...history,
+      { role: 'user', content: imageUrl ? `${transcription} [imagen: ${imageUrl}]` : transcription },
+    ];
+
     if (imageUrl) {
       llmResult = await this.langSmithService.traceLLM(
         () => this.kimiClient.chatWithVision(transcription, imageUrl, history),
+        traceMessages,
       );
     } else {
       llmResult = await this.langSmithService.traceLLM(
         () => this.kimiClient.chat(transcription, history),
+        traceMessages,
       );
     }
 

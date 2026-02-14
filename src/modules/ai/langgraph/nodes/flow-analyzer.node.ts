@@ -94,6 +94,7 @@ export class FlowAnalyzerNode {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const llmResult = await this.langSmithService.traceLLM(
         () => this.kimiClient.rawChat(chatMessages, 250),
+        chatMessages,
       );
 
       apiCalls.push({

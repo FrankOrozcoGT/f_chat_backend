@@ -35,12 +35,19 @@ export class LangSmithService {
   }
 
   /**
-   * Wraps the LLM step as a traceable function
+   * Wraps the LLM step as a traceable function.
+   * Pass messages so they appear as inputs in LangSmith UI.
    */
-  traceLLM<T>(fn: () => Promise<T>): Promise<T> {
+  traceLLM<T>(
+    fn: () => Promise<T>,
+    messages?: { role: string; content: string }[],
+  ): Promise<T> {
     if (!this.isEnabled) return fn();
-    const traced = traceable(fn, { name: 'llm', run_type: 'llm' });
-    return traced();
+    const traced = traceable(
+      async (input: { messages?: { role: string; content: string }[] }) => fn(),
+      { name: 'llm', run_type: 'llm' },
+    );
+    return traced({ messages }) as Promise<T>;
   }
 
   /**
