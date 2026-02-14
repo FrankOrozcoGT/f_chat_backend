@@ -36,6 +36,7 @@ export class ConversationsService {
       lastMessageAt: conversation.lastMessageAt,
       lastMessagePreview: conversation.lastMessagePreview,
       isActive: conversation.isActive,
+      mode: conversation.mode,
     };
 
     return {

@@ -4,6 +4,7 @@ export class ConversationResponseDto {
   id: string;
   phoneId: string;
   clientId: string;
+  mode: string;
   lastMessageAt: Date;
   lastMessagePreview: string | null;
   isActive: boolean;
@@ -34,6 +35,7 @@ export class ConversationResponseDto {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
     this.clientId = conversation.clientId;
+    this.mode = conversation.mode;
     this.lastMessageAt = conversation.lastMessageAt;
     this.lastMessagePreview = conversation.lastMessagePreview;
     this.isActive = conversation.isActive;
