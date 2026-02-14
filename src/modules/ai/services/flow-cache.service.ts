@@ -21,11 +21,12 @@ export class FlowCacheService {
 
   async load(conversationId: string, sessionId: string): Promise<FlowData> {
     const cached = await this.redis.getJson<FlowData>(this.key(conversationId));
-    if (cached) return cached;
+    if (cached) return { currentNodeId: cached.currentNodeId ?? null, nodes: cached.nodes ?? [] };
 
     // Cache miss: load from DB
     const session = await this.sessionRepository.findActiveByConversationId(conversationId);
-    const flowData: FlowData = (session?.flowData as unknown as FlowData) || { currentNodeId: null, nodes: [] };
+    const raw = session?.flowData as unknown as Partial<FlowData> | null;
+    const flowData: FlowData = { currentNodeId: raw?.currentNodeId ?? null, nodes: raw?.nodes ?? [] };
 
     await this.redis.setJson(this.key(conversationId), flowData, DEFAULT_TTL_SECONDS);
     this.logger.debug(`Flow loaded from DB for ${conversationId}`);

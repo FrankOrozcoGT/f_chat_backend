@@ -28,15 +28,16 @@ export class LlmNode {
       // Flujo complejo: context builder ya armó el contexto
       history = [{ role: 'user', content: contextForLlm }];
     } else {
-      // Flujo simple: cargar todos los mensajes de la conversación
+      // Flujo simple: cargar últimos 30 mensajes de la conversación
       const messages = await this.prisma.message.findMany({
         where: { conversationId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
+        take: 31, // 30 + 1 (el mensaje actual)
         select: { content: true, direction: true },
       });
 
-      // Excluir el último (es el mensaje actual, se pasa como transcription)
-      const previousMessages = messages.slice(0, -1);
+      // Reverse para orden cronológico, excluir el último (mensaje actual)
+      const previousMessages = messages.reverse().slice(0, -1);
 
       history = previousMessages
         .filter((m) => m.content)
