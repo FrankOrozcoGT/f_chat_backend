@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LlmResponse } from './interfaces/llm-response.interface';
 
+type ChatMessage = {
+  role: string;
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+};
+
 @Injectable()
 export class KimiClient {
   private readonly logger = new Logger(KimiClient.name);
@@ -41,8 +46,41 @@ export class KimiClient {
     };
   }
 
+  async chatWithVision(
+    text: string,
+    imageUrl: string,
+    history: ChatMessage[] = [],
+  ): Promise<LlmResponse> {
+    const userContent = [
+      { type: 'text', text: text || 'Describe esta imagen.' },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ];
+
+    const messages: ChatMessage[] = [
+      {
+        role: 'system',
+        content: 'Eres un asistente amigable y conciso. Responde en español. Si el usuario envía una imagen, descríbela y responde a cualquier pregunta sobre ella. Si el usuario quiere hablar con un humano, responde con el intent "switch_hitl".',
+      },
+      ...history,
+      { role: 'user', content: userContent },
+    ];
+
+    const result = await this.rawChat(messages, 500);
+
+    const intent = result.response.toLowerCase().includes('switch_hitl') ? 'switch_hitl' : 'normal';
+
+    return {
+      response: intent === 'switch_hitl' ? result.response.replace(/switch_hitl/gi, '').trim() : result.response,
+      intent,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+      costUsd: result.costUsd,
+      latencyMs: result.latencyMs,
+    };
+  }
+
   async rawChat(
-    messages: { role: string; content: string }[],
+    messages: ChatMessage[],
     maxTokens: number = 500,
   ): Promise<Omit<LlmResponse, 'intent'>> {
     const startTime = Date.now();
