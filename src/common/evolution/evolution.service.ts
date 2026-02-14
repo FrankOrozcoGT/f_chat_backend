@@ -5,7 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import {
   CreateInstanceResponseDto,
   SendMessageResponseDto,
-  WebhookResponseDto,
 } from './dto/evolution-response.dto';
 
 export enum EvolutionMediaType {
@@ -51,8 +50,6 @@ export class EvolutionService {
     instanceName: string,
     options?: {
       qrcode?: boolean;
-      webhookUrl?: string;
-      webhookEvents?: string[];
     },
   ): Promise<CreateInstanceResponseDto> {
     try {
@@ -65,14 +62,6 @@ export class EvolutionService {
 
       if (options?.qrcode !== undefined) {
         body.qrcode = options.qrcode;
-      }
-
-      if (options?.webhookUrl) {
-        body.webhook = {
-          url: options.webhookUrl,
-          enabled: true,
-          events: options.webhookEvents || ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
-        };
       }
 
       const response = await firstValueFrom(
@@ -352,64 +341,6 @@ export class EvolutionService {
     const base64Audio = audioBuffer.toString('base64');
     const audioDataUrl = `data:audio/ogg;base64,${base64Audio}`;
     return this.sendAudioMessage(instanceId, phoneNumber, audioDataUrl, attempt);
-  }
-
-  /**
-   * Configurar webhook - POST /webhook/set/:instanceName
-   * Timeout: 5s, retry x2 con delay 2s
-   */
-  async setWebhook(
-    instanceName: string,
-    webhookUrl: string,
-    attempt = 1,
-  ): Promise<WebhookResponseDto> {
-    const maxAttempts = 3; // 1 inicial + 2 retries
-    const retryDelay = 2000; // 2s
-
-    try {
-      this.logger.log(
-        `Setting webhook for instance: ${instanceName} (attempt ${attempt}/${maxAttempts})`,
-      );
-
-      const response = await firstValueFrom(
-        this.httpService.post(
-          `${this.apiUrl}/webhook/set/${instanceName}`,
-          {
-            webhook: {
-              url: webhookUrl,
-              enabled: true,
-              events: [
-                'QRCODE_UPDATED',
-                'CONNECTION_UPDATE',
-                'MESSAGES_UPSERT',
-                'MESSAGES_UPDATE',
-              ],
-            },
-          },
-          {
-            headers: this.getHeaders(),
-            timeout: 5000,
-          },
-        ),
-      );
-
-      this.logger.log(`Webhook set successfully for instance: ${instanceName}`);
-      return response.data;
-    } catch (error) {
-      this.logger.warn(
-        `Attempt ${attempt}/${maxAttempts} failed for setWebhook: ${instanceName}`,
-        error.message,
-      );
-
-      if (attempt < maxAttempts) {
-        this.logger.log(`Retrying in ${retryDelay}ms...`);
-        await this.delay(retryDelay);
-        return this.setWebhook(instanceName, webhookUrl, attempt + 1);
-      }
-
-      this.logger.error(`All attempts failed for setWebhook: ${instanceName}`);
-      throw new BadGatewayException('Failed to set webhook after retries');
-    }
   }
 
   /**

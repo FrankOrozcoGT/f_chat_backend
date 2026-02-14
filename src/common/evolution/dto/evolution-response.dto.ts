@@ -32,11 +32,3 @@ export class SendMessageResponseDto {
   messageTimestamp: string;
   status: string;
 }
-
-export class WebhookResponseDto {
-  url: string;
-  enabled: boolean;
-  events: string[];
-  webhookByEvents?: boolean;
-  webhookBase64?: boolean;
-}
