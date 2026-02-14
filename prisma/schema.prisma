@@ -61,8 +61,22 @@ model Client {
   firstContactAt DateTime       @default(now())
   lastContactAt  DateTime       @updatedAt
   conversations  Conversation[]
+  memories       ClientMemory[]
 
   @@index([phoneNumber])
+}
+
+model ClientMemory {
+  id        String   @id @default(uuid())
+  clientId  String
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, key])
+  @@index([clientId])
 }
 
 model Conversation {
@@ -90,7 +104,6 @@ model Conversation {
 model Message {
   id             String            @id @default(uuid())
   conversationId String
-  flowNodeId     String?
   type           MessageType
   content        String
   mediaUrl       String?
@@ -104,47 +117,28 @@ model Message {
   metadata       Json?
   createdAt      DateTime          @default(now())
   conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  flowNode       FlowNode?         @relation(fields: [flowNodeId], references: [id], onDelete: SetNull)
   apiCalls       ApiCall[]
   mediaFiles     MediaFile[]
 
   @@index([conversationId])
   @@index([createdAt])
-  @@index([flowNodeId])
 }
 
 // AI & HITL Models
 
 model Session {
-  id               String       @id @default(uuid())
-  conversationId   String
-  type             SessionType
-  mermaidFlowchart String       @default("")
-  currentNodeId    String?
-  startedAt        DateTime     @default(now())
-  endedAt          DateTime?
-  endedBy          String?
-  takenBy          String?
-  reason           String?
-  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  flowNodes        FlowNode[]
+  id             String       @id @default(uuid())
+  conversationId String
+  type           SessionType
+  flowData       Json         @default("{}")
+  startedAt      DateTime     @default(now())
+  endedAt        DateTime?
+  endedBy        String?
+  takenBy        String?
+  reason         String?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
-}
-
-model FlowNode {
-  id            String         @id @default(uuid())
-  sessionId     String
-  nodeId        String
-  understanding String         @default("")
-  status        FlowNodeStatus @default(clarifying)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  session       Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  messages      Message[]
-
-  @@unique([sessionId, nodeId])
-  @@index([sessionId])
 }
 
 model ApiCall {
@@ -240,18 +234,11 @@ enum SessionType {
   HITL
 }
 
-enum FlowNodeStatus {
-  clarifying
-  understood
-  executing
-  completed
-  abandoned
-}
-
 enum ApiType {
   qwen_stt
   kimi_llm
   qwen_tts
+  kimi_flow_analyzer
 }
 
 enum MediaType {
