@@ -200,23 +200,22 @@ export class WebhooksController {
       console.log(`[Webhook] Incoming message for conversation ${conversation.id}`);
     }
 
-    // 9. Si mode=AI y es mensaje entrante de audio, emitir evento para AI agent
+    // 9. Si mode=AI y es mensaje entrante, emitir evento para AI agent
     if (!fromMe && conversation.mode === 'AI') {
-      const isAudioMessage = message.type === 'voice' || message.type === 'audio';
-
-      if (isAudioMessage && mediaData) {
-        const phone = await this.phoneRepository.findById(phoneId);
-        if (phone) {
-          this.eventEmitter.emit('ai.incoming.audio', {
-            messageId: message.id,
-            conversationId: conversation.id,
-            instanceName,
-            clientPhone: clientData.phoneNumber,
-            userId: phone.userId,
-            mediaRelativePath: mediaData.relativePath,
-          });
-          this.logger.log(`Emitted ai.incoming.audio for conversation ${conversation.id}`);
-        }
+      const phone = await this.phoneRepository.findById(phoneId);
+      if (phone) {
+        this.eventEmitter.emit('ai.incoming.message', {
+          messageId: message.id,
+          conversationId: conversation.id,
+          instanceName,
+          clientPhone: clientData.phoneNumber,
+          userId: phone.userId,
+          messageType: message.type,
+          content: message.content,
+          mediaRelativePath: mediaData?.relativePath || null,
+          mediaMetadata: mediaData ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType } : null,
+        });
+        this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
       }
     }
   }
