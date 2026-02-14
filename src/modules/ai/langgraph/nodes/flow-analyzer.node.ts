@@ -1,47 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '@common/prisma/prisma.service';
 import { KimiClient } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { FlowCacheService } from '../../services/flow-cache.service';
+import { NodeMessageService } from '../../services/node-message.service';
 import { SessionRepository } from '../../repositories/session.repository';
 import { ClientMemoryRepository } from '../../repositories/client-memory.repository';
-import { WorkflowStateType, FlowData, FlowAction, FlowNode } from '../state.interface';
+import { WorkflowStateType, FlowData, FlowOperation, FlowOpType, FlowNode } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { ApiType } from '@prisma/client';
+import { loadPrompt } from '../../prompts/load-prompt';
 
-const ANALYZER_SYSTEM_PROMPT = `Eres un analizador de flujo de conversación. Detectas SOLO cambios significativos de dirección o enfoque.
+const ANALYZER_SYSTEM_PROMPT = loadPrompt('analyzer-system.md');
 
-Tu trabajo NO es analizar cada mensaje. La mayoría de veces la respuesta es NONE porque la conversación fluye normalmente.
-
-Solo responde diferente si:
-- DIRECTION_CHANGE: el usuario abandona COMPLETAMENTE lo que estaba haciendo para algo totalmente distinto
-- SHIFT_FOCUS: el usuario necesita resolver algo puntual que BLOQUEA el objetivo (como un error, un problema técnico, una duda que impide continuar). El contexto anterior ESTORBA y debe colapsarse temporalmente.
-- BACK_TO_OBJECTIVE: el usuario resolvió el desvío/bloqueo y vuelve al tema principal
-- CREATE: es un tema genuinamente nuevo (NO una pregunta rápida dentro del mismo flujo)
-- END_CONVERSATION: despedida clara, la conversación terminó
-
-Una pregunta rápida como "¿cuánto cuesta?" dentro del flujo de un pedido NO es un cambio. Es parte del mismo flujo.
-
-Responde SOLO un JSON válido (sin markdown, sin backticks):
-{ "action": "NONE" }
-o
-{ "action": "CREATE", "label": "descripción corta del tema" }
-o
-{ "action": "SHIFT_FOCUS", "label": "descripción del bloqueo" }
-o
-{ "action": "DIRECTION_CHANGE", "label": "nuevo tema" }
-o
-{ "action": "BACK_TO_OBJECTIVE" }
-o
-{ "action": "END_CONVERSATION" }`;
+const VALID_OPS: FlowOpType[] = ['create', 'close', 'reopen', 'focus', 'end'];
 
 @Injectable()
 export class FlowAnalyzerNode {
   private readonly logger = new Logger(FlowAnalyzerNode.name);
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly kimiClient: KimiClient,
     private readonly langSmithService: LangSmithService,
     private readonly flowCacheService: FlowCacheService,
+    private readonly nodeMessageService: NodeMessageService,
     private readonly sessionRepository: SessionRepository,
     private readonly clientMemoryRepository: ClientMemoryRepository,
   ) {}
@@ -64,172 +47,214 @@ export class FlowAnalyzerNode {
 
     // 3. Build context for analyzer
     const activeNodes = flowData.nodes.filter((n) => n.status === 'active' || n.status === 'reopened');
-    const activeLabels =
-      activeNodes.length > 0
-        ? activeNodes.map((n) => `- ${n.nodeId} (${n.status}): ${n.understanding}`).join('\n')
-        : '(ninguno - conversación nueva)';
+    const collapsedNodes = flowData.nodes.filter((n) => n.status === 'collapsed');
 
-    const userMessage = `Nodos activos:\n${activeLabels}\n\nMensaje del usuario: "${transcription}"`;
+    let nodesList = '';
+    if (activeNodes.length > 0) {
+      nodesList += 'Nodos activos:\n' +
+        activeNodes.map((n) => `- ${n.nodeId}${n.nodeId === flowData.currentNodeId ? ' (foco)' : ''}`).join('\n');
+    }
+    if (collapsedNodes.length > 0) {
+      nodesList += '\nNodos cerrados:\n' +
+        collapsedNodes.map((n) => `- ${n.nodeId}`).join('\n');
+    }
+    if (!nodesList) {
+      nodesList = '(ningún nodo - conversación nueva)';
+    }
 
-    // 4. Call LLM for analysis
-    const messages = [
+    // Load messages from current active node
+    let nodeConversation = '';
+    if (flowData.currentNodeId) {
+      const currentNode = activeNodes.find((n) => n.nodeId === flowData.currentNodeId);
+      if (currentNode?.messageIds?.length) {
+        const msgs = await this.nodeMessageService.loadNodeMessages(
+          currentNode.messageIds,
+          conversationId,
+          this.prisma,
+        );
+        if (msgs.length > 0) {
+          nodeConversation = '\n\nConversación del nodo actual:\n' +
+            msgs.map((m) => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n');
+        }
+      }
+    }
+
+    const userMessage = `${nodesList}${nodeConversation}\n\nMensaje del usuario: "${transcription}"`;
+
+    // 4. Call LLM for analysis (with retry on parse failure)
+    const chatMessages: { role: string; content: string }[] = [
       { role: 'system', content: ANALYZER_SYSTEM_PROMPT },
       { role: 'user', content: userMessage },
     ];
 
-    const llmResult = await this.langSmithService.traceLLM(
-      () => this.kimiClient.rawChat(messages, 150),
-    );
+    const apiCalls: CreateApiCallData[] = [];
+    let operations: FlowOperation[] | null = null;
+    let totalAnalyzerCost = 0;
 
-    // 5. Parse response
-    const analyzerResult = this.parseAnalyzerResponse(llmResult.response);
-    const action = analyzerResult.action;
-    const label = analyzerResult.label;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const llmResult = await this.langSmithService.traceLLM(
+        () => this.kimiClient.rawChat(chatMessages, 250),
+      );
 
-    this.logger.log(`FlowAnalyzer: action=${action}${label ? `, label="${label}"` : ''}`);
+      apiCalls.push({
+        messageId,
+        apiType: 'kimi_flow_analyzer' as ApiType,
+        operation: attempt === 1 ? 'flow_analysis' : 'flow_analysis_retry',
+        tokensInput: llmResult.tokensInput,
+        tokensOutput: llmResult.tokensOutput,
+        costUsd: llmResult.costUsd,
+        latencyMs: llmResult.latencyMs,
+      });
+      totalAnalyzerCost += llmResult.costUsd;
 
-    // 6. Apply action to flow data
-    const updatedFlowData = this.applyAction(flowData, action, label, messageId);
+      const parseResult = this.parseOperations(llmResult.response);
+      if (parseResult !== null) {
+        operations = parseResult;
+        break;
+      }
 
-    // 7. Handle END_CONVERSATION
-    if (action === 'END_CONVERSATION') {
+      // Parse failed — retry with error feedback
+      if (attempt === 1) {
+        this.logger.warn(`FlowAnalyzer: parse failed (attempt 1), retrying with error feedback`);
+        chatMessages.push(
+          { role: 'assistant', content: llmResult.response },
+          { role: 'user', content: `Error: tu respuesta no es un JSON válido con el formato { "operations": [...] }. Corrige y responde SOLO el JSON.` },
+        );
+      }
+    }
+
+    // If both attempts failed, mark as unanalyzed
+    if (operations === null) {
+      this.logger.error(`FlowAnalyzer: parse failed after 2 attempts, skipping analysis`);
+      operations = [];
+
+      // Add message to current node anyway so it's not lost
+      const fallbackFlowData = this.applyOperations(flowData, [], messageId);
+      await this.flowCacheService.save(conversationId, fallbackFlowData);
+
+      return {
+        sessionId,
+        flowOperations: [],
+        flowData: fallbackFlowData,
+        apiCalls: [...existingApiCalls, ...apiCalls],
+        totalCost: existingCost + totalAnalyzerCost,
+      };
+    }
+
+    // 5. Log operations
+    const opsLog = operations.length === 0
+      ? 'ops=[]'
+      : 'ops=[' + operations.map((o) => `${o.op}(${o.label || o.nodeId || ''})`).join(', ') + ']';
+    this.logger.log(`FlowAnalyzer: ${opsLog}`);
+
+    // 6. Apply operations to flow data
+    const updatedFlowData = this.applyOperations(flowData, operations, messageId);
+
+    // 7. Handle end operation
+    const hasEnd = operations.some((o) => o.op === 'end');
+    if (hasEnd) {
       await this.flowCacheService.save(conversationId, updatedFlowData);
       await this.flowCacheService.flushToDb(conversationId, sessionId);
       await this.sessionRepository.close(sessionId, 'end_conversation');
       await this.flowCacheService.clear(conversationId);
     } else {
-      // Save updated flow to Redis
       await this.flowCacheService.save(conversationId, updatedFlowData);
     }
 
-    // 8. Record API call
-    const apiCall: CreateApiCallData = {
-      messageId,
-      apiType: 'kimi_flow_analyzer' as ApiType,
-      operation: 'flow_analysis',
-      tokensInput: llmResult.tokensInput,
-      tokensOutput: llmResult.tokensOutput,
-      costUsd: llmResult.costUsd,
-      latencyMs: llmResult.latencyMs,
-    };
-
     return {
       sessionId,
-      flowAction: action,
+      flowOperations: operations,
       flowData: updatedFlowData,
-      apiCalls: [...existingApiCalls, apiCall],
-      totalCost: existingCost + llmResult.costUsd,
+      apiCalls: [...existingApiCalls, ...apiCalls],
+      totalCost: existingCost + totalAnalyzerCost,
     };
   }
 
-  private parseAnalyzerResponse(response: string): { action: FlowAction; label?: string } {
+  /**
+   * Returns FlowOperation[] on success, null on parse failure.
+   * Empty array [] = valid response (no changes needed).
+   * null = invalid JSON or missing operations field.
+   */
+  private parseOperations(response: string): FlowOperation[] | null {
     try {
-      // Strip markdown code blocks if present
       const cleaned = response.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleaned);
-      const validActions: FlowAction[] = [
-        'NONE', 'CREATE', 'SHIFT_FOCUS', 'BACK_TO_OBJECTIVE', 'DIRECTION_CHANGE', 'END_CONVERSATION',
-      ];
-      if (validActions.includes(parsed.action)) {
-        return { action: parsed.action, label: parsed.label };
-      }
+
+      if (!Array.isArray(parsed.operations)) return null;
+
+      return parsed.operations.filter((op: any) => {
+        if (!op?.op || !VALID_OPS.includes(op.op)) return false;
+        if (op.op === 'create' && !op.label) return false;
+        if ((op.op === 'close' || op.op === 'reopen' || op.op === 'focus') && !op.nodeId) return false;
+        return true;
+      });
     } catch {
       this.logger.warn(`FlowAnalyzer: failed to parse response: "${response}"`);
     }
-    return { action: 'NONE' };
+    return null;
   }
 
-  private applyAction(flowData: FlowData, action: FlowAction, label?: string, messageId?: string): FlowData {
+  private applyOperations(flowData: FlowData, operations: FlowOperation[], messageId?: string): FlowData {
     const nodes = [...flowData.nodes.map((n) => ({ ...n, messageIds: [...n.messageIds] }))];
     let currentNodeId = flowData.currentNodeId;
 
-    switch (action) {
-      case 'NONE': {
-        // Add message to current node if exists
-        if (currentNodeId) {
-          const current = nodes.find((n) => n.nodeId === currentNodeId);
-          if (current && messageId) current.messageIds.push(messageId);
+    for (const op of operations) {
+      switch (op.op) {
+        case 'create': {
+          const newNode: FlowNode = {
+            nodeId: op.label!,
+            parentId: currentNodeId,
+            status: 'active',
+            understanding: op.label!,
+            messageIds: [],
+          };
+          nodes.push(newNode);
+          currentNodeId = newNode.nodeId;
+          break;
         }
-        break;
-      }
 
-      case 'CREATE': {
-        const newNode: FlowNode = {
-          nodeId: label || `node_${Date.now()}`,
-          parentId: currentNodeId,
-          status: 'active',
-          understanding: label || '',
-          messageIds: messageId ? [messageId] : [],
-        };
-        nodes.push(newNode);
-        currentNodeId = newNode.nodeId;
-        break;
-      }
-
-      case 'SHIFT_FOCUS': {
-        // Collapse current active nodes (they "estorban")
-        nodes.forEach((n) => {
-          if (n.status === 'active') n.status = 'collapsed';
-        });
-        // Create focus node
-        const focusNode: FlowNode = {
-          nodeId: label || `focus_${Date.now()}`,
-          parentId: currentNodeId,
-          status: 'active',
-          understanding: label || '',
-          messageIds: messageId ? [messageId] : [],
-        };
-        nodes.push(focusNode);
-        currentNodeId = focusNode.nodeId;
-        break;
-      }
-
-      case 'BACK_TO_OBJECTIVE': {
-        // Collapse current focus node
-        if (currentNodeId) {
-          const current = nodes.find((n) => n.nodeId === currentNodeId);
-          if (current) {
-            current.status = 'collapsed';
-            // Reopen parent
-            if (current.parentId) {
-              const parent = nodes.find((n) => n.nodeId === current.parentId);
-              if (parent) {
-                parent.status = 'reopened';
-                currentNodeId = parent.nodeId;
-                if (messageId) parent.messageIds.push(messageId);
-              }
+        case 'close': {
+          const node = nodes.find((n) => n.nodeId === op.nodeId);
+          if (node) {
+            node.status = 'collapsed';
+            if (currentNodeId === op.nodeId) {
+              const firstActive = nodes.find((n) => n.status === 'active' || n.status === 'reopened');
+              currentNodeId = firstActive?.nodeId || null;
             }
           }
+          break;
         }
-        break;
-      }
 
-      case 'DIRECTION_CHANGE': {
-        // Collapse ALL active nodes
-        nodes.forEach((n) => {
-          if (n.status === 'active' || n.status === 'reopened') n.status = 'collapsed';
-        });
-        // Create new direction node
-        const directionNode: FlowNode = {
-          nodeId: label || `direction_${Date.now()}`,
-          parentId: null,
-          status: 'active',
-          understanding: label || '',
-          messageIds: messageId ? [messageId] : [],
-        };
-        nodes.push(directionNode);
-        currentNodeId = directionNode.nodeId;
-        break;
-      }
+        case 'reopen': {
+          const node = nodes.find((n) => n.nodeId === op.nodeId && n.status === 'collapsed');
+          if (node) {
+            node.status = 'active';
+          }
+          break;
+        }
 
-      case 'END_CONVERSATION': {
-        // Collapse everything
-        nodes.forEach((n) => {
-          if (n.status !== 'collapsed') n.status = 'collapsed';
-        });
-        currentNodeId = null;
-        break;
+        case 'focus': {
+          const node = nodes.find((n) => n.nodeId === op.nodeId && (n.status === 'active' || n.status === 'reopened'));
+          if (node) {
+            currentNodeId = node.nodeId;
+          }
+          break;
+        }
+
+        case 'end': {
+          nodes.forEach((n) => {
+            if (n.status !== 'collapsed') n.status = 'collapsed';
+          });
+          currentNodeId = null;
+          break;
+        }
       }
+    }
+
+    // Add messageId to the node with focus AFTER all ops
+    if (currentNodeId && messageId) {
+      const focusNode = nodes.find((n) => n.nodeId === currentNodeId);
+      if (focusNode) focusNode.messageIds.push(messageId);
     }
 
     return { currentNodeId, nodes };
