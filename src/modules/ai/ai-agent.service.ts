@@ -78,7 +78,7 @@ export class AiAgentService {
         mimeType: savedFile.mimeType,
         fileName: savedFile.fileName,
         fileSize: savedFile.fileSize,
-        senderType: 'system',
+        senderType: 'bot',
       });
 
       // 8. Guardar costo AI en el mensaje

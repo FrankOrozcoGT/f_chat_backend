@@ -195,6 +195,7 @@ enum MessageDirection {
 enum MessageSenderType {
   client
   agent
+  bot
   system
 }
 
