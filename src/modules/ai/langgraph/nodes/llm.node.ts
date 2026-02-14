@@ -5,6 +5,7 @@ import { KimiClient } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
+import { LlmResponse } from '../../clients/interfaces/llm-response.interface';
 
 @Injectable()
 export class LlmNode {
@@ -17,7 +18,7 @@ export class LlmNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { transcription, contextForLlm, conversationId, messageId, messageType, apiCalls: existingApiCalls, totalCost: existingCost } = state;
+    const { transcription, contextForLlm, conversationId, messageId, messageType, imageUrl, apiCalls: existingApiCalls, totalCost: existingCost } = state;
 
     // Flujo complejo: usa contextForLlm del ContextBuilderNode
     // Flujo simple: carga historial de la conversación desde DB
@@ -47,9 +48,17 @@ export class LlmNode {
       this.logger.log(`LlmNode: loaded ${history.length} messages from conversation history`);
     }
 
-    const llmResult = await this.langSmithService.traceLLM(
-      () => this.kimiClient.chat(transcription, history),
-    );
+    let llmResult: LlmResponse;
+
+    if (imageUrl) {
+      llmResult = await this.langSmithService.traceLLM(
+        () => this.kimiClient.chatWithVision(transcription, imageUrl, history),
+      );
+    } else {
+      llmResult = await this.langSmithService.traceLLM(
+        () => this.kimiClient.chat(transcription, history),
+      );
+    }
 
     const apiCall: CreateApiCallData = {
       messageId,

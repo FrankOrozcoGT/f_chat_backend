@@ -58,7 +58,27 @@ export class InputRouterNode {
       };
     }
 
-    // media (document, image, etc.)
+    if (messageType === MessageType.image) {
+      const caption = content || '';
+      let imageUrl: string | null = null;
+
+      if (mediaRelativePath) {
+        const imageBuffer = await this.fileStorageService.readFile(mediaRelativePath);
+        const mimeType = mediaMetadata?.mimeType || 'image/jpeg';
+        const base64 = imageBuffer.toString('base64');
+        imageUrl = `data:${mimeType};base64,${base64}`;
+        this.logger.log(`InputRouter: image → base64 data URI (${Math.round(base64.length / 1024)}KB), caption="${caption.substring(0, 80)}"`);
+      }
+
+      return {
+        transcription: caption || 'El usuario envió una imagen.',
+        imageUrl,
+        apiCalls,
+        totalCost: 0,
+      };
+    }
+
+    // media (document, video, etc.)
     const fileName = mediaMetadata?.fileName || 'unknown';
     const transcription = `Usuario envió documento: ${fileName}`;
     this.logger.log(`InputRouter: media → metadata: ${transcription}`);
