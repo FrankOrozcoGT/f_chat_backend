@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { StateGraph, END, START } from '@langchain/langgraph';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { WorkflowState, WorkflowStateType } from './state.interface';
 import { InputRouterNode } from './nodes/input-router.node';
+import { FlowAnalyzerNode } from './nodes/flow-analyzer.node';
+import { ContextBuilderNode } from './nodes/context-builder.node';
 import { LlmNode } from './nodes/llm.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { SendNode } from './nodes/send.node';
@@ -12,14 +15,20 @@ import { IncomingMessageEvent } from '../ai-agent.service';
 export class AiWorkflow {
   private readonly logger = new Logger(AiWorkflow.name);
   private graph: any;
+  private readonly flowEnabled: boolean;
 
   constructor(
     private readonly inputRouterNode: InputRouterNode,
+    private readonly flowAnalyzerNode: FlowAnalyzerNode,
+    private readonly contextBuilderNode: ContextBuilderNode,
     private readonly llmNode: LlmNode,
     private readonly outputRouterNode: OutputRouterNode,
     private readonly sendNode: SendNode,
     private readonly langSmithService: LangSmithService,
+    private readonly configService: ConfigService,
   ) {
+    this.flowEnabled = this.configService.get<string>('FLOW_ANALYZER_ENABLED', 'false') === 'true';
+    this.logger.log(`Flow Analyzer: ${this.flowEnabled ? 'ENABLED' : 'DISABLED'}`);
     this.graph = this.buildGraph();
   }
 
@@ -29,8 +38,20 @@ export class AiWorkflow {
       .addNode('llm', (state: WorkflowStateType) => this.llmNode.execute(state))
       .addNode('output_router', (state: WorkflowStateType) => this.outputRouterNode.execute(state))
       .addNode('send', (state: WorkflowStateType) => this.sendNode.execute(state))
-      .addEdge(START, 'input_router')
-      .addEdge('input_router', 'llm')
+      .addEdge(START, 'input_router');
+
+    if (this.flowEnabled) {
+      builder
+        .addNode('flow_analyzer', (state: WorkflowStateType) => this.flowAnalyzerNode.execute(state))
+        .addNode('context_builder', (state: WorkflowStateType) => this.contextBuilderNode.execute(state))
+        .addEdge('input_router', 'flow_analyzer')
+        .addEdge('flow_analyzer', 'context_builder')
+        .addEdge('context_builder', 'llm');
+    } else {
+      builder.addEdge('input_router', 'llm');
+    }
+
+    builder
       .addEdge('llm', 'output_router')
       .addEdge('output_router', 'send')
       .addEdge('send', END);

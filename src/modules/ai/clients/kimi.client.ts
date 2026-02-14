@@ -18,18 +18,36 @@ export class KimiClient {
   }
 
   async chat(text: string, history: { role: string; content: string }[] = []): Promise<LlmResponse> {
+    const messages = [
+      {
+        role: 'system',
+        content: 'Eres un asistente de voz amigable y conciso. Responde en español de forma natural y breve, como si estuvieras hablando por teléfono. Si el usuario quiere hablar con un humano, responde con el intent "switch_hitl".',
+      },
+      ...history,
+      { role: 'user', content: text },
+    ];
+
+    const result = await this.rawChat(messages, 500);
+
+    const intent = result.response.toLowerCase().includes('switch_hitl') ? 'switch_hitl' : 'normal';
+
+    return {
+      response: intent === 'switch_hitl' ? result.response.replace(/switch_hitl/gi, '').trim() : result.response,
+      intent,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+      costUsd: result.costUsd,
+      latencyMs: result.latencyMs,
+    };
+  }
+
+  async rawChat(
+    messages: { role: string; content: string }[],
+    maxTokens: number = 500,
+  ): Promise<Omit<LlmResponse, 'intent'>> {
     const startTime = Date.now();
 
     try {
-      const messages = [
-        {
-          role: 'system',
-          content: 'Eres un asistente de voz amigable y conciso. Responde en español de forma natural y breve, como si estuvieras hablando por teléfono. Si el usuario quiere hablar con un humano, responde con el intent "switch_hitl".',
-        },
-        ...history,
-        { role: 'user', content: text },
-      ];
-
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
@@ -39,7 +57,7 @@ export class KimiClient {
         body: JSON.stringify({
           model: 'kimi-k2.5',
           messages,
-          max_tokens: 500,
+          max_tokens: maxTokens,
         }),
       });
 
@@ -60,19 +78,9 @@ export class KimiClient {
         tokensInput * KimiClient.COST_PER_INPUT_TOKEN +
         tokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
 
-      // Detect intent
-      const intent = responseText.toLowerCase().includes('switch_hitl') ? 'switch_hitl' : 'normal';
-
       this.logger.log(`LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`);
 
-      return {
-        response: intent === 'switch_hitl' ? responseText.replace(/switch_hitl/gi, '').trim() : responseText,
-        intent,
-        tokensInput,
-        tokensOutput,
-        costUsd,
-        latencyMs,
-      };
+      return { response: responseText, tokensInput, tokensOutput, costUsd, latencyMs };
     } catch (error) {
       const latencyMs = Date.now() - startTime;
       this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message}`);
