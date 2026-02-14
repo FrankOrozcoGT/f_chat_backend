@@ -90,6 +90,7 @@ model Conversation {
 model Message {
   id             String            @id @default(uuid())
   conversationId String
+  flowNodeId     String?
   type           MessageType
   content        String
   mediaUrl       String?
@@ -103,27 +104,47 @@ model Message {
   metadata       Json?
   createdAt      DateTime          @default(now())
   conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  flowNode       FlowNode?         @relation(fields: [flowNodeId], references: [id], onDelete: SetNull)
   apiCalls       ApiCall[]
   mediaFiles     MediaFile[]
 
   @@index([conversationId])
   @@index([createdAt])
+  @@index([flowNodeId])
 }
 
 // AI & HITL Models
 
 model Session {
-  id             String       @id @default(uuid())
-  conversationId String
-  type           SessionType
-  startedAt      DateTime     @default(now())
-  endedAt        DateTime?
-  endedBy        String?
-  takenBy        String?
-  reason         String?
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id               String       @id @default(uuid())
+  conversationId   String
+  type             SessionType
+  mermaidFlowchart String       @default("")
+  currentNodeId    String?
+  startedAt        DateTime     @default(now())
+  endedAt          DateTime?
+  endedBy          String?
+  takenBy          String?
+  reason           String?
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  flowNodes        FlowNode[]
 
   @@index([conversationId])
+}
+
+model FlowNode {
+  id            String         @id @default(uuid())
+  sessionId     String
+  nodeId        String
+  understanding String         @default("")
+  status        FlowNodeStatus @default(clarifying)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  session       Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages      Message[]
+
+  @@unique([sessionId, nodeId])
+  @@index([sessionId])
 }
 
 model ApiCall {
@@ -217,6 +238,14 @@ enum ConversationMode {
 enum SessionType {
   AI
   HITL
+}
+
+enum FlowNodeStatus {
+  clarifying
+  understood
+  executing
+  completed
+  abandoned
 }
 
 enum ApiType {
