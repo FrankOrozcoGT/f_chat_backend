@@ -18,7 +18,7 @@ export interface SendMessageParams {
   mimeType?: string;
   fileName?: string;
   fileSize?: number;
-  senderType?: 'agent' | 'system';
+  senderType?: 'agent' | 'bot' | 'system';
 }
 
 @Injectable()

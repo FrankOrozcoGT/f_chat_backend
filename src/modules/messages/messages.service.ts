@@ -85,7 +85,7 @@ export class MessagesService {
     fileName?: string | null,
     fileSize?: number | null,
     mimeType?: string | null,
-    senderType: 'agent' | 'system' = 'agent',
+    senderType: 'agent' | 'bot' | 'system' = 'agent',
   ) {
     return {
       conversationId,
