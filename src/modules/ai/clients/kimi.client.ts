@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LlmResponse } from './interfaces/llm-response.interface';
+import { loadPrompt } from '../prompts/load-prompt';
+
+const CHAT_SYSTEM_PROMPT = loadPrompt('chat-system.md');
 
 type ChatMessage = {
   role: string;
@@ -26,7 +29,7 @@ export class KimiClient {
     const messages = [
       {
         role: 'system',
-        content: 'Eres un asistente de voz amigable y conciso. Responde en español de forma natural y breve, como si estuvieras hablando por teléfono. Si el usuario quiere hablar con un humano, responde con el intent "switch_hitl".',
+        content: CHAT_SYSTEM_PROMPT,
       },
       ...history,
       { role: 'user', content: text },
@@ -59,7 +62,7 @@ export class KimiClient {
     const messages: ChatMessage[] = [
       {
         role: 'system',
-        content: 'Eres un asistente amigable y conciso. Responde en español. Si el usuario envía una imagen, descríbela y responde a cualquier pregunta sobre ella. Si el usuario quiere hablar con un humano, responde con el intent "switch_hitl".',
+        content: CHAT_SYSTEM_PROMPT,
       },
       ...history,
       { role: 'user', content: userContent },
@@ -96,6 +99,7 @@ export class KimiClient {
           model: 'kimi-k2.5',
           messages,
           max_tokens: maxTokens,
+          thinking: { type: 'disabled' },
         }),
       });
 

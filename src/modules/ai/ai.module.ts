@@ -14,6 +14,7 @@ import { AiRepository } from './repositories/ai.repository';
 import { SessionRepository } from './repositories/session.repository';
 import { ClientMemoryRepository } from './repositories/client-memory.repository';
 import { FlowCacheService } from './services/flow-cache.service';
+import { NodeMessageService } from './services/node-message.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { MessagesModule } from '@modules/messages/messages.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
@@ -36,6 +37,7 @@ import { ConversationsModule } from '@modules/conversations/conversations.module
     SessionRepository,
     ClientMemoryRepository,
     FlowCacheService,
+    NodeMessageService,
   ],
 })
 export class AiModule {}
