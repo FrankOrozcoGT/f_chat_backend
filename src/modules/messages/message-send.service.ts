@@ -1,6 +1,5 @@
 import { Injectable, Logger, BadRequestException, BadGatewayException } from '@nestjs/common';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
-import { CacheService } from '@common/cache/cache.service';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
 import { MessagesService } from './messages.service';
 import { MessageType } from '@prisma/client';
@@ -27,7 +26,6 @@ export class MessageSendService {
 
   constructor(
     private readonly evolutionService: EvolutionService,
-    private readonly cacheService: CacheService,
     private readonly messageRepository: MessageRepository,
     private readonly messagesService: MessagesService,
   ) {}
@@ -37,8 +35,7 @@ export class MessageSendService {
    * Usado por: MessagesController (HITL) y AiAgentService (AI)
    *
    * 1. Envía vía Evolution API
-   * 2. Cache para dedup
-   * 3. Guarda en BD con transaction
+   * 2. Guarda en BD con transaction
    */
   async send(params: SendMessageParams) {
     const {
@@ -92,16 +89,7 @@ export class MessageSendService {
       throw new BadGatewayException('Failed to send message via WhatsApp');
     }
 
-    // 2. Cache para dedup (webhook no duplica este mensaje)
-    this.cacheService.set(
-      `sent_message:${evolutionKeyId}`,
-      { userId, conversationId },
-      300,
-    );
-
-    this.logger.log(`Cache SET: sent_message:${evolutionKeyId}`);
-
-    // 3. Construir messageData
+    // 2. Construir messageData
     const messageData = this.messagesService.buildOutgoingMessageData(
       conversationId,
       tipo,
@@ -115,7 +103,7 @@ export class MessageSendService {
       senderType,
     );
 
-    // 4. Guardar en BD con transaction
+    // 3. Guardar en BD con transaction
     const conversationUpdate = {
       lastMessageAt: new Date(),
       lastMessagePreview: contenido.substring(0, 100),

@@ -145,6 +145,25 @@ export class MessageRepository {
   }
 
   /**
+   * Busca un mensaje por keyId en metadata
+   * @param keyId - ID del mensaje en Evolution API (guardado en metadata.keyId)
+   * @returns Mensaje completo o null si no se encuentra
+   */
+  async findByMetadataKeyId(keyId: string) {
+    const result = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Message"
+      WHERE metadata->>'keyId' = ${keyId}
+      LIMIT 1
+    `;
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    return this.prisma.message.findUnique({ where: { id: result[0].id } });
+  }
+
+  /**
    * Busca mensaje por keyId en metadata y actualiza su status
    * @param keyId - ID del mensaje en Evolution API (guardado en metadata.keyId)
    * @param status - Nuevo status
