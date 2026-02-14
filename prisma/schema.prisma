@@ -66,18 +66,20 @@ model Client {
 }
 
 model Conversation {
-  id                 String   @id @default(uuid())
+  id                 String           @id @default(uuid())
   phoneId            String
   clientId           String
-  lastMessageAt      DateTime @default(now())
+  mode               ConversationMode @default(HITL)
+  lastMessageAt      DateTime         @default(now())
   lastMessagePreview String?
-  isActive           Boolean  @default(true)
+  isActive           Boolean          @default(true)
   summary            String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  phone              Phone    @relation(fields: [phoneId], references: [id], onDelete: Cascade)
-  client             Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  phone              Phone            @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+  client             Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
   messages           Message[]
+  sessions           Session[]
 
   @@unique([phoneId, clientId])
   @@index([phoneId])
@@ -97,12 +99,75 @@ model Message {
   direction      MessageDirection
   senderType     MessageSenderType
   status         MessageStatus     @default(pending)
+  costUsd        Float?
   metadata       Json?
   createdAt      DateTime          @default(now())
   conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  apiCalls       ApiCall[]
+  mediaFiles     MediaFile[]
 
   @@index([conversationId])
   @@index([createdAt])
+}
+
+// AI & HITL Models
+
+model Session {
+  id             String       @id @default(uuid())
+  conversationId String
+  type           SessionType
+  startedAt      DateTime     @default(now())
+  endedAt        DateTime?
+  endedBy        String?
+  takenBy        String?
+  reason         String?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model ApiCall {
+  id           String   @id @default(uuid())
+  messageId    String
+  apiType      ApiType
+  operation    String
+  tokensInput  Int?
+  tokensOutput Int?
+  costUsd      Float
+  latencyMs    Int
+  errorMessage String?
+  calledAt     DateTime @default(now())
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([calledAt])
+}
+
+model MediaFile {
+  id              String    @id @default(uuid())
+  messageId       String
+  type            MediaType
+  storagePath     String
+  whatsappMediaId String?
+  sizeBytes       Int?
+  durationSeconds Float?
+  message         Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model ApiHealth {
+  id               String       @id @default(uuid())
+  apiName          ApiName      @unique
+  status           HealthStatus @default(up)
+  monitoringActive Boolean      @default(true)
+  responseTimeMs   Int?
+  errorMessage     String?
+  lastErrorAt      DateTime?
+  lastCheckAt      DateTime?
+  recoveredAt      DateTime?
+
+  @@index([apiName])
 }
 
 // WhatsApp Enums
@@ -130,6 +195,7 @@ enum MessageDirection {
 enum MessageSenderType {
   client
   agent
+  bot
   system
 }
 
@@ -139,4 +205,41 @@ enum MessageStatus {
   delivered
   read
   failed
+}
+
+// AI & HITL Enums
+
+enum ConversationMode {
+  AI
+  HITL
+}
+
+enum SessionType {
+  AI
+  HITL
+}
+
+enum ApiType {
+  qwen_stt
+  kimi_llm
+  qwen_tts
+}
+
+enum MediaType {
+  audio
+  image
+  video
+  document
+}
+
+enum ApiName {
+  qwen_stt
+  kimi_llm
+  qwen_tts
+}
+
+enum HealthStatus {
+  up
+  down
+  degraded
 }

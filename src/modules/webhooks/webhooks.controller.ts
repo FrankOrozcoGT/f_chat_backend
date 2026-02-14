@@ -5,11 +5,12 @@ import {
   HttpCode,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WebhooksService } from './webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { PhoneRepository } from '../phones/repositories/phone.repository';
+import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
-import { ConversationRepository } from '../conversations/repositories/conversation.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
 import { CacheService } from '@common/cache/cache.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
@@ -29,6 +30,7 @@ export class WebhooksController {
     private readonly cacheService: CacheService,
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   @Post()
@@ -196,6 +198,26 @@ export class WebhooksController {
     } else {
       this.websocketGateway.emit('message:incoming', message);
       console.log(`[Webhook] Incoming message for conversation ${conversation.id}`);
+    }
+
+    // 9. Si mode=AI y es mensaje entrante de audio, emitir evento para AI agent
+    if (!fromMe && conversation.mode === 'AI') {
+      const isAudioMessage = message.type === 'voice' || message.type === 'audio';
+
+      if (isAudioMessage && mediaData) {
+        const phone = await this.phoneRepository.findById(phoneId);
+        if (phone) {
+          this.eventEmitter.emit('ai.incoming.audio', {
+            messageId: message.id,
+            conversationId: conversation.id,
+            instanceName,
+            clientPhone: clientData.phoneNumber,
+            userId: phone.userId,
+            mediaRelativePath: mediaData.relativePath,
+          });
+          this.logger.log(`Emitted ai.incoming.audio for conversation ${conversation.id}`);
+        }
+      }
     }
   }
 

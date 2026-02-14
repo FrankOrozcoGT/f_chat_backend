@@ -84,6 +84,13 @@ export class ConversationRepository {
    * @param conversationId - ID de la conversación
    * @param data - Datos de actualización
    */
+  async updateMode(conversationId: string, mode: 'AI' | 'HITL') {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { mode },
+    });
+  }
+
   async updateLastMessage(
     conversationId: string,
     data: { lastMessageAt: Date; lastMessagePreview: string },

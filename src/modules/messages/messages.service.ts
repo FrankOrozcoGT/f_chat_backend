@@ -85,6 +85,7 @@ export class MessagesService {
     fileName?: string | null,
     fileSize?: number | null,
     mimeType?: string | null,
+    senderType: 'agent' | 'bot' | 'system' = 'agent',
   ) {
     return {
       conversationId,
@@ -95,7 +96,7 @@ export class MessagesService {
       fileSize: fileSize || null,
       mimeType: mimeType || null,
       direction: 'outgoing' as const,
-      senderType: 'agent' as const,
+      senderType,
       status,
       metadata: evolutionKeyId ? { keyId: evolutionKeyId } : null,
     };

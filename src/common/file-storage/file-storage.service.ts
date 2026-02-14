@@ -193,10 +193,34 @@ export class FileStorageService {
   }
 
   /**
-   * Construye URL completa desde path relativo
-   * @param relativePath - Path relativo (ej: /storage/conversations/...)
-   * @returns URL completa (ej: http://localhost:3001/storage/...)
+   * Guarda un Buffer directamente como archivo
    */
+  async saveBuffer(
+    buffer: Buffer,
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    extension: string,
+    mimeType: string,
+  ): Promise<{ relativePath: string; fileName: string; fileSize: number; mimeType: string }> {
+    const storageDir = path.join(process.cwd(), 'storage', 'conversations', userId, conversationId);
+    await fs.mkdir(storageDir, { recursive: true });
+
+    const fileName = `${messageId}_${Date.now()}${extension}`;
+    const filePath = path.join(storageDir, fileName);
+    await fs.writeFile(filePath, buffer);
+
+    const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+    this.logger.log(`Buffer saved: ${relativePath} (${buffer.length} bytes)`);
+
+    return { relativePath, fileName, fileSize: buffer.length, mimeType };
+  }
+
+  async readFile(relativePath: string): Promise<Buffer> {
+    const fullPath = path.join(process.cwd(), relativePath);
+    return fs.readFile(fullPath);
+  }
+
   buildFullUrl(relativePath: string): string {
     const backendUrl = this.configService.get<string>('BACKEND_URL');
     return `${backendUrl}${relativePath}`;
