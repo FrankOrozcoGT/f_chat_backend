@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ClientMemoryRepository } from '../../repositories/client-memory.repository';
+import { NodeMessageService } from '../../services/node-message.service';
 import { WorkflowStateType, FlowData } from '../state.interface';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class ContextBuilderNode {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clientMemoryRepository: ClientMemoryRepository,
+    private readonly nodeMessageService: NodeMessageService,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -47,27 +49,52 @@ export class ContextBuilderNode {
     );
     const collapsedNodes = flowData.nodes.filter((n) => n.status === 'collapsed');
 
-    // Foco: current node with full detail
+    // Foco: current node with full messages
     if (flowData.currentNodeId) {
       const focusNode = activeNodes.find((n) => n.nodeId === flowData.currentNodeId);
       if (focusNode) {
         parts.push(`### Foco: ${focusNode.nodeId}`);
         parts.push(focusNode.understanding);
+
+        // Load all messages for the focus node
+        if (focusNode.messageIds?.length) {
+          const msgs = await this.nodeMessageService.loadNodeMessages(
+            focusNode.messageIds,
+            conversationId,
+            this.prisma,
+          );
+          if (msgs.length > 0) {
+            parts.push('');
+            for (const msg of msgs) {
+              parts.push(`${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`);
+            }
+          }
+        }
         parts.push('');
       }
     }
 
-    // En mente: other active nodes (just labels)
+    // En mente: other active nodes with their messages
     const otherActive = activeNodes.filter((n) => n.nodeId !== flowData.currentNodeId);
     if (otherActive.length > 0) {
       parts.push('### En mente:');
       for (const node of otherActive) {
-        parts.push(`- ${node.nodeId}`);
+        parts.push(`- ${node.nodeId}: ${node.understanding}`);
+        if (node.messageIds?.length) {
+          const msgs = await this.nodeMessageService.loadNodeMessages(
+            node.messageIds,
+            conversationId,
+            this.prisma,
+          );
+          for (const msg of msgs) {
+            parts.push(`  ${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`);
+          }
+        }
       }
       parts.push('');
     }
 
-    // Collapsed: one line each (only top-level, children of collapsed parents are invisible)
+    // Collapsed: one line each, NO messages (only labels)
     const visibleCollapsed = this.getVisibleCollapsed(collapsedNodes, flowData.nodes);
     if (visibleCollapsed.length > 0) {
       parts.push('### Resuelto:');
@@ -77,25 +104,7 @@ export class ContextBuilderNode {
       parts.push('');
     }
 
-    // 3. Recent raw messages
-    const recentMessages = await this.prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'desc' },
-      take: activeNodes.length > 0 ? 5 : 10,
-      select: { content: true, direction: true, senderType: true },
-    });
-
-    if (recentMessages.length > 0) {
-      parts.push('### Últimos mensajes:');
-      // Reverse to show oldest first
-      for (const msg of recentMessages.reverse()) {
-        const sender = msg.direction === 'incoming' ? 'Cliente' : 'Bot';
-        parts.push(`${sender}: ${msg.content}`);
-      }
-      parts.push('');
-    }
-
-    // 4. Current message
+    // Current message
     parts.push(`### Mensaje actual:\n"${transcription}"`);
 
     const contextForLlm = parts.join('\n');
