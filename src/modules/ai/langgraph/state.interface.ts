@@ -40,6 +40,9 @@ export const WorkflowState = Annotation.Root({
   // After Input Router
   transcription: Annotation<string>,
 
+  // After Input Router (images)
+  imageUrl: Annotation<string | null>,
+
   // After Flow Analyzer
   sessionId: Annotation<string | null>,
   flowAction: Annotation<FlowAction | null>,
