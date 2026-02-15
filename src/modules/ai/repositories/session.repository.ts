@@ -32,10 +32,23 @@ export class SessionRepository {
     });
   }
 
-  async close(sessionId: string, reason?: string) {
+  async createHitl(conversationId: string, takenBy?: string) {
+    return this.prisma.session.create({
+      data: { conversationId, type: 'HITL', flowData: {}, takenBy },
+    });
+  }
+
+  async findActiveHitlByConversationId(conversationId: string) {
+    return this.prisma.session.findFirst({
+      where: { conversationId, type: 'HITL', endedAt: null },
+      orderBy: { startedAt: 'desc' },
+    });
+  }
+
+  async close(sessionId: string, reason?: string, endedBy?: string) {
     return this.prisma.session.update({
       where: { id: sessionId },
-      data: { endedAt: new Date(), reason },
+      data: { endedAt: new Date(), reason, endedBy },
     });
   }
 }
