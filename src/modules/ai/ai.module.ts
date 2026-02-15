@@ -18,9 +18,10 @@ import { NodeMessageService } from './services/node-message.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { MessagesModule } from '@modules/messages/messages.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
+import { WebSocketModule } from '@common/websocket/websocket.module';
 
 @Module({
-  imports: [PrismaModule, MessagesModule, ConversationsModule],
+  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule],
   providers: [
     AiAgentService,
     AiWorkflow,

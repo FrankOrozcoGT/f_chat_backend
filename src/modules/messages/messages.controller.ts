@@ -10,6 +10,7 @@ import {
   BadRequestException,
   NotFoundException,
   BadGatewayException,
+  ForbiddenException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
@@ -114,6 +115,11 @@ export class MessagesController {
     // Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
 
+    // Validar que la conversación esté en modo HITL
+    if (conversation.mode !== 'HITL') {
+      throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
+    }
+
     // 3. Si hay mediaUrl, construir URL completa para Evolution
     const relativePath = dto.mediaUrl || null;
     const mediaUrlForEvolution = relativePath
@@ -217,6 +223,11 @@ export class MessagesController {
 
     // Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
+
+    // Validar que la conversación esté en modo HITL
+    if (conversation.mode !== 'HITL') {
+      throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
+    }
 
     // 5. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
     const { randomUUID } = await import('crypto');

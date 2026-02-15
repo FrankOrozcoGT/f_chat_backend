@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MessageSendService } from '@modules/messages/message-send.service';
 import { AiRepository } from '../../repositories/ai.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { SessionRepository } from '../../repositories/session.repository';
+import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { MessageType } from '@prisma/client';
 import { WorkflowStateType } from '../state.interface';
 
@@ -13,6 +15,8 @@ export class SendNode {
     private readonly messageSendService: MessageSendService,
     private readonly aiRepository: AiRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly sessionRepository: SessionRepository,
+    private readonly websocketGateway: AppWebSocketGateway,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -63,6 +67,20 @@ export class SendNode {
     // Switch to HITL if intent requires it
     if (intent === 'switch_hitl') {
       await this.conversationRepository.updateMode(conversationId, 'HITL');
+
+      const activeSession = await this.sessionRepository.findActiveByConversationId(conversationId);
+      if (activeSession) {
+        await this.sessionRepository.close(activeSession.id, 'client_request');
+      }
+
+      await this.sessionRepository.createHitl(conversationId);
+
+      this.websocketGateway.emit('conversation:hitl', {
+        conversationId,
+        clientPhone,
+        timestamp: new Date().toISOString(),
+      }, userId);
+
       this.logger.log(`SendNode: conversation ${conversationId} switched to HITL mode`);
     }
 

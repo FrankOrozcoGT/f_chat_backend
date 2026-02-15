@@ -15,6 +15,7 @@ import { MessagesModule } from '@modules/messages/messages.module';
 import { LangSmithModule } from '@common/langsmith/langsmith.module';
 import { RedisModule } from '@common/redis/redis.module';
 import { AiModule } from '@modules/ai/ai.module';
+import { HitlModule } from '@modules/hitl/hitl.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AiModule } from '@modules/ai/ai.module';
     ConversationsModule,
     MessagesModule,
     AiModule,
+    HitlModule,
     WebhooksModule,
   ],
 })
