@@ -1,5 +1,5 @@
 import { Annotation } from '@langchain/langgraph';
-import { MessageType } from '@prisma/client';
+import { ApiName, MessageType } from '@prisma/client';
 import { CreateApiCallData } from '../repositories/ai.repository';
 
 // Flow data interfaces (used in Redis + Session.flowData JSON)
@@ -66,6 +66,9 @@ export const WorkflowState = Annotation.Root({
   // Accumulated across nodes
   apiCalls: Annotation<CreateApiCallData[]>,
   totalCost: Annotation<number>,
+
+  // Error tracking
+  error: Annotation<{ step: string; apiName: ApiName; message: string } | null>,
 });
 
 export type WorkflowStateType = typeof WorkflowState.State;

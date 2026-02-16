@@ -16,7 +16,10 @@ export class OutputRouterNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { preferredFormat, responseText, userId, conversationId, messageId, apiCalls: existingApiCalls, totalCost: existingCost } = state;
+    const { preferredFormat, responseText, userId, conversationId, messageId, apiCalls: existingApiCalls, totalCost: existingCost, error: previousError } = state;
+
+    // Si un node anterior falló, skip
+    if (previousError) return {};
 
     if (preferredFormat === 'text') {
       this.logger.log(`OutputRouter: text → pass-through`);
@@ -30,42 +33,56 @@ export class OutputRouterNode {
     }
 
     // audio: TTS + save file
-    const ttsResult = await this.langSmithService.traceTTS(
-      () => this.ttsClient.synthesize(responseText),
-    );
+    try {
+      const ttsResult = await this.langSmithService.traceTTS(
+        () => this.ttsClient.synthesize(responseText),
+      );
 
-    const apiCall: CreateApiCallData = {
-      messageId,
-      apiType: 'qwen_tts',
-      operation: 'synthesize',
-      costUsd: ttsResult.costUsd,
-      latencyMs: ttsResult.latencyMs,
-    };
+      const apiCall: CreateApiCallData = {
+        messageId,
+        apiType: 'qwen_tts',
+        operation: 'synthesize',
+        costUsd: ttsResult.costUsd,
+        latencyMs: ttsResult.latencyMs,
+      };
 
-    const { randomUUID } = await import('crypto');
-    const responseMessageId = randomUUID();
+      const { randomUUID } = await import('crypto');
+      const responseMessageId = randomUUID();
 
-    const savedFile = await this.fileStorageService.saveBuffer(
-      ttsResult.audioBuffer,
-      userId,
-      conversationId,
-      responseMessageId,
-      '.ogg',
-      'audio/ogg',
-    );
+      const savedFile = await this.fileStorageService.saveBuffer(
+        ttsResult.audioBuffer,
+        userId,
+        conversationId,
+        responseMessageId,
+        '.ogg',
+        'audio/ogg',
+      );
 
-    const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(savedFile.relativePath);
+      const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(savedFile.relativePath);
 
-    this.logger.log(`OutputRouter: audio → TTS + saved ${savedFile.relativePath}`);
+      this.logger.log(`OutputRouter: audio → TTS + saved ${savedFile.relativePath}`);
 
-    return {
-      responseMediaRelativePath: savedFile.relativePath,
-      responseMediaUrl: mediaUrl,
-      responseMimeType: savedFile.mimeType,
-      responseFileName: savedFile.fileName,
-      responseFileSize: savedFile.fileSize,
-      apiCalls: [...existingApiCalls, apiCall],
-      totalCost: existingCost + ttsResult.costUsd,
-    };
+      return {
+        responseMediaRelativePath: savedFile.relativePath,
+        responseMediaUrl: mediaUrl,
+        responseMimeType: savedFile.mimeType,
+        responseFileName: savedFile.fileName,
+        responseFileSize: savedFile.fileSize,
+        apiCalls: [...existingApiCalls, apiCall],
+        totalCost: existingCost + ttsResult.costUsd,
+      };
+    } catch (error) {
+      this.logger.error(`OutputRouter: TTS failed: ${error.message}`);
+      // TTS falla pero tenemos responseText → fallback a texto
+      this.logger.warn(`OutputRouter: falling back to text response`);
+      return {
+        preferredFormat: 'text',
+        responseMediaRelativePath: null,
+        responseMediaUrl: null,
+        responseMimeType: null,
+        responseFileName: null,
+        responseFileSize: null,
+      };
+    }
   }
 }

@@ -27,25 +27,34 @@ export class InputRouterNode {
 
       const audioBuffer = await this.fileStorageService.readFile(mediaRelativePath);
 
-      const sttResult = await this.langSmithService.traceSTT(
-        () => this.sttClient.transcribe(audioBuffer),
-      );
+      try {
+        const sttResult = await this.langSmithService.traceSTT(
+          () => this.sttClient.transcribe(audioBuffer),
+        );
 
-      apiCalls.push({
-        messageId,
-        apiType: 'qwen_stt',
-        operation: 'transcribe',
-        costUsd: sttResult.costUsd,
-        latencyMs: sttResult.latencyMs,
-      });
+        apiCalls.push({
+          messageId,
+          apiType: 'qwen_stt',
+          operation: 'transcribe',
+          costUsd: sttResult.costUsd,
+          latencyMs: sttResult.latencyMs,
+        });
 
-      this.logger.log(`InputRouter: audio → STT transcription: "${sttResult.text.substring(0, 80)}"`);
+        this.logger.log(`InputRouter: audio → STT transcription: "${sttResult.text.substring(0, 80)}"`);
 
-      return {
-        transcription: sttResult.text,
-        apiCalls,
-        totalCost: sttResult.costUsd,
-      };
+        return {
+          transcription: sttResult.text,
+          apiCalls,
+          totalCost: sttResult.costUsd,
+        };
+      } catch (error) {
+        this.logger.error(`InputRouter: STT failed: ${error.message}`);
+        return {
+          error: { step: 'input_router', apiName: 'qwen_stt', message: error.message },
+          apiCalls,
+          totalCost: 0,
+        };
+      }
     }
 
     if (messageType === MessageType.text) {

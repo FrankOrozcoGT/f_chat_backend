@@ -30,6 +30,9 @@ export class FlowAnalyzerNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+    // Si un node anterior falló, skip
+    if (state.error) return {};
+
     const {
       transcription,
       conversationId,

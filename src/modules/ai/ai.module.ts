@@ -19,9 +19,10 @@ import { PrismaModule } from '@common/prisma/prisma.module';
 import { MessagesModule } from '@modules/messages/messages.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
+import { HealthModule } from '@modules/health/health.module';
 
 @Module({
-  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule],
+  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule],
   providers: [
     AiAgentService,
     AiWorkflow,
