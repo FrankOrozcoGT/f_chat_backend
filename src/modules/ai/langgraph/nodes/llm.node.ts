@@ -18,7 +18,10 @@ export class LlmNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { transcription, contextForLlm, conversationId, messageId, messageType, imageUrl, apiCalls: existingApiCalls, totalCost: existingCost } = state;
+    const { transcription, contextForLlm, conversationId, messageId, messageType, imageUrl, apiCalls: existingApiCalls, totalCost: existingCost, error: previousError } = state;
+
+    // Si un node anterior falló, skip
+    if (previousError) return {};
 
     // Flujo complejo: usa contextForLlm del ContextBuilderNode
     // Flujo simple: carga historial de la conversación desde DB
@@ -49,47 +52,54 @@ export class LlmNode {
       this.logger.log(`LlmNode: loaded ${history.length} messages from conversation history`);
     }
 
-    let llmResult: LlmResponse;
+    try {
+      let llmResult: LlmResponse;
 
-    const traceMessages = [
-      ...history,
-      { role: 'user', content: imageUrl ? `${transcription} [imagen: ${imageUrl}]` : transcription },
-    ];
+      const traceMessages = [
+        ...history,
+        { role: 'user', content: imageUrl ? `${transcription} [imagen: ${imageUrl}]` : transcription },
+      ];
 
-    if (imageUrl) {
-      llmResult = await this.langSmithService.traceLLM(
-        () => this.kimiClient.chatWithVision(transcription, imageUrl, history),
-        traceMessages,
-      );
-    } else {
-      llmResult = await this.langSmithService.traceLLM(
-        () => this.kimiClient.chat(transcription, history),
-        traceMessages,
-      );
+      if (imageUrl) {
+        llmResult = await this.langSmithService.traceLLM(
+          () => this.kimiClient.chatWithVision(transcription, imageUrl, history),
+          traceMessages,
+        );
+      } else {
+        llmResult = await this.langSmithService.traceLLM(
+          () => this.kimiClient.chat(transcription, history),
+          traceMessages,
+        );
+      }
+
+      const apiCall: CreateApiCallData = {
+        messageId,
+        apiType: 'kimi_llm',
+        operation: 'chat',
+        tokensInput: llmResult.tokensInput,
+        tokensOutput: llmResult.tokensOutput,
+        costUsd: llmResult.costUsd,
+        latencyMs: llmResult.latencyMs,
+      };
+
+      // Decide preferred format: respond with audio if input was audio, text otherwise
+      const preferredFormat: 'audio' | 'text' =
+        messageType === MessageType.voice || messageType === MessageType.audio ? 'audio' : 'text';
+
+      this.logger.log(`LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`);
+
+      return {
+        responseText: llmResult.response,
+        intent: llmResult.intent,
+        preferredFormat,
+        apiCalls: [...existingApiCalls, apiCall],
+        totalCost: existingCost + llmResult.costUsd,
+      };
+    } catch (error) {
+      this.logger.error(`LlmNode: Kimi LLM failed: ${error.message}`);
+      return {
+        error: { step: 'llm', apiName: 'kimi_llm', message: error.message },
+      };
     }
-
-    const apiCall: CreateApiCallData = {
-      messageId,
-      apiType: 'kimi_llm',
-      operation: 'chat',
-      tokensInput: llmResult.tokensInput,
-      tokensOutput: llmResult.tokensOutput,
-      costUsd: llmResult.costUsd,
-      latencyMs: llmResult.latencyMs,
-    };
-
-    // Decide preferred format: respond with audio if input was audio, text otherwise
-    const preferredFormat: 'audio' | 'text' =
-      messageType === MessageType.voice || messageType === MessageType.audio ? 'audio' : 'text';
-
-    this.logger.log(`LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`);
-
-    return {
-      responseText: llmResult.response,
-      intent: llmResult.intent,
-      preferredFormat,
-      apiCalls: [...existingApiCalls, apiCall],
-      totalCost: existingCost + llmResult.costUsd,
-    };
   }
 }
