@@ -72,6 +72,7 @@ export class AiWorkflow {
       mediaMetadata: payload.mediaMetadata,
       apiCalls: [],
       totalCost: 0,
+      error: null,
     };
 
     await this.langSmithService.tracePipeline(
