@@ -91,6 +91,10 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     this.emit('api:down', { apiName, error, timestamp: new Date().toISOString() }, userId);
   }
 
+  emitApiUp(apiName: string, userId?: string) {
+    this.emit('api:up', { apiName, timestamp: new Date().toISOString() }, userId);
+  }
+
   emit(event: string, data: any, targetUserId?: string) {
     if (targetUserId) {
       // Emitir solo a los sockets del usuario específico
