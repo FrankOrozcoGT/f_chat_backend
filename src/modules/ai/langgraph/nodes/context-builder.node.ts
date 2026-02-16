@@ -15,6 +15,9 @@ export class ContextBuilderNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+    // Si un node anterior falló, skip
+    if (state.error) return {};
+
     const { transcription, conversationId, flowData, clientPhone } = state;
 
     // If no flow data or no nodes, pass transcription raw
