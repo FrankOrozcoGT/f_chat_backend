@@ -8,6 +8,10 @@ export class UserResponseDto {
   picture: string | null;
   plan: Plan;
   role: Role;
+  whatsappLimit: number;
+  creditsLimit: number;
+  creditsUsed: number;
+  billingPeriodStart: Date;
   lastLogin: Date | null;
   createdAt: Date;
 

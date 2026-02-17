@@ -44,4 +44,14 @@ export class UserRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async updateLimits(
+    userId: string,
+    data: { whatsappLimit?: number; creditsLimit?: number },
+  ): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
 }

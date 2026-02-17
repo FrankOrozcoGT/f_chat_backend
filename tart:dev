@@ -1,0 +1,6 @@
+                  id                  |            email             |         name         | whatsappLimit | creditsLimit | creditsUsed |   billingPeriodStart    
+--------------------------------------+------------------------------+----------------------+---------------+--------------+-------------+-------------------------
+ 4783a8dd-1ab4-4a6e-8883-786f8d150c65 | tech.afinidata2021@gmail.com | Afini Plus undefined |             1 |            0 |           0 | 2026-02-17 07:54:08.222
+ 790976a4-cd75-40db-8f50-d3558de042ec | frank.orozco.11.87@gmail.com | frank orozco         |             1 |            0 |           0 | 2026-02-17 07:54:08.222
+(2 rows)
+
