@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ApiName } from '@prisma/client';
 
 interface ApiCallWithRelations {
   id: string;
@@ -17,6 +18,18 @@ interface ApiCallWithRelations {
       };
     };
   };
+}
+
+export interface ApiHealthRecord {
+  id: string;
+  apiName: ApiName;
+  status: string;
+  monitoringActive: boolean;
+  responseTimeMs: number | null;
+  errorMessage: string | null;
+  lastErrorAt: Date | null;
+  lastCheckAt: Date | null;
+  recoveredAt: Date | null;
 }
 
 @Injectable()
@@ -114,5 +127,39 @@ export class AdminService {
       byUser,
       byDay,
     };
+  }
+
+  getHealthStatus(dbRecords: ApiHealthRecord[]) {
+    // Todas las APIs del sistema
+    const allApis: ApiName[] = ['qwen_stt', 'kimi_llm', 'qwen_tts'];
+
+    // Crear mapa de registros existentes para búsqueda rápida
+    const dbMap = new Map<ApiName, ApiHealthRecord>();
+    for (const record of dbRecords) {
+      dbMap.set(record.apiName, record);
+    }
+
+    // Generar response para cada API
+    return allApis.map((apiName) => {
+      const dbRecord = dbMap.get(apiName);
+
+      if (dbRecord) {
+        // API tiene registro en DB → usar su estado real
+        return dbRecord;
+      } else {
+        // API NO tiene registro → estado por defecto (nunca ha fallado)
+        return {
+          id: `default-${apiName}`,
+          apiName,
+          status: 'up',
+          monitoringActive: false,
+          responseTimeMs: null,
+          errorMessage: null,
+          lastErrorAt: null,
+          lastCheckAt: null,
+          recoveredAt: null,
+        };
+      }
+    });
   }
 }
