@@ -5,13 +5,13 @@ import {
   HttpCode,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WebhooksService } from './webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { PhoneRepository } from '../phones/repositories/phone.repository';
+import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
-import { ConversationRepository } from '../conversations/repositories/conversation.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
-import { CacheService } from '@common/cache/cache.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
@@ -26,9 +26,9 @@ export class WebhooksController {
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
-    private readonly cacheService: CacheService,
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   @Post()
@@ -57,6 +57,7 @@ export class WebhooksController {
         break;
 
       case 'messages.upsert':
+      case 'send.message':
         await this.handleMessagesUpsert(phone.id, instanceId, webhookData);
         break;
 
@@ -124,36 +125,39 @@ export class WebhooksController {
     const fromMe = webhookData?.data?.key?.fromMe || false;
     const messageKey = webhookData?.data?.key;
 
-    // NUEVO: Verificar cache si es mensaje saliente (fromMe=true)
+    // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
+    //    con MessageSendService que puede estar guardando en paralelo
     if (fromMe && messageKey) {
-      const wasSentByAPI = this.cacheService.has(`sent_message:${messageKey.id}`);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const existingMessage = await this.messageRepository.findByMetadataKeyId(messageKey.id);
 
-      if (wasSentByAPI) {
-        this.logger.log(`Message ${messageKey.id} sent via API, skipping webhook creation`);
-        return; // Skip - mensaje ya fue creado por POST /send
+      if (existingMessage) {
+        // Ya fue guardado por MessageSendService (HITL o AI) → solo emitir al frontend
+        this.websocketGateway.emit('message:sent', existingMessage);
+        this.logger.log(`Message ${messageKey.id} already in DB, emitted to frontend`);
+        return;
       }
 
-      // Si NO está en cache, es mensaje desde WhatsApp Web
-      this.logger.log(`Message ${messageKey.id} sent from WhatsApp Web, saving`);
+      // No existe en DB → enviado desde WhatsApp Web, seguir flujo normal
+      this.logger.log(`Message ${messageKey.id} from WhatsApp Web, saving`);
     }
 
-    // 1. Construir datos del Client (pasar fromMe para no usar pushName incorrecto)
+    // 2. Construir datos del Client (pasar fromMe para no usar pushName incorrecto)
     const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
 
     // Ignorar mensajes de grupos (terminan en @g.us)
     if (clientData.phoneNumber.endsWith('@g.us')) {
-      // Silently ignore group messages
       return;
     }
 
-    // 2. Upsert Client
+    // 3. Upsert Client
     const client = await this.clientRepository.upsert(clientData);
 
-    // 3. Construir y upsert Conversation
+    // 4. Construir y upsert Conversation
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 4. Si hay media, descargar ANTES de crear el mensaje (usando FileStorageService)
+    // 5. Si hay media, descargar ANTES de crear el mensaje
     let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
@@ -166,36 +170,54 @@ export class WebhooksController {
             instanceName,
             phone.userId,
             conversation.id,
-            messageKey.id, // Usar ID de WhatsApp para nombrar archivo
+            messageKey.id,
             messageKey,
           );
           this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
         }
       } catch (error) {
-        this.logger.error(`Failed to download media`, error.message);
-        // Continuar sin media si falla
+        this.logger.error(`Failed to download media: ${error.message}`);
       }
     }
 
-    // 5. Construir mensaje según dirección (con mediaData si existe)
+    // 6. Construir mensaje según dirección
     const messageData = fromMe
       ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
       : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
 
-    // 6. Crear mensaje (ya con mediaUrl correcto)
+    // 7. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
 
-    // 7. Actualizar último mensaje de la conversación
+    // 8. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 8. Emitir eventos WebSocket
+    // 9. Emitir al frontend
     if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
-      console.log(`[Webhook] Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
+      this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
       this.websocketGateway.emit('message:incoming', message);
-      console.log(`[Webhook] Incoming message for conversation ${conversation.id}`);
+      this.logger.log(`Incoming message for conversation ${conversation.id}`);
+    }
+
+    // 10. Si mode=AI y es mensaje entrante, emitir evento para AI agent
+    if (!fromMe && conversation.mode === 'AI') {
+      const phone = await this.phoneRepository.findById(phoneId);
+      if (phone) {
+        this.eventEmitter.emit('ai.incoming.message', {
+          messageId: message.id,
+          conversationId: conversation.id,
+          instanceName,
+          clientPhone: clientData.phoneNumber,
+          userId: phone.userId,
+          messageType: message.type,
+          content: message.content,
+          mediaRelativePath: mediaData?.relativePath || null,
+          mediaMetadata: mediaData ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType } : null,
+        });
+        this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
+      }
     }
   }
 

@@ -87,6 +87,14 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
    * @param data - Datos a enviar
    * @param targetUserId - ID del usuario objetivo (opcional, si no se provee es broadcast)
    */
+  emitApiDown(apiName: string, error: string, userId?: string) {
+    this.emit('api:down', { apiName, error, timestamp: new Date().toISOString() }, userId);
+  }
+
+  emitApiUp(apiName: string, userId?: string) {
+    this.emit('api:up', { apiName, timestamp: new Date().toISOString() }, userId);
+  }
+
   emit(event: string, data: any, targetUserId?: string) {
     if (targetUserId) {
       // Emitir solo a los sockets del usuario específico

@@ -13,7 +13,6 @@ import {
   BadGatewayException,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { PhoneRepository } from './repositories/phone.repository';
@@ -30,7 +29,6 @@ export class PhonesController {
     private readonly phoneRepository: PhoneRepository,
     private readonly phonesService: PhonesService,
     private readonly evolutionService: EvolutionService,
-    private readonly configService: ConfigService,
   ) {}
 
   @Get()
@@ -49,38 +47,22 @@ export class PhonesController {
     // 1. Validar instanceName
     this.phonesService.validateInstanceName(dto.instanceName);
 
-    // 2. Crear instancia en Evolution API con QR y configurar webhook automáticamente
-    const webhookUrl = this.configService.get<string>('EVOLUTION_WEBHOOK_URL');
-    this.logger.log(`Webhook URL from env: ${webhookUrl}`);
-
+    // 2. Crear instancia en Evolution API con QR (webhook se configura global en docker-compose)
     let evolutionData;
     try {
       evolutionData = await this.evolutionService.createInstance(
         dto.instanceName,
-        {
-          qrcode: true,
-          webhookUrl,
-          webhookEvents: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
-        },
+        { qrcode: true },
       );
     } catch (error) {
       this.logger.error(`Failed to create instance in Evolution API: ${error.message}`);
       throw new BadGatewayException('Failed to create WhatsApp instance');
     }
 
-    // 3. Asegurar webhook con setWebhook (fallback por si createInstance no lo guardó)
-    if (webhookUrl) {
-      try {
-        await this.evolutionService.setWebhook(dto.instanceName, webhookUrl);
-      } catch (error) {
-        this.logger.warn(`Failed to set webhook: ${error.message}`);
-      }
-    }
-
-    // 4. Construir datos del phone con QR
+    // 3. Construir datos del phone con QR
     const phoneData = this.phonesService.buildPhoneData(dto, evolutionData, userId);
 
-    // 5. Guardar en DB
+    // 4. Guardar en DB
     const phone = await this.phoneRepository.create(phoneData);
 
     this.logger.log(`Phone instance created successfully: ${phone.id}`);

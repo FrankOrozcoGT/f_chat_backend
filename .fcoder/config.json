@@ -1,5 +1,11 @@
 {
   "projectId": "3c848d5a-5b68-4ea0-8492-14aab7ad3587",
   "projectName": "f_chat - Backend",
-  "type": "backend"
+  "type": "backend",
+  "terminals": [
+    {
+      "name":"tunnel cloudfare",
+      "command":"cloudflared tunnel --url http://localhost:3001 run dev-principal"
+    }
+  ]
 }
