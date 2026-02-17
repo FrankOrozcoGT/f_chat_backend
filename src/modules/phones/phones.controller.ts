@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { EvolutionService } from '@common/evolution/evolution.service';
+import { LimitsService } from '@common/services/limits.service';
 import { PhoneRepository } from './repositories/phone.repository';
 import { PhonesService } from './phones.service';
 import { PhoneResponseDto } from './dto/phone-response.dto';
@@ -29,6 +30,7 @@ export class PhonesController {
     private readonly phoneRepository: PhoneRepository,
     private readonly phonesService: PhonesService,
     private readonly evolutionService: EvolutionService,
+    private readonly limitsService: LimitsService,
   ) {}
 
   @Get()
@@ -47,7 +49,10 @@ export class PhonesController {
     // 1. Validar instanceName
     this.phonesService.validateInstanceName(dto.instanceName);
 
-    // 2. Crear instancia en Evolution API con QR (webhook se configura global en docker-compose)
+    // 2. Validar límite de WhatsApp
+    await this.limitsService.validateWhatsAppLimit(userId);
+
+    // 3. Crear instancia en Evolution API con QR (webhook se configura global en docker-compose)
     let evolutionData;
     try {
       evolutionData = await this.evolutionService.createInstance(
@@ -59,15 +64,15 @@ export class PhonesController {
       throw new BadGatewayException('Failed to create WhatsApp instance');
     }
 
-    // 3. Construir datos del phone con QR
+    // 4. Construir datos del phone con QR
     const phoneData = this.phonesService.buildPhoneData(dto, evolutionData, userId);
 
-    // 4. Guardar en DB
+    // 5. Guardar en DB
     const phone = await this.phoneRepository.create(phoneData);
 
     this.logger.log(`Phone instance created successfully: ${phone.id}`);
 
-    // 5. Retornar phone + qrCode
+    // 6. Retornar phone + qrCode
     return {
       phone: new PhoneResponseDto(phone),
       qrCode: evolutionData.qrcode?.code || null,
