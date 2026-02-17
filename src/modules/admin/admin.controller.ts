@@ -1,12 +1,24 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+  Patch,
+  Param,
+  Body,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import { AdminService } from './admin.service';
 import { CostsRepository } from './repositories/costs.repository';
 import { ApiHealthRepository } from '@modules/health/repositories/api-health.repository';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { CostsQueryDto } from './dto/costs-query.dto';
 import { CostsResponseDto } from './dto/costs-response.dto';
+import { UpdateUserLimitsDto } from './dto/update-user-limits.dto';
+import { UserLimitsResponseDto } from './dto/user-limits-response.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,6 +28,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly costsRepository: CostsRepository,
     private readonly apiHealthRepository: ApiHealthRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   @Get('costs')
@@ -40,5 +53,31 @@ export class AdminController {
 
     // 3. Retornar response
     return healthStatus;
+  }
+
+  @Patch('users/:userId/limits')
+  async updateUserLimits(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserLimitsDto,
+  ): Promise<UserLimitsResponseDto> {
+    // 1. Verificar que el usuario existe
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 2. Actualizar límites vía Repository
+    const updatedUser = await this.userRepository.updateLimits(userId, dto);
+
+    // 3. Retornar response con datos actualizados
+    return {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      whatsappLimit: updatedUser.whatsappLimit,
+      creditsLimit: updatedUser.creditsLimit,
+      creditsUsed: updatedUser.creditsUsed,
+      billingPeriodStart: updatedUser.billingPeriodStart,
+    };
   }
 }

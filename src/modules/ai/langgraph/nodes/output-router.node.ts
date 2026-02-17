@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { QwenTtsClient } from '../../clients/qwen-tts.client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
+import { LimitsService } from '@common/services/limits.service';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 
@@ -13,6 +15,8 @@ export class OutputRouterNode {
     private readonly ttsClient: QwenTtsClient,
     private readonly fileStorageService: FileStorageService,
     private readonly langSmithService: LangSmithService,
+    private readonly limitsService: LimitsService,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -32,6 +36,8 @@ export class OutputRouterNode {
       };
     }
 
+    // NO validar créditos - permitir que TTS se ejecute aunque quede en negativo
+
     // audio: TTS + save file
     try {
       const ttsResult = await this.langSmithService.traceTTS(
@@ -45,6 +51,10 @@ export class OutputRouterNode {
         costUsd: ttsResult.costUsd,
         latencyMs: ttsResult.latencyMs,
       };
+
+      // Incrementar créditos usados basado en longitud del texto
+      const actualCredits = this.limitsService.calculateCreditsFromChars(responseText.length);
+      await this.userRepository.incrementCreditsUsed(userId, actualCredits);
 
       const { randomUUID } = await import('crypto');
       const responseMessageId = randomUUID();

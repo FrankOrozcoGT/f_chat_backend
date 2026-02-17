@@ -10,16 +10,20 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  name      String
-  picture   String?
-  plan      Plan      @default(free)
-  role      Role      @default(free)
-  lastLogin DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  phones    Phone[]
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  name               String
+  picture            String?
+  plan               Plan      @default(free)
+  role               Role      @default(free)
+  whatsappLimit      Int       @default(1)
+  creditsLimit       Float     @default(0)
+  creditsUsed        Float     @default(0)
+  billingPeriodStart DateTime  @default(now())
+  lastLogin          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  phones             Phone[]
 }
 
 enum Plan {

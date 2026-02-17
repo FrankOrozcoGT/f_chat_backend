@@ -57,4 +57,15 @@ export class PhoneRepository {
       where: { id },
     });
   }
+
+  async countActiveByUserId(userId: string): Promise<number> {
+    return this.prisma.phone.count({
+      where: {
+        userId,
+        status: {
+          in: ['pending', 'connected'],
+        },
+      },
+    });
+  }
 }
