@@ -18,6 +18,7 @@ import { UserRepository } from '@modules/users/repositories/user.repository';
 import { CostsQueryDto } from './dto/costs-query.dto';
 import { CostsResponseDto } from './dto/costs-response.dto';
 import { UpdateUserLimitsDto } from './dto/update-user-limits.dto';
+import { UpdateUserPlanDto } from './dto/update-user-plan.dto';
 import { UserLimitsResponseDto } from './dto/user-limits-response.dto';
 
 @Controller('admin')
@@ -53,6 +54,19 @@ export class AdminController {
 
     // 3. Retornar response
     return healthStatus;
+  }
+
+  @Patch('users/:userId/plan')
+  async updateUserPlan(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserPlanDto,
+  ) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const updated = await this.userRepository.updatePlan(userId, dto.plan);
+    return { id: updated.id, email: updated.email, plan: updated.plan };
   }
 
   @Patch('users/:userId/limits')

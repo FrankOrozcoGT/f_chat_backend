@@ -55,6 +55,13 @@ export class UserRepository {
     });
   }
 
+  async updatePlan(userId: string, plan: Plan): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { plan },
+    });
+  }
+
   async incrementCreditsUsed(userId: string, amount: number): Promise<User> {
     return this.prisma.user.update({
       where: { id: userId },
