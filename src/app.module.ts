@@ -16,6 +16,7 @@ import { LangSmithModule } from '@common/langsmith/langsmith.module';
 import { RedisModule } from '@common/redis/redis.module';
 import { AiModule } from '@modules/ai/ai.module';
 import { HitlModule } from '@modules/hitl/hitl.module';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { HitlModule } from '@modules/hitl/hitl.module';
     MessagesModule,
     AiModule,
     HitlModule,
+    AdminModule,
     WebhooksModule,
   ],
 })
