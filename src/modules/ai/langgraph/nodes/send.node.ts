@@ -5,6 +5,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
 import { SessionRepository } from '../../repositories/session.repository';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { ApiHealthRepository } from '@modules/health/repositories/api-health.repository';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { MessageType } from '@prisma/client';
 import { WorkflowStateType } from '../state.interface';
 
@@ -19,6 +20,7 @@ export class SendNode {
     private readonly sessionRepository: SessionRepository,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly apiHealthRepository: ApiHealthRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -101,6 +103,34 @@ export class SendNode {
     await this.aiRepository.saveMessage(message.id, totalCost);
 
     this.logger.log(`SendNode: message sent for ${conversationId} | type=${tipo} | cost=$${totalCost.toFixed(6)}`);
+
+    // Verificar si se excedieron los créditos DESPUÉS de procesar
+    const user = await this.userRepository.findById(userId);
+    if (user && user.creditsUsed > user.creditsLimit) {
+      this.logger.warn(`Credits exceeded after processing for user ${userId}, conversation ${conversationId}`);
+
+      // Emitir WebSocket al usuario (dueño)
+      this.websocketGateway.emitCreditsExhausted(
+        userId,
+        conversationId,
+        user.creditsUsed,
+        user.creditsLimit,
+      );
+
+      // Cambiar conversación a HITL
+      await this.conversationRepository.updateMode(conversationId, 'HITL');
+
+      // Cerrar sesión AI activa
+      const activeSession = await this.sessionRepository.findActiveByConversationId(conversationId);
+      if (activeSession) {
+        await this.sessionRepository.close(activeSession.id, 'credits_exhausted');
+      }
+
+      // Crear sesión HITL
+      await this.sessionRepository.createHitl(conversationId);
+
+      this.logger.log(`SendNode: conversation ${conversationId} moved to HITL due to credits exhaustion`);
+    }
 
     // Switch to HITL if intent requires it
     if (intent === 'switch_hitl') {

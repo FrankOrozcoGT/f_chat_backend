@@ -3,6 +3,9 @@ import { MessageType } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { KimiClient } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
+import { LimitsService } from '@common/services/limits.service';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { LlmResponse } from '../../clients/interfaces/llm-response.interface';
@@ -15,6 +18,9 @@ export class LlmNode {
     private readonly kimiClient: KimiClient,
     private readonly langSmithService: LangSmithService,
     private readonly prisma: PrismaService,
+    private readonly limitsService: LimitsService,
+    private readonly conversationRepository: ConversationRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -52,6 +58,19 @@ export class LlmNode {
       this.logger.log(`LlmNode: loaded ${history.length} messages from conversation history`);
     }
 
+    // Validar créditos ANTES de llamar a LLM
+    const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+    if (!conversation) {
+      return {
+        error: { step: 'llm', apiName: 'kimi_llm', message: 'Conversation not found' },
+      };
+    }
+    const userId = conversation.phone.userId;
+
+    // NO validar créditos - permitir que el flujo se complete aunque quede en negativo
+    // La deuda se arrastrará al siguiente periodo de facturación
+    this.logger.log(`LlmNode: processing for user ${userId} (no credit validation)`);
+
     try {
       let llmResult: LlmResponse;
 
@@ -82,11 +101,18 @@ export class LlmNode {
         latencyMs: llmResult.latencyMs,
       };
 
+      // Incrementar créditos usados basado en tokens reales
+      const totalTokens = llmResult.tokensInput + llmResult.tokensOutput;
+      const actualCredits = this.limitsService.calculateCreditsFromTokens(totalTokens);
+      await this.userRepository.incrementCreditsUsed(userId, actualCredits);
+      this.logger.log(`LlmNode: incremented ${actualCredits.toFixed(3)} credits (${totalTokens} tokens)`);
+
       // Decide preferred format: respond with audio if input was audio, text otherwise
       const preferredFormat: 'audio' | 'text' =
         messageType === MessageType.voice || messageType === MessageType.audio ? 'audio' : 'text';
 
       this.logger.log(`LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`);
+
 
       return {
         responseText: llmResult.response,
