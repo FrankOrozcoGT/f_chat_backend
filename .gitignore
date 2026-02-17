@@ -41,8 +41,7 @@ lerna-debug.log*
 .env.agent
 
 # Prisma
-prisma/migrations/**
-!prisma/migrations/.gitkeep
+# (migrations are now tracked in git)
 
 # fcoder
 .fcoder/terminals.json
