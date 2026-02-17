@@ -3,6 +3,9 @@ import { MessageType } from '@prisma/client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { QwenSttClient } from '../../clients/qwen-stt.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
+import { LimitsService } from '@common/services/limits.service';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { UserRepository } from '@modules/users/repositories/user.repository';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 
@@ -14,10 +17,13 @@ export class InputRouterNode {
     private readonly fileStorageService: FileStorageService,
     private readonly sttClient: QwenSttClient,
     private readonly langSmithService: LangSmithService,
+    private readonly limitsService: LimitsService,
+    private readonly conversationRepository: ConversationRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { messageType, content, mediaRelativePath, mediaMetadata, messageId } = state;
+    const { messageType, content, mediaRelativePath, mediaMetadata, messageId, conversationId } = state;
     const apiCalls: CreateApiCallData[] = [];
 
     if (messageType === MessageType.voice || messageType === MessageType.audio) {
@@ -26,6 +32,18 @@ export class InputRouterNode {
       }
 
       const audioBuffer = await this.fileStorageService.readFile(mediaRelativePath);
+
+      // Obtener userId para tracking de créditos (sin validación)
+      const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+      if (!conversation) {
+        return {
+          error: { step: 'input_router', apiName: 'qwen_stt', message: 'Conversation not found' },
+          apiCalls,
+          totalCost: 0,
+        };
+      }
+      const userId = conversation.phone.userId;
+      const estimatedDurationSeconds = 30; // Para incremento posterior
 
       try {
         const sttResult = await this.langSmithService.traceSTT(
@@ -39,6 +57,10 @@ export class InputRouterNode {
           costUsd: sttResult.costUsd,
           latencyMs: sttResult.latencyMs,
         });
+
+        // Incrementar créditos usados basado en duración estimada
+        const actualCredits = this.limitsService.calculateCreditsFromSeconds(estimatedDurationSeconds);
+        await this.userRepository.incrementCreditsUsed(userId, actualCredits);
 
         this.logger.log(`InputRouter: audio → STT transcription: "${sttResult.text.substring(0, 80)}"`);
 

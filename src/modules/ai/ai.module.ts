@@ -20,9 +20,11 @@ import { MessagesModule } from '@modules/messages/messages.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { HealthModule } from '@modules/health/health.module';
+import { LimitsModule } from '@common/services/limits.module';
+import { UsersModule } from '@modules/users/users.module';
 
 @Module({
-  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule],
+  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule, LimitsModule, UsersModule],
   providers: [
     AiAgentService,
     AiWorkflow,

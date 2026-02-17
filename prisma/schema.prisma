@@ -17,8 +17,8 @@ model User {
   plan               Plan      @default(free)
   role               Role      @default(free)
   whatsappLimit      Int       @default(1)
-  creditsLimit       Int       @default(0)
-  creditsUsed        Int       @default(0)
+  creditsLimit       Float     @default(0)
+  creditsUsed        Float     @default(0)
   billingPeriodStart DateTime  @default(now())
   lastLogin          DateTime?
   createdAt          DateTime  @default(now())
