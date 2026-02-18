@@ -119,7 +119,8 @@ export class MessageSendService {
       );
 
       this.logger.log(`Message saved with status 'pending', webhook will update status`);
-      return message;
+      const [messageWithUrl] = this.messagesService.buildMessagesWithFullUrls([message]);
+      return messageWithUrl;
     } catch (error) {
       this.logger.error(`Failed to save message in DB: ${error.message}`);
       throw new BadGatewayException('Message sent but failed to save in database');
