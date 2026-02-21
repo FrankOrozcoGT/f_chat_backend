@@ -22,6 +22,11 @@ import { PhonesService } from './phones.service';
 import { PhoneResponseDto } from './dto/phone-response.dto';
 import { CreatePhoneDto } from './dto/create-phone.dto';
 import { ContactResponseDto } from './dto/contact-response.dto';
+import { MessageResponseDto } from './dto/message-response.dto';
+import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
 
 @Controller('api/phones')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -33,6 +38,9 @@ export class PhonesController {
     private readonly phonesService: PhonesService,
     private readonly evolutionService: EvolutionService,
     private readonly limitsService: LimitsService,
+    private readonly clientRepository: ClientRepository,
+    private readonly conversationRepository: ConversationRepository,
+    private readonly messageRepository: MessageRepository,
   ) {}
 
   @Get()
@@ -115,6 +123,109 @@ export class PhonesController {
       }));
 
     return contacts;
+  }
+
+  @Get(':id/messages/:remoteJid')
+  @UseGuards(JwtAuthGuard)
+  async findMessages(
+    @Param('id') phoneId: string,
+    @Param('remoteJid') remoteJid: string,
+    @Req() req,
+  ): Promise<MessageResponseDto[]> {
+    const userId = req.user.id;
+
+    // 1. Buscar phone y verificar ownership
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      throw new NotFoundException('Phone not found');
+    }
+    if (phone.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    // 2. Obtener mensajes de Evolution API
+    let rawMessages: any[];
+    try {
+      rawMessages = await this.evolutionService.findMessages(phone.instanceName, remoteJid);
+    } catch (error) {
+      this.logger.error(`Failed to get messages for phone ${phoneId}: ${error.message}`);
+      throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
+    }
+
+    if (rawMessages.length === 0) {
+      return [];
+    }
+
+    // Log de distribución de mensajes
+    const fromMeCount = rawMessages.filter((m) => m.key?.fromMe).length;
+    this.logger.log(`Messages: total=${rawMessages.length} fromMe=${fromMeCount} fromClient=${rawMessages.length - fromMeCount}`);
+    rawMessages.forEach((m, i) => {
+      this.logger.log(`[${i}] fromMe=${m.key?.fromMe} type=${m.messageType} ts=${m.messageTimestamp}`);
+    });
+
+    // 3. Upsert Client por remoteJid
+    const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
+    const client = await this.clientRepository.upsert({
+      phoneNumber,
+      name: firstWithName?.pushName || phoneNumber,
+    });
+
+    // 4. Upsert Conversation
+    const conversation = await this.conversationRepository.upsert({
+      phoneId,
+      clientId: client.id,
+      isActive: true,
+    });
+
+    // 5. Obtener keyIds existentes en DB para esta conversación
+    const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
+
+    // 6. Filtrar mensajes nuevos y persistir
+    const newMessages = rawMessages.filter((m) => m.key?.id && !existingKeyIds.has(m.key.id));
+
+    if (newMessages.length > 0) {
+      const messageData = newMessages.map((m) => {
+        const messageContent = m.message || {};
+        let type: MessageType = MessageType.text;
+        let content = '';
+
+        if (messageContent.conversation) {
+          type = MessageType.text;
+          content = messageContent.conversation;
+        } else if (messageContent.extendedTextMessage) {
+          type = MessageType.text;
+          content = messageContent.extendedTextMessage.text || '';
+        } else if (messageContent.imageMessage) {
+          type = MessageType.image;
+          content = messageContent.imageMessage.caption || '';
+        } else if (messageContent.videoMessage) {
+          type = MessageType.video;
+          content = messageContent.videoMessage.caption || '';
+        } else if (messageContent.audioMessage) {
+          type = MessageType.voice;
+          content = '';
+        } else if (messageContent.documentMessage) {
+          type = MessageType.document;
+          content = messageContent.documentMessage.caption || messageContent.documentMessage.fileName || '';
+        }
+
+        return {
+          conversationId: conversation.id,
+          type,
+          content,
+          mediaUrl: null,
+          direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
+          senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
+          status: MessageStatus.delivered,
+          metadata: { keyId: m.key?.id },
+        };
+      });
+
+      await this.messageRepository.createMany(messageData);
+    }
+
+    return rawMessages;
   }
 
   @Delete(':id')

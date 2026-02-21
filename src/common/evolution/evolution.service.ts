@@ -423,6 +423,33 @@ export class EvolutionService {
   }
 
   /**
+   * Obtener mensajes de una conversación - POST /chat/findMessages/:instance
+   * Timeout: 10s, NO retry
+   */
+  async findMessages(instanceName: string, remoteJid: string): Promise<any[]> {
+    try {
+      this.logger.log(`Finding messages for ${remoteJid} on instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/chat/findMessages/${instanceName}`,
+          { where: { key: { remoteJid } } },
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      this.logger.log(`Messages retrieved for ${remoteJid} on instance: ${instanceName}`);
+      return response.data?.messages?.records ?? [];
+    } catch (error) {
+      this.logger.error(`Failed to find messages for ${remoteJid} on instance: ${instanceName}`, error.message);
+      throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
+    }
+  }
+
+  /**
    * Utility para delay en retries
    */
   private delay(ms: number): Promise<void> {

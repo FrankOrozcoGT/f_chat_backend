@@ -145,6 +145,37 @@ export class MessageRepository {
   }
 
   /**
+   * Crea múltiples mensajes ignorando duplicados
+   */
+  async createMany(data: Array<{
+    conversationId: string;
+    type: MessageType;
+    content: string;
+    mediaUrl: string | null;
+    direction: MessageDirection;
+    senderType: MessageSenderType;
+    status: MessageStatus;
+    metadata?: any;
+  }>) {
+    return this.prisma.message.createMany({ data });
+  }
+
+  /**
+   * Retorna los keyIds (metadata.keyId) existentes de una conversación
+   * @param conversationId - ID de la conversación
+   * @returns Set de keyIds ya persistidos
+   */
+  async findKeyIdsByConversationId(conversationId: string): Promise<Set<string>> {
+    const results = await this.prisma.$queryRaw<Array<{ keyId: string }>>`
+      SELECT metadata->>'keyId' as "keyId"
+      FROM "Message"
+      WHERE "conversationId" = ${conversationId}
+        AND metadata->>'keyId' IS NOT NULL
+    `;
+    return new Set(results.map((r) => r.keyId));
+  }
+
+  /**
    * Busca un mensaje por keyId en metadata
    * @param keyId - ID del mensaje en Evolution API (guardado en metadata.keyId)
    * @returns Mensaje completo o null si no se encuentra
