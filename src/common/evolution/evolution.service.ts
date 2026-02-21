@@ -396,6 +396,33 @@ export class EvolutionService {
   }
 
   /**
+   * Obtener contactos de una instancia - POST /chat/findContacts/:instance
+   * Timeout: 10s, NO retry
+   */
+  async findContacts(instanceName: string): Promise<any[]> {
+    try {
+      this.logger.log(`Finding contacts for instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/chat/findContacts/${instanceName}`,
+          {},
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      this.logger.log(`Contacts retrieved for instance: ${instanceName}`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to find contacts for instance: ${instanceName}`, error.message);
+      throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
+    }
+  }
+
+  /**
    * Utility para delay en retries
    */
   private delay(ms: number): Promise<void> {
