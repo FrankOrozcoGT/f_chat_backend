@@ -12,6 +12,7 @@ import {
   Logger,
   BadGatewayException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { EvolutionService } from '@common/evolution/evolution.service';
@@ -20,6 +21,7 @@ import { PhoneRepository } from './repositories/phone.repository';
 import { PhonesService } from './phones.service';
 import { PhoneResponseDto } from './dto/phone-response.dto';
 import { CreatePhoneDto } from './dto/create-phone.dto';
+import { ContactResponseDto } from './dto/contact-response.dto';
 
 @Controller('api/phones')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -77,6 +79,42 @@ export class PhonesController {
       phone: new PhoneResponseDto(phone),
       qrCode: evolutionData.qrcode?.code || null,
     };
+  }
+
+  @Get(':id/contacts')
+  @UseGuards(JwtAuthGuard)
+  async findContacts(@Param('id') phoneId: string, @Req() req): Promise<ContactResponseDto[]> {
+    const userId = req.user.id;
+
+    // 1. Buscar phone y verificar ownership
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      throw new NotFoundException('Phone not found');
+    }
+
+    if (phone.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    // 2. Obtener contactos de Evolution API
+    let rawContacts: any[];
+    try {
+      rawContacts = await this.evolutionService.findContacts(phone.instanceName);
+    } catch (error) {
+      this.logger.error(`Failed to get contacts for phone ${phoneId}: ${error.message}`);
+      throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
+    }
+
+    // 3. Mapear y filtrar contactos con nombre
+    const contacts = rawContacts
+      .filter((c) => c.pushName)
+      .map((c) => new ContactResponseDto({
+        id: c.remoteJid,
+        name: c.pushName,
+        phoneNumber: c.remoteJid.split('@')[0],
+      }));
+
+    return contacts;
   }
 
   @Delete(':id')
