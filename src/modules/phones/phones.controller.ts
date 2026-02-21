@@ -113,14 +113,12 @@ export class PhonesController {
       throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
     }
 
-    // 3. Mapear y filtrar contactos con nombre
-    const contacts = rawContacts
-      .filter((c) => c.pushName)
-      .map((c) => new ContactResponseDto({
-        id: c.remoteJid,
-        name: c.pushName,
-        phoneNumber: c.remoteJid.split('@')[0],
-      }));
+    // 3. Mapear todos los contactos
+    const contacts = rawContacts.map((c) => new ContactResponseDto({
+      id: c.remoteJid,
+      name: c.pushName || c.remoteJid.split('@')[0],
+      phoneNumber: c.remoteJid.split('@')[0],
+    }));
 
     return contacts;
   }
