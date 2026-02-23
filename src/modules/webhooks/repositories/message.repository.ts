@@ -162,6 +162,10 @@ export class MessageRepository {
     return this.prisma.message.createMany({ data });
   }
 
+  async countByConversationId(conversationId: string): Promise<number> {
+    return this.prisma.message.count({ where: { conversationId } });
+  }
+
   /**
    * Retorna los keyIds (metadata.keyId) existentes de una conversación
    * @param conversationId - ID de la conversación
