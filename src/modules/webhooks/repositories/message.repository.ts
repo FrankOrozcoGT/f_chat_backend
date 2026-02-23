@@ -37,6 +37,7 @@ export class MessageRepository {
     senderType: MessageSenderType;
     status: MessageStatus;
     metadata?: any;
+    createdAt?: Date;
   }, messageId?: string) {
     return this.prisma.message.create({
       data: {
@@ -52,6 +53,7 @@ export class MessageRepository {
         senderType: data.senderType,
         status: data.status,
         metadata: data.metadata,
+        createdAt: data.createdAt,
       },
     });
   }
