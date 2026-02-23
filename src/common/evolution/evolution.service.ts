@@ -2,10 +2,17 @@ import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { MessageType } from '@prisma/client';
 import {
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
+
+export interface ParsedMessageContent {
+  type: MessageType;
+  content: string;
+  hasMedia: boolean;
+}
 
 export enum EvolutionMediaType {
   IMAGE = 'image',
@@ -433,7 +440,7 @@ export class EvolutionService {
       const response = await firstValueFrom(
         this.httpService.post(
           `${this.apiUrl}/chat/findMessages/${instanceName}`,
-          { where: { key: { remoteJid } } },
+          { where: { key: { remoteJid } }, offset: 60, page: 1 },
           {
             headers: this.getHeaders(),
             timeout: 10000,
@@ -447,6 +454,31 @@ export class EvolutionService {
       this.logger.error(`Failed to find messages for ${remoteJid} on instance: ${instanceName}`, error.message);
       throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
     }
+  }
+
+  /**
+   * Parsea el contenido de un mensaje de Evolution al formato interno
+   */
+  parseMessageContent(messageData: Record<string, any>): ParsedMessageContent {
+    if (messageData.conversation) {
+      return { type: MessageType.text, content: messageData.conversation, hasMedia: false };
+    } else if (messageData.extendedTextMessage) {
+      return { type: MessageType.text, content: messageData.extendedTextMessage.text || '', hasMedia: false };
+    } else if (messageData.imageMessage) {
+      return { type: MessageType.image, content: messageData.imageMessage.caption || '', hasMedia: true };
+    } else if (messageData.videoMessage) {
+      return { type: MessageType.video, content: messageData.videoMessage.caption || '', hasMedia: true };
+    } else if (messageData.audioMessage) {
+      return { type: MessageType.voice, content: '', hasMedia: true };
+    } else if (messageData.documentMessage) {
+      return {
+        type: MessageType.document,
+        content: messageData.documentMessage.caption || messageData.documentMessage.fileName || '',
+        hasMedia: true,
+      };
+    }
+
+    return { type: MessageType.text, content: '', hasMedia: false };
   }
 
   /**
