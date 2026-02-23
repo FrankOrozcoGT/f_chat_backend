@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageSendService } from '@modules/messages/message-send.service';
+import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
+import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { MessagesService } from '@modules/messages/messages.service';
 import { AiRepository } from '../../repositories/ai.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { SessionRepository } from '../../repositories/session.repository';
@@ -14,7 +16,9 @@ export class SendNode {
   private readonly logger = new Logger(SendNode.name);
 
   constructor(
-    private readonly messageSendService: MessageSendService,
+    private readonly evolutionService: EvolutionService,
+    private readonly messageRepository: MessageRepository,
+    private readonly messagesService: MessagesService,
     private readonly aiRepository: AiRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly sessionRepository: SessionRepository,
@@ -44,10 +48,7 @@ export class SendNode {
 
     // Si hubo error en un node anterior → activar HITL (transparente para el cliente)
     if (error) {
-      // Marcar API como down
       await this.apiHealthRepository.markAsDown(error.apiName, error.message);
-
-      // Activar HITL automáticamente
       await this.conversationRepository.updateMode(conversationId, 'HITL');
 
       const activeSession = await this.sessionRepository.findActiveByConversationId(conversationId);
@@ -57,7 +58,6 @@ export class SendNode {
 
       await this.sessionRepository.createHitl(conversationId);
 
-      // Emitir WebSocket: api:down + conversation:hitl
       this.websocketGateway.emitApiDown(error.apiName, error.message, userId);
       this.websocketGateway.emit('conversation:hitl', {
         conversationId,
@@ -69,7 +69,6 @@ export class SendNode {
 
       this.logger.warn(`SendNode: API error (${error.apiName}) → HITL activated for ${conversationId}`);
 
-      // Guardar api calls acumulados hasta el error
       if (apiCalls.length > 0) {
         await this.aiRepository.saveApiCalls(apiCalls);
       }
@@ -79,60 +78,79 @@ export class SendNode {
 
     const tipo: MessageType = preferredFormat === 'audio' ? MessageType.voice : MessageType.text;
 
-    const message = await this.messageSendService.send({
+    // 1. Enviar vía Evolution API
+    let evolutionKeyId: string;
+    if (tipo === MessageType.text) {
+      const response = await this.evolutionService.sendTextMessage(instanceName, clientPhone, responseText);
+      evolutionKeyId = response.key.id;
+    } else if (responseMediaUrl) {
+      const mediatype = this.mapTypeToMediaType(tipo);
+      const response = await this.evolutionService.sendMediaMessage(
+        instanceName,
+        clientPhone,
+        responseMediaUrl,
+        mediatype,
+        responseText || undefined,
+        responseMimeType || undefined,
+        responseFileName || undefined,
+      );
+      evolutionKeyId = response.key.id;
+    } else {
+      throw new Error('mediaUrl is required for multimedia messages');
+    }
+
+    this.logger.log(`Evolution accepted message for ${clientPhone}, keyId: ${evolutionKeyId}`);
+
+    // 2. Guardar en BD
+    const messageData = this.messagesService.buildOutgoingMessageData(
+      conversationId,
+      tipo,
+      responseText,
+      'pending',
+      responseMediaRelativePath,
+      evolutionKeyId,
+      responseFileName || null,
+      responseFileSize || null,
+      responseMimeType || null,
+      'bot',
+    );
+
+    const { message } = await this.messageRepository.sendMessageTransaction(
       conversationId,
       userId,
-      instanceId: instanceName,
-      clientPhone,
-      tipo,
-      contenido: responseText,
-      relativePath: responseMediaRelativePath,
-      mediaUrlForEvolution: responseMediaUrl,
-      mimeType: responseMimeType || undefined,
-      fileName: responseFileName || undefined,
-      fileSize: responseFileSize || undefined,
-      senderType: 'bot',
-    });
+      messageData,
+      {
+        lastMessageAt: new Date(),
+        lastMessagePreview: responseText.substring(0, 100),
+      },
+    );
 
-    // Save API calls
+    // 3. Guardar API calls y costo
     if (apiCalls.length > 0) {
       await this.aiRepository.saveApiCalls(apiCalls);
     }
-
-    // Save total cost on the message
     await this.aiRepository.saveMessage(message.id, totalCost);
 
     this.logger.log(`SendNode: message sent for ${conversationId} | type=${tipo} | cost=$${totalCost.toFixed(6)}`);
 
-    // Verificar si se excedieron los créditos DESPUÉS de procesar
+    // 4. Verificar créditos
     const user = await this.userRepository.findById(userId);
     if (user && user.creditsUsed > user.creditsLimit) {
       this.logger.warn(`Credits exceeded after processing for user ${userId}, conversation ${conversationId}`);
 
-      // Emitir WebSocket al usuario (dueño)
-      this.websocketGateway.emitCreditsExhausted(
-        userId,
-        conversationId,
-        user.creditsUsed,
-        user.creditsLimit,
-      );
-
-      // Cambiar conversación a HITL
+      this.websocketGateway.emitCreditsExhausted(userId, conversationId, user.creditsUsed, user.creditsLimit);
       await this.conversationRepository.updateMode(conversationId, 'HITL');
 
-      // Cerrar sesión AI activa
       const activeSession = await this.sessionRepository.findActiveByConversationId(conversationId);
       if (activeSession) {
         await this.sessionRepository.close(activeSession.id, 'credits_exhausted');
       }
 
-      // Crear sesión HITL
       await this.sessionRepository.createHitl(conversationId);
-
       this.logger.log(`SendNode: conversation ${conversationId} moved to HITL due to credits exhaustion`);
     }
 
-    // Switch to HITL if intent requires it
+    // 5. Switch a HITL si el intent lo requiere
     if (intent === 'switch_hitl') {
       await this.conversationRepository.updateMode(conversationId, 'HITL');
 
@@ -153,5 +171,16 @@ export class SendNode {
     }
 
     return {};
+  }
+
+  private mapTypeToMediaType(tipo: MessageType): EvolutionMediaType {
+    switch (tipo) {
+      case MessageType.image: return EvolutionMediaType.IMAGE;
+      case MessageType.video: return EvolutionMediaType.VIDEO;
+      case MessageType.voice:
+      case MessageType.audio: return EvolutionMediaType.AUDIO;
+      case MessageType.document: return EvolutionMediaType.DOCUMENT;
+      default: throw new Error(`Unsupported media type: ${tipo}`);
+    }
   }
 }
