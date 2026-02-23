@@ -65,8 +65,12 @@ export class WebhooksController {
         await this.handleMessagesUpdate(phone.id, instanceId, webhookData);
         break;
 
+      case 'messages.set':
+        await this.handleMessagesSet(phone.id, webhookData);
+        break;
+
       default:
-        // Ignorar eventos no manejados
+        this.logger.log(`[Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`);
         break;
     }
 
@@ -219,6 +223,27 @@ export class WebhooksController {
         this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
       }
     }
+  }
+
+  /**
+   * Maneja evento MESSAGES_SET
+   * Notifica al frontend el progreso de sincronización del historial
+   */
+  private async handleMessagesSet(phoneId: string, webhookData: any) {
+    this.logger.log(`[messages.set] raw data: ${JSON.stringify(webhookData?.data).substring(0, 300)}`);
+    const isLatest: boolean = webhookData?.data?.isLatest ?? false;
+    const progress: number = webhookData?.data?.progress ?? 0;
+
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) return;
+
+    this.websocketGateway.emit(
+      'phone:sync_progress',
+      { phoneId, progress, isLatest },
+      phone.userId,
+    );
+
+    this.logger.log(`Sync progress for phone ${phoneId}: ${progress}% - isLatest: ${isLatest}`);
   }
 
   /**
