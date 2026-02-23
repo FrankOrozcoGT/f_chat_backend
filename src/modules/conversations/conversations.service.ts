@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { Conversation, Client, Phone } from '@prisma/client';
+import { Conversation, Client, Phone, ConversationMode } from '@prisma/client';
+import { ConversationResponseDto } from './dto/conversation-response.dto';
 
 @Injectable()
 export class ConversationsService {
@@ -28,6 +29,35 @@ export class ConversationsService {
    * @param client - Cliente asociado
    * @returns Objeto con conversation, client y summary
    */
+  mapContactsToConversations(
+    contacts: any[],
+    phone: Phone,
+  ): ConversationResponseDto[] {
+    const now = new Date();
+    return contacts
+      .filter((c) => c.remoteJid?.endsWith('@s.whatsapp.net'))
+      .map((c) => new ConversationResponseDto({
+        id: c.remoteJid,
+        phoneId: phone.id,
+        clientId: c.remoteJid,
+        mode: ConversationMode.HITL,
+        lastMessageAt: now,
+        lastMessagePreview: null,
+        isActive: true,
+        summary: null,
+        createdAt: now,
+        updatedAt: now,
+        client: {
+          id: c.remoteJid,
+          phoneNumber: c.remoteJid.replace(/@s\.whatsapp\.net$/, ''),
+          name: c.pushName || c.notify || null,
+          firstContactAt: now,
+          lastContactAt: now,
+        } as Client,
+        phone: phone,
+      } as Conversation & { client: Client; phone: Phone }));
+  }
+
   buildDetailResponse(conversation: Conversation, client: Client | null) {
     const summary = {
       conversationId: conversation.id,

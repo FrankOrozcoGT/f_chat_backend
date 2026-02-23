@@ -14,6 +14,7 @@ import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { ConversationsService } from './conversations.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
+import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Controller('api/conversations')
 export class ConversationsController {
@@ -24,6 +25,7 @@ export class ConversationsController {
     private readonly conversationsService: ConversationsService,
     private readonly phoneRepository: PhoneRepository,
     private readonly clientRepository: ClientRepository,
+    private readonly evolutionService: EvolutionService,
   ) {}
 
   @Get()
@@ -36,14 +38,25 @@ export class ConversationsController {
 
     this.logger.log(`GET /api/conversations - userId: ${userId}, phoneId: ${phoneId || 'all'}`);
 
-    // Obtener conversaciones del usuario
-    const conversations = await this.conversationRepository.findByUserIdAndPhone(
-      userId,
-      phoneId,
-    );
+    const conversations = await this.conversationRepository.findByUserIdAndPhone(userId, phoneId);
 
-    // Mapear a DTO
-    return conversations.map((conversation) => new ConversationResponseDto(conversation));
+    if (conversations.length > 0) {
+      return conversations.map((conversation) => new ConversationResponseDto(conversation));
+    }
+
+    // Fallback: consultar Evolution contacts si no hay conversaciones en DB
+    const phone = phoneId
+      ? await this.phoneRepository.findById(phoneId)
+      : await this.phoneRepository.findAllByUserId(userId).then((phones) => phones[0] ?? null);
+
+    if (!phone) {
+      this.logger.warn(`No phone found for userId: ${userId}, returning empty list`);
+      return [];
+    }
+
+    this.logger.log(`No conversations in DB, falling back to Evolution contacts for phone: ${phone.instanceName}`);
+    const contacts = await this.evolutionService.findContacts(phone.instanceName);
+    return this.conversationsService.mapContactsToConversations(contacts, phone);
   }
 
   @Get(':id')
