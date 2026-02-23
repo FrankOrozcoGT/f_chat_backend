@@ -26,7 +26,8 @@ import { MessageResponseDto } from './dto/message-response.dto';
 import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
-import { MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import { MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import { FileStorageService } from '@common/file-storage/file-storage.service';
 
 @Controller('api/phones')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -41,6 +42,7 @@ export class PhonesController {
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
+    private readonly fileStorageService: FileStorageService,
   ) {}
 
   @Get()
@@ -154,13 +156,6 @@ export class PhonesController {
       return [];
     }
 
-    // Log de distribución de mensajes
-    const fromMeCount = rawMessages.filter((m) => m.key?.fromMe).length;
-    this.logger.log(`Messages: total=${rawMessages.length} fromMe=${fromMeCount} fromClient=${rawMessages.length - fromMeCount}`);
-    rawMessages.forEach((m, i) => {
-      this.logger.log(`[${i}] fromMe=${m.key?.fromMe} type=${m.messageType} ts=${m.messageTimestamp}`);
-    });
-
     // 3. Upsert Client por remoteJid
     const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
     const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
@@ -176,54 +171,60 @@ export class PhonesController {
       isActive: true,
     });
 
-    // 5. Obtener keyIds existentes en DB para esta conversación
-    const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
+    // 5. Retornar al frontend inmediatamente, persistir en background
+    this.persistMessagesInBackground(phone, conversation.id, rawMessages);
 
-    // 6. Filtrar mensajes nuevos y persistir
-    const newMessages = rawMessages.filter((m) => m.key?.id && !existingKeyIds.has(m.key.id));
+    return rawMessages;
+  }
 
-    if (newMessages.length > 0) {
-      const messageData = newMessages.map((m) => {
-        const messageContent = m.message || {};
-        let type: MessageType = MessageType.text;
-        let content = '';
+  private async persistMessagesInBackground(phone: any, conversationId: string, rawMessages: any[]) {
+    try {
+      // Obtener keyIds existentes
+      const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversationId);
+      const newMessages = rawMessages.filter((m) => m.key?.id && !existingKeyIds.has(m.key.id));
 
-        if (messageContent.conversation) {
-          type = MessageType.text;
-          content = messageContent.conversation;
-        } else if (messageContent.extendedTextMessage) {
-          type = MessageType.text;
-          content = messageContent.extendedTextMessage.text || '';
-        } else if (messageContent.imageMessage) {
-          type = MessageType.image;
-          content = messageContent.imageMessage.caption || '';
-        } else if (messageContent.videoMessage) {
-          type = MessageType.video;
-          content = messageContent.videoMessage.caption || '';
-        } else if (messageContent.audioMessage) {
-          type = MessageType.voice;
-          content = '';
-        } else if (messageContent.documentMessage) {
-          type = MessageType.document;
-          content = messageContent.documentMessage.caption || messageContent.documentMessage.fileName || '';
+      if (newMessages.length === 0) return;
+
+      for (const m of newMessages) {
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+
+        // Descargar media si aplica
+        if (hasMedia && m.key?.id) {
+          try {
+            mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+              this.evolutionService,
+              phone.instanceName,
+              phone.userId,
+              conversationId,
+              m.key.id,
+              m.key,
+            );
+          } catch (err) {
+            this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
+          }
         }
 
-        return {
-          conversationId: conversation.id,
+        await this.messageRepository.create({
+          conversationId,
           type,
           content,
-          mediaUrl: null,
+          mediaUrl: mediaData?.relativePath || null,
+          fileName: mediaData?.fileName || null,
+          fileSize: mediaData?.fileSize || null,
+          mimeType: mediaData?.mimeType || null,
           direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
           senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
           status: MessageStatus.delivered,
           metadata: { keyId: m.key?.id },
-        };
-      });
+          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
+        });
+      }
 
-      await this.messageRepository.createMany(messageData);
+      this.logger.log(`Background: persisted ${newMessages.length} messages for conversation ${conversationId}`);
+    } catch (err) {
+      this.logger.error(`Background persistence failed: ${err.message}`);
     }
-
-    return rawMessages;
   }
 
   @Delete(':id')
