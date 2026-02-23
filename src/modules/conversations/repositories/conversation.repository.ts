@@ -11,22 +11,42 @@ export class ConversationRepository {
    * @param phoneId - ID del teléfono (opcional)
    * @returns Lista de conversaciones con datos de client y phone
    */
-  async findByUserIdAndPhone(userId: string, phoneId?: string) {
-    return this.prisma.conversation.findMany({
-      where: {
-        phone: {
-          userId,
-          ...(phoneId && { id: phoneId }),
+  async findByUserIdAndPhone(
+    userId: string,
+    phoneId?: string,
+    options?: { page?: number; limit?: number; search?: string },
+  ) {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const search = options?.search?.trim();
+
+    const where = {
+      phone: {
+        userId,
+        ...(phoneId && { id: phoneId }),
+      },
+      ...(search && {
+        client: {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { phoneNumber: { contains: search, mode: 'insensitive' as const } },
+          ],
         },
-      },
-      include: {
-        client: true,
-        phone: true,
-      },
-      orderBy: {
-        lastMessageAt: 'desc',
-      },
-    });
+      }),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.conversation.findMany({
+        where,
+        include: { client: true, phone: true },
+        orderBy: { lastMessageAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.conversation.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
   }
 
   /**
