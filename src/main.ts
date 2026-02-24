@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import * as express from 'express';
 import * as dotenv from 'dotenv';
 import { join } from 'path';
 import { AppModule } from '@/app.module';
@@ -16,6 +17,9 @@ async function bootstrap() {
     bufferLogs: true,
   });
   const configService = app.get(ConfigService);
+
+  // Body parser limit (Evolution webhooks pueden ser grandes durante sync)
+  app.use(express.json({ limit: '10mb' }));
 
   // Cookie Parser
   app.use(cookieParser());

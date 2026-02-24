@@ -16,6 +16,7 @@ import { ClientMemoryRepository } from './repositories/client-memory.repository'
 import { FlowCacheService } from './services/flow-cache.service';
 import { NodeMessageService } from './services/node-message.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
+import { EvolutionModule } from '@common/evolution/evolution.module';
 import { MessagesModule } from '@modules/messages/messages.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
@@ -24,7 +25,7 @@ import { LimitsModule } from '@common/services/limits.module';
 import { UsersModule } from '@modules/users/users.module';
 
 @Module({
-  imports: [PrismaModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule, LimitsModule, UsersModule],
+  imports: [PrismaModule, EvolutionModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule, LimitsModule, UsersModule],
   providers: [
     AiAgentService,
     AiWorkflow,

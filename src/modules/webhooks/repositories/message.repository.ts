@@ -37,6 +37,7 @@ export class MessageRepository {
     senderType: MessageSenderType;
     status: MessageStatus;
     metadata?: any;
+    createdAt?: Date;
   }, messageId?: string) {
     return this.prisma.message.create({
       data: {
@@ -52,6 +53,7 @@ export class MessageRepository {
         senderType: data.senderType,
         status: data.status,
         metadata: data.metadata,
+        createdAt: data.createdAt,
       },
     });
   }
@@ -142,6 +144,41 @@ export class MessageRepository {
         createdAt: true,
       },
     });
+  }
+
+  /**
+   * Crea múltiples mensajes ignorando duplicados
+   */
+  async createMany(data: Array<{
+    conversationId: string;
+    type: MessageType;
+    content: string;
+    mediaUrl: string | null;
+    direction: MessageDirection;
+    senderType: MessageSenderType;
+    status: MessageStatus;
+    metadata?: any;
+  }>) {
+    return this.prisma.message.createMany({ data });
+  }
+
+  async countByConversationId(conversationId: string): Promise<number> {
+    return this.prisma.message.count({ where: { conversationId } });
+  }
+
+  /**
+   * Retorna los keyIds (metadata.keyId) existentes de una conversación
+   * @param conversationId - ID de la conversación
+   * @returns Set de keyIds ya persistidos
+   */
+  async findKeyIdsByConversationId(conversationId: string): Promise<Set<string>> {
+    const results = await this.prisma.$queryRaw<Array<{ keyId: string }>>`
+      SELECT metadata->>'keyId' as "keyId"
+      FROM "Message"
+      WHERE "conversationId" = ${conversationId}
+        AND metadata->>'keyId' IS NOT NULL
+    `;
+    return new Set(results.map((r) => r.keyId));
   }
 
   /**

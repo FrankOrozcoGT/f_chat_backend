@@ -19,13 +19,14 @@ import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
 import { MessagesService } from './messages.service';
-import { MessageSendService } from './message-send.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SendWithFileDto } from './dto/send-with-file.dto';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
-import { MessageType } from '@prisma/client';
+import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
+import { MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
 
 @Controller('api/messages')
 export class MessagesController {
@@ -35,10 +36,11 @@ export class MessagesController {
     private readonly messageRepository: MessageRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly phoneRepository: PhoneRepository,
+    private readonly clientRepository: ClientRepository,
     private readonly messagesService: MessagesService,
-    private readonly messageSendService: MessageSendService,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly fileStorageService: FileStorageService,
+    private readonly evolutionService: EvolutionService,
   ) {}
 
   @Get()
@@ -55,29 +57,85 @@ export class MessagesController {
       throw new BadRequestException('conversationId query parameter is required');
     }
 
-    // 2. Obtener conversación por ID
-    const conversation = await this.conversationRepository.findById(conversationId);
+    // 2. Obtener conversación con relaciones (phone + client en 1 query)
+    const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+
+    // Fallback: si no existe en DB y es un remoteJid, buscar en Evolution
     if (!conversation) {
-      throw new NotFoundException(
-        `Conversation with id ${conversationId} not found`,
-      );
+      if (!conversationId.endsWith('@s.whatsapp.net')) {
+        throw new NotFoundException(`Conversation with id ${conversationId} not found`);
+      }
+
+      const phones = await this.phoneRepository.findAllByUserId(userId);
+      const phone = phones[0] ?? null;
+      if (!phone) {
+        throw new NotFoundException(`No phone found for user`);
+      }
+
+      this.logger.log(`Conversation not in DB, falling back to Evolution for remoteJid: ${conversationId}`);
+      const rawMessages = await this.evolutionService.findMessages(phone.instanceName, conversationId);
+
+      const phoneNumber = conversationId.replace('@s.whatsapp.net', '');
+      const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
+      this.bootstrapConversationInBackground(phone, phoneNumber, firstWithName?.pushName || phoneNumber, rawMessages, userId);
+
+      return rawMessages.map((m) => {
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        return {
+          id: m.key?.id || m.id,
+          conversationId,
+          type,
+          content,
+          mediaUrl: null,
+          fileName: null,
+          fileSize: null,
+          mimeType: null,
+          direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
+          senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
+          status: MessageStatus.delivered,
+          metadata: { keyId: m.key?.id, mediaLoading: hasMedia },
+          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
+          updatedAt: new Date(),
+        };
+      });
     }
 
-    // 3. Obtener phone asociado
-    const phone = await this.phoneRepository.findById(conversation.phoneId);
-    if (!phone) {
-      throw new NotFoundException(
-        `Phone associated with conversation not found`,
-      );
+    // 3. Validar permisos
+    this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
+
+    // 4. Obtener mensajes
+    const messages = await this.messageRepository.findByConversationId(conversationId);
+
+    // Fallback: si no hay mensajes en DB, consultar Evolution
+    if (messages.length === 0 && conversation.client) {
+      const remoteJid = `${conversation.client.phoneNumber}@s.whatsapp.net`;
+      this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
+      const rawMessages = await this.evolutionService.findMessages(conversation.phone.instanceName, remoteJid);
+
+      this.bootstrapConversationInBackground(conversation.phone, conversation.client.phoneNumber, conversation.client.name || conversation.client.phoneNumber, rawMessages, userId);
+
+      return rawMessages
+        .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0))
+        .map((m) => {
+          const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+          return {
+            id: m.key?.id || m.id,
+            conversationId,
+            type,
+            content,
+            mediaUrl: null,
+            fileName: null,
+            fileSize: null,
+            mimeType: null,
+            direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
+            senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
+            status: MessageStatus.delivered,
+            metadata: { keyId: m.key?.id, mediaLoading: hasMedia },
+            createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
+            updatedAt: new Date(),
+          };
+        });
     }
-
-    // 4. Validar permisos (Service - lógica pura)
-    this.messagesService.checkUserOwnsConversation(conversation, phone, userId);
-
-    // 5. Obtener mensajes
-    const messages = await this.messageRepository.findByConversationId(
-      conversationId,
-    );
 
     // 6. Construir URLs completas para mediaUrl
     const messagesWithFullUrls = this.messagesService.buildMessagesWithFullUrls(messages);
@@ -126,18 +184,46 @@ export class MessagesController {
       ? this.fileStorageService.buildDockerAccessibleUrl(relativePath)
       : null;
 
-    // 4. Enviar usando flujo centralizado
+    // 4. Enviar vía Evolution API + guardar en BD
     try {
-      return await this.messageSendService.send({
-        conversationId: dto.conversationId,
-        userId,
-        instanceId: conversation.phone.evolutionInstanceId,
-        clientPhone: conversation.client.phoneNumber,
-        tipo: dto.tipo,
-        contenido: dto.contenido,
+      let evolutionKeyId: string;
+      if (dto.tipo === MessageType.text) {
+        const response = await this.evolutionService.sendTextMessage(
+          conversation.phone.evolutionInstanceId,
+          conversation.client.phoneNumber,
+          dto.contenido,
+        );
+        evolutionKeyId = response.key.id;
+      } else if (mediaUrlForEvolution) {
+        const mediatype = this.mapTypeToMediaType(dto.tipo);
+        const response = await this.evolutionService.sendMediaMessage(
+          conversation.phone.evolutionInstanceId,
+          conversation.client.phoneNumber,
+          mediaUrlForEvolution,
+          mediatype,
+          dto.contenido || undefined,
+        );
+        evolutionKeyId = response.key.id;
+      } else {
+        throw new BadRequestException('mediaUrl is required for multimedia messages');
+      }
+
+      const messageData = this.messagesService.buildOutgoingMessageData(
+        dto.conversationId,
+        dto.tipo,
+        dto.contenido,
+        'pending',
         relativePath,
-        mediaUrlForEvolution,
-      });
+        evolutionKeyId,
+      );
+      const { message } = await this.messageRepository.sendMessageTransaction(
+        dto.conversationId,
+        userId,
+        messageData,
+        { lastMessageAt: new Date(), lastMessagePreview: dto.contenido.substring(0, 100) },
+      );
+      const [messageWithUrl] = this.messagesService.buildMessagesWithFullUrls([message]);
+      return messageWithUrl;
     } catch (error) {
       this.websocketGateway.emit(
         'message:error',
@@ -264,21 +350,40 @@ export class MessagesController {
 
     this.logger.log(`About to send - tipo: ${dto.tipo}, mimeType: ${finalMimeType}, fileName: ${fileName}, mediaUrl: ${mediaUrl}`);
 
-    // 8. Enviar usando flujo centralizado
+    // 8. Enviar vía Evolution API + guardar en BD
     try {
-      return await this.messageSendService.send({
-        conversationId: dto.conversationId,
-        userId,
-        instanceId: conversation.phone.evolutionInstanceId,
-        clientPhone: conversation.client.phoneNumber,
-        tipo: dto.tipo,
-        contenido: dto.contenido || '',
-        relativePath,
-        mediaUrlForEvolution: mediaUrl,
-        messageId,
-        mimeType: finalMimeType,
+      const mediatype = this.mapTypeToMediaType(dto.tipo);
+      const response = await this.evolutionService.sendMediaMessage(
+        conversation.phone.evolutionInstanceId,
+        conversation.client.phoneNumber,
+        mediaUrl,
+        mediatype,
+        dto.contenido || undefined,
+        finalMimeType,
         fileName,
-      });
+      );
+      const evolutionKeyId = response.key.id;
+
+      const messageData = this.messagesService.buildOutgoingMessageData(
+        dto.conversationId,
+        dto.tipo,
+        dto.contenido || '',
+        'pending',
+        relativePath,
+        evolutionKeyId,
+        fileName,
+        file.size,
+        finalMimeType,
+      );
+      const { message } = await this.messageRepository.sendMessageTransaction(
+        dto.conversationId,
+        userId,
+        messageData,
+        { lastMessageAt: new Date(), lastMessagePreview: (dto.contenido || fileName).substring(0, 100) },
+        messageId,
+      );
+      const [messageWithUrl] = this.messagesService.buildMessagesWithFullUrls([message]);
+      return messageWithUrl;
     } catch (error) {
       this.websocketGateway.emit(
         'message:error',
@@ -286,6 +391,91 @@ export class MessagesController {
         userId,
       );
       throw error;
+    }
+  }
+
+  private mapTypeToMediaType(tipo: MessageType): EvolutionMediaType {
+    switch (tipo) {
+      case MessageType.image: return EvolutionMediaType.IMAGE;
+      case MessageType.video: return EvolutionMediaType.VIDEO;
+      case MessageType.voice:
+      case MessageType.audio: return EvolutionMediaType.AUDIO;
+      case MessageType.document: return EvolutionMediaType.DOCUMENT;
+      default: throw new BadRequestException(`Unsupported media type: ${tipo}`);
+    }
+  }
+
+  private async bootstrapConversationInBackground(
+    phone: any,
+    phoneNumber: string,
+    clientName: string,
+    rawMessages: any[],
+    userId: string,
+  ) {
+    try {
+      // 1. Upsert client
+      const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
+
+      // 2. Upsert conversation
+      const conversation = await this.conversationRepository.upsert({
+        phoneId: phone.id,
+        clientId: client.id,
+        isActive: true,
+      });
+
+      // 3. Deduplicar mensajes ya persistidos
+      const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
+      const newMessages = rawMessages
+        .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
+        .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
+
+      if (newMessages.length === 0) return;
+
+      // 4. Persistir mensajes, descargando media cuando aplica
+      for (const m of newMessages) {
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+
+        if (hasMedia && m.key?.id) {
+          try {
+            mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+              this.evolutionService,
+              phone.instanceName,
+              userId,
+              conversation.id,
+              m.key.id,
+              m.key,
+            );
+            // Notificar al frontend que el media ya está listo
+            this.websocketGateway.emit(
+              'message:media_ready',
+              { id: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
+              userId,
+            );
+          } catch (err) {
+            this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
+          }
+        }
+
+        await this.messageRepository.create({
+          conversationId: conversation.id,
+          type,
+          content,
+          mediaUrl: mediaData?.relativePath || null,
+          fileName: mediaData?.fileName || null,
+          fileSize: mediaData?.fileSize || null,
+          mimeType: mediaData?.mimeType || null,
+          direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
+          senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
+          status: MessageStatus.delivered,
+          metadata: { keyId: m.key?.id },
+          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
+        });
+      }
+
+      this.logger.log(`Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`);
+    } catch (err) {
+      this.logger.error(`Background bootstrap failed: ${err.message}`);
     }
   }
 

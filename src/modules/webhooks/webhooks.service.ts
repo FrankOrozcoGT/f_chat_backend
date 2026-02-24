@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PhoneStatus, MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import { PhoneStatus, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
 
-  constructor() {}
+  constructor(private readonly evolutionService: EvolutionService) {}
   /**
    * Parsea el estado de conexión desde el webhook data
    * @param webhookData - Datos del webhook
@@ -103,30 +104,7 @@ export class WebhooksService {
     mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-
-    // Detectar tipo de mensaje
-    let type: MessageType = MessageType.text;
-    let content = '';
-
-    if (messageData.conversation) {
-      type = MessageType.text;
-      content = messageData.conversation;
-    } else if (messageData.extendedTextMessage) {
-      type = MessageType.text;
-      content = messageData.extendedTextMessage.text;
-    } else if (messageData.imageMessage) {
-      type = MessageType.image;
-      content = messageData.imageMessage.caption || '';
-    } else if (messageData.videoMessage) {
-      type = MessageType.video;
-      content = messageData.videoMessage.caption || '';
-    } else if (messageData.audioMessage) {
-      type = MessageType.voice;
-      content = '';
-    } else if (messageData.documentMessage) {
-      type = MessageType.document;
-      content = messageData.documentMessage.caption || messageData.documentMessage.fileName || '';
-    }
+    const { type, content } = this.evolutionService.parseMessageContent(messageData);
 
     return {
       conversationId,
@@ -155,30 +133,7 @@ export class WebhooksService {
     mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-
-    // Detectar tipo de mensaje
-    let type: MessageType = MessageType.text;
-    let content = '';
-
-    if (messageData.conversation) {
-      type = MessageType.text;
-      content = messageData.conversation;
-    } else if (messageData.extendedTextMessage) {
-      type = MessageType.text;
-      content = messageData.extendedTextMessage.text;
-    } else if (messageData.imageMessage) {
-      type = MessageType.image;
-      content = messageData.imageMessage.caption || '';
-    } else if (messageData.videoMessage) {
-      type = MessageType.video;
-      content = messageData.videoMessage.caption || '';
-    } else if (messageData.audioMessage) {
-      type = MessageType.voice;
-      content = '';
-    } else if (messageData.documentMessage) {
-      type = MessageType.document;
-      content = messageData.documentMessage.caption || messageData.documentMessage.fileName || '';
-    }
+    const { type, content } = this.evolutionService.parseMessageContent(messageData);
 
     return {
       conversationId,
