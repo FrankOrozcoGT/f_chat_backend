@@ -2,10 +2,17 @@ import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { MessageType } from '@prisma/client';
 import {
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
+
+export interface ParsedMessageContent {
+  type: MessageType;
+  content: string;
+  hasMedia: boolean;
+}
 
 export enum EvolutionMediaType {
   IMAGE = 'image',
@@ -393,6 +400,85 @@ export class EvolutionService {
       this.logger.error(`Failed to get base64 from media message: ${messageKey.id}`, error.message);
       throw new BadGatewayException('Failed to download media file');
     }
+  }
+
+  /**
+   * Obtener contactos de una instancia - POST /chat/findContacts/:instance
+   * Timeout: 10s, NO retry
+   */
+  async findContacts(instanceName: string): Promise<any[]> {
+    try {
+      this.logger.log(`Finding contacts for instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/chat/findContacts/${instanceName}`,
+          {},
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      this.logger.log(`Contacts retrieved for instance: ${instanceName}`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to find contacts for instance: ${instanceName}`, error.message);
+      throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
+    }
+  }
+
+  /**
+   * Obtener mensajes de una conversación - POST /chat/findMessages/:instance
+   * Timeout: 10s, NO retry
+   */
+  async findMessages(instanceName: string, remoteJid: string): Promise<any[]> {
+    try {
+      this.logger.log(`Finding messages for ${remoteJid} on instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.apiUrl}/chat/findMessages/${instanceName}`,
+          { where: { key: { remoteJid } }, offset: 60, page: 1 },
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      this.logger.log(`Messages retrieved for ${remoteJid} on instance: ${instanceName}`);
+      return response.data?.messages?.records ?? [];
+    } catch (error) {
+      this.logger.error(`Failed to find messages for ${remoteJid} on instance: ${instanceName}`, error.message);
+      throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
+    }
+  }
+
+  /**
+   * Parsea el contenido de un mensaje de Evolution al formato interno
+   */
+  parseMessageContent(messageData: Record<string, any>): ParsedMessageContent {
+    if (messageData.conversation) {
+      return { type: MessageType.text, content: messageData.conversation, hasMedia: false };
+    } else if (messageData.extendedTextMessage) {
+      return { type: MessageType.text, content: messageData.extendedTextMessage.text || '', hasMedia: false };
+    } else if (messageData.imageMessage) {
+      return { type: MessageType.image, content: messageData.imageMessage.caption || '', hasMedia: true };
+    } else if (messageData.videoMessage) {
+      return { type: MessageType.video, content: messageData.videoMessage.caption || '', hasMedia: true };
+    } else if (messageData.audioMessage) {
+      return { type: MessageType.voice, content: '', hasMedia: true };
+    } else if (messageData.documentMessage) {
+      return {
+        type: MessageType.document,
+        content: messageData.documentMessage.caption || messageData.documentMessage.fileName || '',
+        hasMedia: true,
+      };
+    }
+
+    return { type: MessageType.text, content: '', hasMedia: false };
   }
 
   /**

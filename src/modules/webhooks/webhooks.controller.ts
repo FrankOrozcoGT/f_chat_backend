@@ -65,8 +65,12 @@ export class WebhooksController {
         await this.handleMessagesUpdate(phone.id, instanceId, webhookData);
         break;
 
+      case 'messages.set':
+        await this.handleMessagesSet(phone.id, webhookData);
+        break;
+
       default:
-        // Ignorar eventos no manejados
+        this.logger.log(`[Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`);
         break;
     }
 
@@ -126,73 +130,82 @@ export class WebhooksController {
     const messageKey = webhookData?.data?.key;
 
     // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
-    //    con MessageSendService que puede estar guardando en paralelo
     if (fromMe && messageKey) {
       await new Promise((resolve) => setTimeout(resolve, 300));
       const existingMessage = await this.messageRepository.findByMetadataKeyId(messageKey.id);
 
       if (existingMessage) {
-        // Ya fue guardado por MessageSendService (HITL o AI) → solo emitir al frontend
         this.websocketGateway.emit('message:sent', existingMessage);
         this.logger.log(`Message ${messageKey.id} already in DB, emitted to frontend`);
         return;
       }
 
-      // No existe en DB → enviado desde WhatsApp Web, seguir flujo normal
       this.logger.log(`Message ${messageKey.id} from WhatsApp Web, saving`);
     }
 
-    // 2. Construir datos del Client (pasar fromMe para no usar pushName incorrecto)
+    // 2. Construir datos del Client
     const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
 
-    // Ignorar mensajes de grupos (terminan en @g.us)
+    // Ignorar mensajes de grupos
     if (clientData.phoneNumber.endsWith('@g.us')) {
       return;
     }
 
-    // 3. Upsert Client
+    // 3. Obtener phone (necesario para userId, instanceName en varios pasos)
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      this.logger.warn(`Phone ${phoneId} not found`);
+      return;
+    }
+
+    // 4. Upsert Client
     const client = await this.clientRepository.upsert(clientData);
 
-    // 4. Construir y upsert Conversation
+    // 5. Construir y upsert Conversation
     const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
     const conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 5. Si hay media, descargar ANTES de crear el mensaje
+    // 6. Si es conversación sin historial, sincronizar en background
+    const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+    if (existingCount === 0) {
+      const remoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
+      this.logger.log(`New conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`);
+      this.bootstrapConversationInBackground(phone, clientData.phoneNumber, clientData.name || clientData.phoneNumber, instanceName, remoteJid);
+    }
+
+    // 7. Si hay media, descargar ANTES de crear el mensaje
     let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
     if (hasMedia && messageKey) {
       try {
-        const phone = await this.phoneRepository.findById(phoneId);
-        if (phone) {
-          mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
-            this.evolutionService,
-            instanceName,
-            phone.userId,
-            conversation.id,
-            messageKey.id,
-            messageKey,
-          );
-          this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
-        }
+        mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+          this.evolutionService,
+          instanceName,
+          phone.userId,
+          conversation.id,
+          messageKey.id,
+          messageKey,
+        );
+        this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
       } catch (error) {
         this.logger.error(`Failed to download media: ${error.message}`);
       }
     }
 
-    // 6. Construir mensaje según dirección
+    // 8. Construir mensaje según dirección
     const messageData = fromMe
       ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
       : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
 
-    // 7. Guardar mensaje
+    // 9. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
 
-    // 8. Actualizar último mensaje de la conversación
+    // 10. Actualizar último mensaje de la conversación
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 9. Emitir al frontend
+    // 11. Emitir al frontend
     if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
@@ -201,24 +214,115 @@ export class WebhooksController {
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
-    // 10. Si mode=AI y es mensaje entrante, emitir evento para AI agent
+    // 12. Si mode=AI y es mensaje entrante, emitir evento para AI agent
     if (!fromMe && conversation.mode === 'AI') {
-      const phone = await this.phoneRepository.findById(phoneId);
-      if (phone) {
-        this.eventEmitter.emit('ai.incoming.message', {
-          messageId: message.id,
-          conversationId: conversation.id,
-          instanceName,
-          clientPhone: clientData.phoneNumber,
-          userId: phone.userId,
-          messageType: message.type,
-          content: message.content,
-          mediaRelativePath: mediaData?.relativePath || null,
-          mediaMetadata: mediaData ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType } : null,
-        });
-        this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
-      }
+      this.eventEmitter.emit('ai.incoming.message', {
+        messageId: message.id,
+        conversationId: conversation.id,
+        instanceName,
+        clientPhone: clientData.phoneNumber,
+        userId: phone.userId,
+        messageType: message.type,
+        content: message.content,
+        mediaRelativePath: mediaData?.relativePath || null,
+        mediaMetadata: mediaData ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType } : null,
+      });
+      this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
     }
+  }
+
+  private async bootstrapConversationInBackground(
+    phone: { id: string; userId: string; instanceName: string },
+    phoneNumber: string,
+    clientName: string,
+    instanceName: string,
+    remoteJid: string,
+  ) {
+    try {
+      const rawMessages = await this.evolutionService.findMessages(instanceName, remoteJid);
+      if (rawMessages.length === 0) return;
+
+      // Upsert client y conversation
+      const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
+      const conversation = await this.conversationRepository.upsert({
+        phoneId: phone.id,
+        clientId: client.id,
+        isActive: true,
+      });
+
+      // Deduplicar
+      const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
+      const newMessages = rawMessages
+        .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
+        .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
+
+      if (newMessages.length === 0) return;
+
+      for (const m of newMessages) {
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+
+        if (hasMedia && m.key?.id) {
+          try {
+            mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+              this.evolutionService,
+              instanceName,
+              phone.userId,
+              conversation.id,
+              m.key.id,
+              m.key,
+            );
+            this.websocketGateway.emit(
+              'message:media_ready',
+              { id: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
+              phone.userId,
+            );
+          } catch (err) {
+            this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
+          }
+        }
+
+        await this.messageRepository.create({
+          conversationId: conversation.id,
+          type,
+          content,
+          mediaUrl: mediaData?.relativePath || null,
+          fileName: mediaData?.fileName || null,
+          fileSize: mediaData?.fileSize || null,
+          mimeType: mediaData?.mimeType || null,
+          direction: m.key?.fromMe ? 'outgoing' : 'incoming',
+          senderType: m.key?.fromMe ? 'agent' : 'client',
+          status: 'delivered',
+          metadata: { keyId: m.key?.id },
+          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
+        });
+      }
+
+      this.logger.log(`Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`);
+    } catch (err) {
+      this.logger.error(`Background bootstrap failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Maneja evento MESSAGES_SET
+   * Notifica al frontend el progreso de sincronización del historial
+   */
+  private async handleMessagesSet(phoneId: string, webhookData: any) {
+    this.logger.log(`[messages.set] raw data: ${JSON.stringify(webhookData?.data).substring(0, 300)}`);
+    const isLatest: boolean = webhookData?.data?.isLatest ?? false;
+    const progress: number = webhookData?.data?.progress ?? 0;
+
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) return;
+
+    this.websocketGateway.emit(
+      'phone:sync_progress',
+      { phoneId, progress, isLatest },
+      phone.userId,
+    );
+
+    this.logger.log(`Sync progress for phone ${phoneId}: ${progress}% - isLatest: ${isLatest}`);
   }
 
   /**
