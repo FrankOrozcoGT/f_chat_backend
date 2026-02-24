@@ -124,6 +124,7 @@ export class EvolutionService {
     instanceId: string,
     phoneNumber: string,
     text: string,
+    quotedKey?: { id: string; remoteJid: string; fromMe: boolean },
     attempt = 1,
   ): Promise<SendMessageResponseDto> {
     const maxAttempts = 4; // 1 inicial + 3 retries
@@ -135,13 +136,15 @@ export class EvolutionService {
         `Sending text message to ${phoneNumber} via ${instanceId} (attempt ${attempt}/${maxAttempts})`,
       );
 
+      const body: any = { number: phoneNumber, text };
+      if (quotedKey) {
+        body.quoted = { key: quotedKey };
+      }
+
       const response = await firstValueFrom(
         this.httpService.post(
           `${this.apiUrl}/message/sendText/${instanceId}`,
-          {
-            number: phoneNumber,
-            text,
-          },
+          body,
           {
             headers: this.getHeaders(),
             timeout: 8000,
@@ -160,7 +163,7 @@ export class EvolutionService {
       if (attempt < maxAttempts) {
         this.logger.log(`Retrying in ${retryDelay}ms...`);
         await this.delay(retryDelay);
-        return this.sendTextMessage(instanceId, phoneNumber, text, attempt + 1);
+        return this.sendTextMessage(instanceId, phoneNumber, text, quotedKey, attempt + 1);
       }
 
       this.logger.error(`All attempts failed for sendTextMessage to ${phoneNumber}`);

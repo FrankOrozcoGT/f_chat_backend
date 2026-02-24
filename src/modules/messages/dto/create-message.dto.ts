@@ -17,4 +17,8 @@ export class CreateMessageDto {
   @IsUrl()
   @IsOptional()
   mediaUrl?: string | null;
+
+  @IsString()
+  @IsOptional()
+  quotedMessageId?: string;
 }

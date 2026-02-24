@@ -182,6 +182,13 @@ export class MessageRepository {
   }
 
   /**
+   * Busca un mensaje por su id de DB
+   */
+  async findById(id: string) {
+    return this.prisma.message.findUnique({ where: { id } });
+  }
+
+  /**
    * Busca un mensaje por keyId en metadata
    * @param keyId - ID del mensaje en Evolution API (guardado en metadata.keyId)
    * @returns Mensaje completo o null si no se encuentra

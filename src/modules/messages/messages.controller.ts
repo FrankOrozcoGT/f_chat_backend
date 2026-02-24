@@ -184,7 +184,25 @@ export class MessagesController {
       ? this.fileStorageService.buildDockerAccessibleUrl(relativePath)
       : null;
 
-    // 4. Enviar vía Evolution API + guardar en BD
+    // 4. Si viene quotedMessageId, buscar el mensaje citado por su id de DB
+    let quotedKey: { id: string; remoteJid: string; fromMe: boolean } | undefined;
+    if (dto.quotedMessageId) {
+      const quotedMessage = await this.messageRepository.findById(dto.quotedMessageId);
+      if (!quotedMessage) {
+        throw new NotFoundException(`Quoted message with id ${dto.quotedMessageId} not found`);
+      }
+      const keyId = (quotedMessage.metadata as any)?.keyId;
+      if (!keyId) {
+        throw new NotFoundException(`Quoted message ${dto.quotedMessageId} has no Evolution keyId`);
+      }
+      quotedKey = {
+        id: keyId,
+        remoteJid: `${conversation.client.phoneNumber}@s.whatsapp.net`,
+        fromMe: quotedMessage.direction === 'outgoing',
+      };
+    }
+
+    // 5. Enviar vía Evolution API + guardar en BD
     try {
       let evolutionKeyId: string;
       if (dto.tipo === MessageType.text) {
@@ -192,6 +210,7 @@ export class MessagesController {
           conversation.phone.evolutionInstanceId,
           conversation.client.phoneNumber,
           dto.contenido,
+          quotedKey,
         );
         evolutionKeyId = response.key.id;
       } else if (mediaUrlForEvolution) {
@@ -215,6 +234,11 @@ export class MessagesController {
         'pending',
         relativePath,
         evolutionKeyId,
+        undefined,
+        undefined,
+        undefined,
+        'agent',
+        dto.quotedMessageId,
       );
       const { message } = await this.messageRepository.sendMessageTransaction(
         dto.conversationId,
