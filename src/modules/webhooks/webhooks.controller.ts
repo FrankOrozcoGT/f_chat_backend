@@ -293,7 +293,12 @@ export class WebhooksController {
           direction: m.key?.fromMe ? 'outgoing' : 'incoming',
           senderType: m.key?.fromMe ? 'agent' : 'client',
           status: 'delivered',
-          metadata: { keyId: m.key?.id },
+          metadata: (() => {
+            const meta: Record<string, any> = { keyId: m.key?.id };
+            const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(m.message || {});
+            if (quotedStanzaId) meta.quotedMessageId = quotedStanzaId;
+            return meta;
+          })(),
           createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
         });
       }

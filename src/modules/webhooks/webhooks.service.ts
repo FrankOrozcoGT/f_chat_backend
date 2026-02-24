@@ -106,6 +106,12 @@ export class WebhooksService {
     const messageData = webhookData?.data?.message || {};
     const { type, content } = this.evolutionService.parseMessageContent(messageData);
 
+    const keyId = webhookData?.data?.key?.id;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const metadata: Record<string, any> = {};
+    if (keyId) metadata.keyId = keyId;
+    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+
     return {
       conversationId,
       type,
@@ -117,6 +123,7 @@ export class WebhooksService {
       direction: MessageDirection.incoming,
       senderType: MessageSenderType.client,
       status: MessageStatus.delivered,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
     };
   }
 
@@ -135,6 +142,12 @@ export class WebhooksService {
     const messageData = webhookData?.data?.message || {};
     const { type, content } = this.evolutionService.parseMessageContent(messageData);
 
+    const keyId = webhookData?.data?.key?.id;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const metadata: Record<string, any> = {};
+    if (keyId) metadata.keyId = keyId;
+    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+
     return {
       conversationId,
       type,
@@ -146,7 +159,26 @@ export class WebhooksService {
       direction: MessageDirection.outgoing,
       senderType: MessageSenderType.agent,
       status: MessageStatus.sent,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
     };
+  }
+
+  /**
+   * Extrae el stanzaId del mensaje citado (reply) desde contextInfo
+   */
+  extractQuotedStanzaId(messageData: Record<string, any>): string | null {
+    const msgTypes = [
+      'extendedTextMessage',
+      'imageMessage',
+      'videoMessage',
+      'audioMessage',
+      'documentMessage',
+    ];
+    for (const msgType of msgTypes) {
+      const stanzaId = messageData[msgType]?.contextInfo?.stanzaId;
+      if (stanzaId) return stanzaId;
+    }
+    return null;
   }
 
   /**
