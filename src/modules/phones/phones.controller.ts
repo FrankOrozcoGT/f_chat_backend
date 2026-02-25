@@ -26,7 +26,11 @@ import { MessageResponseDto } from './dto/message-response.dto';
 import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
-import { MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import {
+  MessageDirection,
+  MessageSenderType,
+  MessageStatus,
+} from '@prisma/client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 
 @Controller('api/phones')
@@ -72,12 +76,18 @@ export class PhonesController {
         { qrcode: true },
       );
     } catch (error) {
-      this.logger.error(`Failed to create instance in Evolution API: ${error.message}`);
+      this.logger.error(
+        `Failed to create instance in Evolution API: ${error.message}`,
+      );
       throw new BadGatewayException('Failed to create WhatsApp instance');
     }
 
     // 4. Construir datos del phone con QR
-    const phoneData = this.phonesService.buildPhoneData(dto, evolutionData, userId);
+    const phoneData = this.phonesService.buildPhoneData(
+      dto,
+      evolutionData,
+      userId,
+    );
 
     // 5. Guardar en DB
     const phone = await this.phoneRepository.create(phoneData);
@@ -93,7 +103,10 @@ export class PhonesController {
 
   @Get(':id/contacts')
   @UseGuards(JwtAuthGuard)
-  async findContacts(@Param('id') phoneId: string, @Req() req): Promise<ContactResponseDto[]> {
+  async findContacts(
+    @Param('id') phoneId: string,
+    @Req() req,
+  ): Promise<ContactResponseDto[]> {
     const userId = req.user.id;
 
     // 1. Buscar phone y verificar ownership
@@ -109,18 +122,38 @@ export class PhonesController {
     // 2. Obtener contactos de Evolution API
     let rawContacts: any[];
     try {
-      rawContacts = await this.evolutionService.findContacts(phone.instanceName);
+      rawContacts = await this.evolutionService.findContacts(
+        phone.instanceName,
+      );
     } catch (error) {
-      this.logger.error(`Failed to get contacts for phone ${phoneId}: ${error.message}`);
-      throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
+      this.logger.error(
+        `Failed to get contacts for phone ${phoneId}: ${error.message}`,
+      );
+      throw new BadGatewayException(
+        'Failed to retrieve contacts from WhatsApp',
+      );
     }
 
     // 3. Mapear todos los contactos
-    const contacts = rawContacts.map((c) => new ContactResponseDto({
-      id: c.remoteJid,
-      name: c.pushName || c.remoteJid.split('@')[0],
-      phoneNumber: c.remoteJid.split('@')[0],
-    }));
+    const withPic = rawContacts.filter((c) => c.profilePicUrl).length;
+    this.logger.log(
+      `[findContacts] total=${rawContacts.length} withProfilePic=${withPic}`,
+    );
+    if (rawContacts.length > 0) {
+      this.logger.log(
+        `[findContacts] sample[0] keys=${Object.keys(rawContacts[0]).join(',')} profilePicUrl=${rawContacts[0].profilePicUrl}`,
+      );
+    }
+
+    const contacts = rawContacts.map(
+      (c) =>
+        new ContactResponseDto({
+          id: c.remoteJid,
+          name: c.pushName || c.remoteJid.split('@')[0],
+          phoneNumber: c.remoteJid.split('@')[0],
+          profilePicUrl: c.profilePicUrl || null,
+        }),
+    );
 
     return contacts;
   }
@@ -146,10 +179,17 @@ export class PhonesController {
     // 2. Obtener mensajes de Evolution API
     let rawMessages: any[];
     try {
-      rawMessages = await this.evolutionService.findMessages(phone.instanceName, remoteJid);
+      rawMessages = await this.evolutionService.findMessages(
+        phone.instanceName,
+        remoteJid,
+      );
     } catch (error) {
-      this.logger.error(`Failed to get messages for phone ${phoneId}: ${error.message}`);
-      throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
+      this.logger.error(
+        `Failed to get messages for phone ${phoneId}: ${error.message}`,
+      );
+      throw new BadGatewayException(
+        'Failed to retrieve messages from WhatsApp',
+      );
     }
 
     if (rawMessages.length === 0) {
@@ -157,7 +197,9 @@ export class PhonesController {
     }
 
     // 3. Upsert Client por remoteJid
-    const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    const phoneNumber = remoteJid
+      .replace('@s.whatsapp.net', '')
+      .replace('@c.us', '');
     const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
     const client = await this.clientRepository.upsert({
       phoneNumber,
@@ -177,51 +219,105 @@ export class PhonesController {
     return rawMessages;
   }
 
-  private async persistMessagesInBackground(phone: any, conversationId: string, rawMessages: any[]) {
+  private async persistMessagesInBackground(
+    phone: any,
+    conversationId: string,
+    rawMessages: any[],
+  ) {
     try {
       // Obtener keyIds existentes
-      const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversationId);
-      const newMessages = rawMessages.filter((m) => m.key?.id && !existingKeyIds.has(m.key.id));
+      const existingKeyIds =
+        await this.messageRepository.findKeyIdsByConversationId(conversationId);
+      const newMessages = rawMessages.filter(
+        (m) => m.key?.id && !existingKeyIds.has(m.key.id),
+      );
 
       if (newMessages.length === 0) return;
 
-      for (const m of newMessages) {
-        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
-        let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+      // Separar mensajes con y sin media
+      const parsed = newMessages.map((m) => ({
+        m,
+        ...this.evolutionService.parseMessageContent(m.message || {}),
+      }));
 
-        // Descargar media si aplica
-        if (hasMedia && m.key?.id) {
+      const withoutMedia = parsed.filter((p) => !p.hasMedia);
+      const withMedia = parsed.filter((p) => p.hasMedia);
+
+      // Bulk insert mensajes sin media
+      if (withoutMedia.length > 0) {
+        await this.messageRepository.createManyFull(
+          withoutMedia.map((p) => ({
+            conversationId,
+            type: p.type,
+            content: p.content,
+            mediaUrl: null,
+            direction: p.m.key?.fromMe
+              ? MessageDirection.outgoing
+              : MessageDirection.incoming,
+            senderType: p.m.key?.fromMe
+              ? MessageSenderType.agent
+              : MessageSenderType.client,
+            status: MessageStatus.delivered,
+            metadata: { keyId: p.m.key?.id },
+            createdAt: p.m.messageTimestamp
+              ? new Date(p.m.messageTimestamp * 1000)
+              : undefined,
+          })),
+        );
+      }
+
+      // Loop individual para mensajes con media (requieren descarga)
+      for (const p of withMedia) {
+        let mediaData: {
+          relativePath: string;
+          fileName: string;
+          fileSize: number;
+          mimeType: string;
+        } | null = null;
+
+        if (p.m.key?.id) {
           try {
-            mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
-              this.evolutionService,
-              phone.instanceName,
-              phone.userId,
-              conversationId,
-              m.key.id,
-              m.key,
-            );
+            mediaData =
+              await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+                this.evolutionService,
+                phone.instanceName,
+                phone.userId,
+                conversationId,
+                p.m.key.id,
+                p.m.key,
+              );
           } catch (err) {
-            this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
+            this.logger.warn(
+              `Failed to download media for keyId ${p.m.key.id}: ${err.message}`,
+            );
           }
         }
 
         await this.messageRepository.create({
           conversationId,
-          type,
-          content,
+          type: p.type,
+          content: p.content,
           mediaUrl: mediaData?.relativePath || null,
           fileName: mediaData?.fileName || null,
           fileSize: mediaData?.fileSize || null,
           mimeType: mediaData?.mimeType || null,
-          direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
-          senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
+          direction: p.m.key?.fromMe
+            ? MessageDirection.outgoing
+            : MessageDirection.incoming,
+          senderType: p.m.key?.fromMe
+            ? MessageSenderType.agent
+            : MessageSenderType.client,
           status: MessageStatus.delivered,
-          metadata: { keyId: m.key?.id },
-          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
+          metadata: { keyId: p.m.key?.id },
+          createdAt: p.m.messageTimestamp
+            ? new Date(p.m.messageTimestamp * 1000)
+            : undefined,
         });
       }
 
-      this.logger.log(`Background: persisted ${newMessages.length} messages for conversation ${conversationId}`);
+      this.logger.log(
+        `Background: persisted ${newMessages.length} messages for conversation ${conversationId} (${withoutMedia.length} bulk, ${withMedia.length} with media)`,
+      );
     } catch (err) {
       this.logger.error(`Background persistence failed: ${err.message}`);
     }
@@ -246,7 +342,9 @@ export class PhonesController {
     try {
       await this.evolutionService.deleteInstance(phone.instanceName);
     } catch (error) {
-      this.logger.warn(`Failed to delete instance in Evolution API: ${error.message}`);
+      this.logger.warn(
+        `Failed to delete instance in Evolution API: ${error.message}`,
+      );
       // Continuar con eliminación en DB aunque falle en Evolution
     }
 

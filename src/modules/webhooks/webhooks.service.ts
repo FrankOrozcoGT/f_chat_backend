@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PhoneStatus, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import {
+  PhoneStatus,
+  MessageDirection,
+  MessageSenderType,
+  MessageStatus,
+} from '@prisma/client';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Injectable()
@@ -46,19 +51,33 @@ export class WebhooksService {
    * @param fromMe - Indica si el mensaje fue enviado por mí
    * @returns Datos del cliente (phoneNumber, name)
    */
-  buildClientData(webhookData: any, fromMe: boolean): { phoneNumber: string; name: string } {
+  buildClientData(
+    webhookData: any,
+    fromMe: boolean,
+  ): { phoneNumber: string; name: string; profilePicUrl?: string | null } {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
 
     // Si fromMe=true, pushName es MI nombre (del número registrado), no del destinatario
     // Solo usar pushName cuando fromMe=false (mensaje entrante del cliente)
-    const pushName = !fromMe ? (webhookData?.data?.pushName || 'Unknown') : 'Unknown';
+    const pushName = !fromMe
+      ? webhookData?.data?.pushName || 'Unknown'
+      : 'Unknown';
 
     // Limpiar formato: 5521999999999@s.whatsapp.net -> 5521999999999
-    const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    const phoneNumber = remoteJid
+      .replace('@s.whatsapp.net', '')
+      .replace('@c.us', '');
+
+    const profilePicUrl = webhookData?.data?.profilePicUrl || null;
+
+    this.logger.log(
+      `[buildClientData] phoneNumber=${phoneNumber} pushName=${pushName} profilePicUrl=${profilePicUrl}`,
+    );
 
     return {
       phoneNumber,
       name: pushName,
+      profilePicUrl,
     };
   }
 
@@ -101,10 +120,16 @@ export class WebhooksService {
   buildIncomingMessageData(
     webhookData: any,
     conversationId: string,
-    mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
+    mediaData?: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-    const { type, content } = this.evolutionService.parseMessageContent(messageData);
+    const { type, content } =
+      this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
     const quotedStanzaId = this.extractQuotedStanzaId(messageData);
@@ -137,10 +162,16 @@ export class WebhooksService {
   buildOutgoingMessageFromWebhook(
     webhookData: any,
     conversationId: string,
-    mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
+    mediaData?: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-    const { type, content } = this.evolutionService.parseMessageContent(messageData);
+    const { type, content } =
+      this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
     const quotedStanzaId = this.extractQuotedStanzaId(messageData);
@@ -192,5 +223,4 @@ export class WebhooksService {
       lastMessagePreview: message.content.substring(0, 100),
     };
   }
-
 }

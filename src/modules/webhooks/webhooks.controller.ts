@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WebhooksService } from './webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
@@ -18,6 +12,11 @@ import { EvolutionService } from '@common/evolution/evolution.service';
 @Controller('whatsapp/webhook')
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
+
+  // Debounce timers para sync de contactos por phoneId
+  private readonly syncDebounceTimers = new Map<string, NodeJS.Timeout>();
+  // Contador acumulado de contactos por phoneId
+  private readonly syncContactsCount = new Map<string, number>();
 
   constructor(
     private readonly webhooksService: WebhooksService,
@@ -33,16 +32,17 @@ export class WebhooksController {
 
   @Post()
   @HttpCode(200)
-  async handleWebhook(
-    @Body() webhookData: any,
-  ) {
+  async handleWebhook(@Body() webhookData: any) {
     const event = webhookData.event;
     const instanceId = webhookData.instance;
 
     // Buscar phone por evolutionInstanceId
-    const phone = await this.phoneRepository.findByEvolutionInstanceId(instanceId);
+    const phone =
+      await this.phoneRepository.findByEvolutionInstanceId(instanceId);
     if (!phone) {
-      this.logger.warn(`Phone not found for instance ${instanceId}, ignoring webhook`);
+      this.logger.warn(
+        `Phone not found for instance ${instanceId}, ignoring webhook`,
+      );
       return { message: 'Phone not found, ignoring webhook' };
     }
 
@@ -69,8 +69,18 @@ export class WebhooksController {
         await this.handleMessagesSet(phone.id, webhookData);
         break;
 
+      case 'contacts.update':
+        await this.handleContactsUpdate(webhookData);
+        break;
+
+      case 'contacts.upsert':
+        await this.handleContactsUpsert(phone.id, phone.userId, webhookData);
+        break;
+
       default:
-        this.logger.log(`[Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`);
+        this.logger.log(
+          `[${new Date().toISOString()}] [Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`,
+        );
         break;
     }
 
@@ -86,16 +96,21 @@ export class WebhooksController {
     // Obtener phone para saber el userId
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
-      this.logger.warn(`Phone ${phoneId} not found, cannot emit WebSocket event`);
+      this.logger.warn(
+        `Phone ${phoneId} not found, cannot emit WebSocket event`,
+      );
       return;
     }
 
-    this.logger.log(`Emitting phone:qr_updated for phone ${phoneId} to user ${phone.userId}`);
+    this.logger.log(
+      `[${new Date().toISOString()}] phone:qr_updated phone=${phoneId} userId=${phone.userId}`,
+    );
 
-    // Emitir evento WebSocket solo al usuario dueño del phone
-    this.websocketGateway.emit('phone:qr_updated', { phoneId, qrCode }, phone.userId);
-
-    console.log(`[Webhook] QR Code updated for phone ${phoneId}`);
+    this.websocketGateway.emit(
+      'phone:qr_updated',
+      { phoneId, qrCode },
+      phone.userId,
+    );
   }
 
   /**
@@ -110,33 +125,59 @@ export class WebhooksController {
     // Obtener phone para saber el userId
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
-      this.logger.warn(`Phone ${phoneId} not found, cannot emit WebSocket event`);
+      this.logger.warn(
+        `[${new Date().toISOString()}] Phone ${phoneId} not found, cannot emit WebSocket event`,
+      );
       return;
     }
 
-    this.logger.log(`Emitting phone:status_changed for phone ${phoneId} to user ${phone.userId} with status ${status}`);
+    this.logger.log(
+      `[${new Date().toISOString()}] phone:status_changed phone=${phoneId} userId=${phone.userId} status=${status}`,
+    );
 
-    // Emitir evento WebSocket solo al usuario dueño del phone
-    this.websocketGateway.emit('phone:status_changed', { phoneId, status }, phone.userId);
+    this.websocketGateway.emit(
+      'phone:status_changed',
+      { phoneId, status },
+      phone.userId,
+    );
 
-    console.log(`[Webhook] Connection status updated for phone ${phoneId}: ${status}`);
+    // Si conectó, avisar al frontend que empieza el sync
+    if (status === 'connected') {
+      this.syncContactsCount.set(phoneId, 0);
+      this.websocketGateway.emit(
+        'phone:syncing',
+        { phoneId, contactsCount: 0 },
+        phone.userId,
+      );
+      this.logger.log(
+        `[${new Date().toISOString()}] phone:syncing emitted for phone=${phoneId}`,
+      );
+    }
   }
 
   /**
    * Maneja evento MESSAGES_UPSERT
    */
-  private async handleMessagesUpsert(phoneId: string, instanceName: string, webhookData: any) {
+  private async handleMessagesUpsert(
+    phoneId: string,
+    instanceName: string,
+    webhookData: any,
+  ) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
     const messageKey = webhookData?.data?.key;
 
     // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
     if (fromMe && messageKey) {
       await new Promise((resolve) => setTimeout(resolve, 300));
-      const existingMessage = await this.messageRepository.findByMetadataKeyId(messageKey.id);
+      const existingMessage = await this.messageRepository.findByMetadataKeyId(
+        messageKey.id,
+      );
 
       if (existingMessage) {
         this.websocketGateway.emit('message:sent', existingMessage);
-        this.logger.log(`Message ${messageKey.id} already in DB, emitted to frontend`);
+        this.logger.log(
+          `Message ${messageKey.id} already in DB, emitted to frontend`,
+        );
         return;
       }
 
@@ -144,7 +185,10 @@ export class WebhooksController {
     }
 
     // 2. Construir datos del Client
-    const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
+    const clientData = this.webhooksService.buildClientData(
+      webhookData,
+      fromMe,
+    );
 
     // Ignorar mensajes de grupos
     if (clientData.phoneNumber.endsWith('@g.us')) {
@@ -162,31 +206,51 @@ export class WebhooksController {
     const client = await this.clientRepository.upsert(clientData);
 
     // 5. Construir y upsert Conversation
-    const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
-    const conversation = await this.conversationRepository.upsert(conversationData);
+    const conversationData = this.webhooksService.buildConversationData(
+      phoneId,
+      client.id,
+    );
+    const conversation =
+      await this.conversationRepository.upsert(conversationData);
 
     // 6. Si es conversación sin historial, sincronizar en background
-    const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+    const existingCount = await this.messageRepository.countByConversationId(
+      conversation.id,
+    );
     if (existingCount === 0) {
       const remoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
-      this.logger.log(`New conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`);
-      this.bootstrapConversationInBackground(phone, clientData.phoneNumber, clientData.name || clientData.phoneNumber, instanceName, remoteJid);
+      this.logger.log(
+        `New conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
+      );
+      this.bootstrapConversationInBackground(
+        phone,
+        clientData.phoneNumber,
+        clientData.name || clientData.phoneNumber,
+        instanceName,
+        remoteJid,
+      );
     }
 
     // 7. Si hay media, descargar ANTES de crear el mensaje
-    let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+    let mediaData: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
     if (hasMedia && messageKey) {
       try {
-        mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
-          this.evolutionService,
-          instanceName,
-          phone.userId,
-          conversation.id,
-          messageKey.id,
-          messageKey,
-        );
+        mediaData =
+          await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+            this.evolutionService,
+            instanceName,
+            phone.userId,
+            conversation.id,
+            messageKey.id,
+            messageKey,
+          );
         this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
       } catch (error) {
         this.logger.error(`Failed to download media: ${error.message}`);
@@ -195,20 +259,37 @@ export class WebhooksController {
 
     // 8. Construir mensaje según dirección
     const messageData = fromMe
-      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
-      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(
+          webhookData,
+          conversation.id,
+          mediaData,
+        )
+      : this.webhooksService.buildIncomingMessageData(
+          webhookData,
+          conversation.id,
+          mediaData,
+        );
 
     // 9. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
 
     // 10. Actualizar último mensaje de la conversación
-    const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
-    await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
+    const conversationUpdate =
+      this.webhooksService.buildConversationUpdate(message);
+    await this.conversationRepository.updateLastMessage(
+      conversation.id,
+      conversationUpdate,
+    );
 
     // 11. Emitir al frontend
     if (fromMe) {
-      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
-      this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
+      this.websocketGateway.emit('message:sent', {
+        ...message,
+        fromExternal: true,
+      });
+      this.logger.log(
+        `Outgoing message from WhatsApp Web for conversation ${conversation.id}`,
+      );
     } else {
       this.websocketGateway.emit('message:incoming', message);
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
@@ -225,9 +306,13 @@ export class WebhooksController {
         messageType: message.type,
         content: message.content,
         mediaRelativePath: mediaData?.relativePath || null,
-        mediaMetadata: mediaData ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType } : null,
+        mediaMetadata: mediaData
+          ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType }
+          : null,
       });
-      this.logger.log(`Emitted ai.incoming.message for conversation ${conversation.id}`);
+      this.logger.log(
+        `Emitted ai.incoming.message for conversation ${conversation.id}`,
+      );
     }
   }
 
@@ -239,11 +324,17 @@ export class WebhooksController {
     remoteJid: string,
   ) {
     try {
-      const rawMessages = await this.evolutionService.findMessages(instanceName, remoteJid);
+      const rawMessages = await this.evolutionService.findMessages(
+        instanceName,
+        remoteJid,
+      );
       if (rawMessages.length === 0) return;
 
       // Upsert client y conversation
-      const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
+      const client = await this.clientRepository.upsert({
+        phoneNumber,
+        name: clientName,
+      });
       const conversation = await this.conversationRepository.upsert({
         phoneId: phone.id,
         clientId: client.id,
@@ -251,7 +342,10 @@ export class WebhooksController {
       });
 
       // Deduplicar
-      const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
+      const existingKeyIds =
+        await this.messageRepository.findKeyIdsByConversationId(
+          conversation.id,
+        );
       const newMessages = rawMessages
         .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
         .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
@@ -259,26 +353,39 @@ export class WebhooksController {
       if (newMessages.length === 0) return;
 
       for (const m of newMessages) {
-        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
-        let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
+        const { type, content, hasMedia } =
+          this.evolutionService.parseMessageContent(m.message || {});
+        let mediaData: {
+          relativePath: string;
+          fileName: string;
+          fileSize: number;
+          mimeType: string;
+        } | null = null;
 
         if (hasMedia && m.key?.id) {
           try {
-            mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
-              this.evolutionService,
-              instanceName,
-              phone.userId,
-              conversation.id,
-              m.key.id,
-              m.key,
-            );
+            mediaData =
+              await this.fileStorageService.downloadAndSaveMediaFromEvolution(
+                this.evolutionService,
+                instanceName,
+                phone.userId,
+                conversation.id,
+                m.key.id,
+                m.key,
+              );
             this.websocketGateway.emit(
               'message:media_ready',
-              { id: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
+              {
+                id: m.key.id,
+                conversationId: conversation.id,
+                mediaUrl: mediaData.relativePath,
+              },
               phone.userId,
             );
           } catch (err) {
-            this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
+            this.logger.warn(
+              `Failed to download media for keyId ${m.key.id}: ${err.message}`,
+            );
           }
         }
 
@@ -295,15 +402,21 @@ export class WebhooksController {
           status: 'delivered',
           metadata: (() => {
             const meta: Record<string, any> = { keyId: m.key?.id };
-            const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(m.message || {});
+            const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(
+              m.message || {},
+            );
             if (quotedStanzaId) meta.quotedMessageId = quotedStanzaId;
             return meta;
           })(),
-          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
+          createdAt: m.messageTimestamp
+            ? new Date(m.messageTimestamp * 1000)
+            : undefined,
         });
       }
 
-      this.logger.log(`Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`);
+      this.logger.log(
+        `Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`,
+      );
     } catch (err) {
       this.logger.error(`Background bootstrap failed: ${err.message}`);
     }
@@ -314,9 +427,11 @@ export class WebhooksController {
    * Notifica al frontend el progreso de sincronización del historial
    */
   private async handleMessagesSet(phoneId: string, webhookData: any) {
-    this.logger.log(`[messages.set] raw data: ${JSON.stringify(webhookData?.data).substring(0, 300)}`);
     const isLatest: boolean = webhookData?.data?.isLatest ?? false;
     const progress: number = webhookData?.data?.progress ?? 0;
+    this.logger.log(
+      `[${new Date().toISOString()}] messages.set phone=${phoneId} progress=${progress} isLatest=${isLatest}`,
+    );
 
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) return;
@@ -327,14 +442,20 @@ export class WebhooksController {
       phone.userId,
     );
 
-    this.logger.log(`Sync progress for phone ${phoneId}: ${progress}% - isLatest: ${isLatest}`);
+    this.logger.log(
+      `Sync progress for phone ${phoneId}: ${progress}% - isLatest: ${isLatest}`,
+    );
   }
 
   /**
    * Maneja evento MESSAGES_UPDATE
    * Actualiza el status de mensajes (sent, delivered, read, failed)
    */
-  private async handleMessagesUpdate(phoneId: string, instanceName: string, webhookData: any) {
+  private async handleMessagesUpdate(
+    phoneId: string,
+    instanceName: string,
+    webhookData: any,
+  ) {
     const data = webhookData?.data;
 
     if (!data) {
@@ -346,7 +467,9 @@ export class WebhooksController {
     const status = data.status; // STRING: "SERVER_ACK", "DELIVERY_ACK", "READ", etc.
     const fromMe = data.fromMe;
 
-    this.logger.log(`messages.update: keyId=${keyId}, status=${status}, fromMe=${fromMe}`);
+    this.logger.log(
+      `messages.update: keyId=${keyId}, status=${status}, fromMe=${fromMe}`,
+    );
 
     // Solo procesar mensajes salientes (fromMe: true)
     if (!fromMe) {
@@ -380,7 +503,10 @@ export class WebhooksController {
 
     // Buscar mensaje por keyId en metadata
     try {
-      const updatedMessage = await this.messageRepository.updateStatusByKeyId(keyId, mappedStatus);
+      const updatedMessage = await this.messageRepository.updateStatusByKeyId(
+        keyId,
+        mappedStatus,
+      );
 
       if (!updatedMessage) {
         this.logger.warn(`Message with keyId ${keyId} not found in database`);
@@ -405,9 +531,136 @@ export class WebhooksController {
         phone.userId,
       );
 
-      this.logger.log(`Message ${updatedMessage.id} updated to '${mappedStatus}' and WebSocket emitted`);
+      this.logger.log(
+        `Message ${updatedMessage.id} updated to '${mappedStatus}' and WebSocket emitted`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to update message with keyId ${keyId}: ${error.message}`);
+      this.logger.error(
+        `Failed to update message with keyId ${keyId}: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Maneja evento CONTACTS_UPSERT
+   * Persiste contactos individuales en bulk durante el sync inicial
+   * Emite phone:sync_progress por batch y phone:sync_complete con debounce de 2s
+   */
+  private async handleContactsUpsert(
+    phoneId: string,
+    userId: string,
+    webhookData: any,
+  ) {
+    const raw: Array<{ remoteJid?: string; pushName?: string; profilePicUrl?: string | null }> =
+      Array.isArray(webhookData?.data) ? webhookData.data : [];
+
+    const contacts = raw.filter((c) =>
+      c.remoteJid?.endsWith('@s.whatsapp.net'),
+    );
+
+    this.logger.log(
+      `[${new Date().toISOString()}] contacts.upsert phone=${phoneId} total=${raw.length} individual=${contacts.length}`,
+    );
+
+    // Resetear debounce siempre — incluso si no hay contactos individuales,
+    // para no emitir sync_complete mientras aún llegan batches
+    const existingTimer = this.syncDebounceTimers.get(phoneId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const resetTimer = setTimeout(() => {
+      const finalCount = this.syncContactsCount.get(phoneId) ?? 0;
+      this.syncDebounceTimers.delete(phoneId);
+      this.syncContactsCount.delete(phoneId);
+      this.websocketGateway.emit(
+        'phone:sync_complete',
+        { phoneId, contactsCount: finalCount },
+        userId,
+      );
+      this.logger.log(
+        `[${new Date().toISOString()}] phone:sync_complete phone=${phoneId} contactsCount=${finalCount}`,
+      );
+    }, 5000);
+
+    this.syncDebounceTimers.set(phoneId, resetTimer);
+
+    if (contacts.length === 0) return;
+
+    // 1. Bulk insert clientes
+    await this.clientRepository.createManySkipDuplicates(
+      contacts.map((c) => ({
+        phoneNumber: c.remoteJid!.replace('@s.whatsapp.net', ''),
+        name: c.pushName || c.remoteJid!.replace('@s.whatsapp.net', ''),
+        profilePicUrl: c.profilePicUrl || null,
+      })),
+    );
+
+    // 2. Obtener IDs y bulk insert conversaciones
+    const phoneNumbers = contacts.map((c) =>
+      c.remoteJid!.replace('@s.whatsapp.net', ''),
+    );
+    const clients =
+      await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
+    const phoneToClientId = new Map(clients.map((c) => [c.phoneNumber, c.id]));
+
+    const conversationsData = contacts
+      .map((c) => {
+        const phoneNumber = c.remoteJid!.replace('@s.whatsapp.net', '');
+        const clientId = phoneToClientId.get(phoneNumber);
+        return clientId ? { phoneId, clientId } : null;
+      })
+      .filter((d): d is { phoneId: string; clientId: string } => d !== null);
+
+    await this.conversationRepository.createManySkipDuplicates(
+      conversationsData,
+    );
+
+    // 3. Acumular contador y emitir progreso
+    const prev = this.syncContactsCount.get(phoneId) ?? 0;
+    const total = prev + contacts.length;
+    this.syncContactsCount.set(phoneId, total);
+
+    this.websocketGateway.emit(
+      'phone:sync_progress',
+      { phoneId, contactsCount: total },
+      userId,
+    );
+
+    this.logger.log(
+      `[${new Date().toISOString()}] phone:sync_progress phone=${phoneId} contactsCount=${total}`,
+    );
+  }
+
+  /**
+   * Maneja evento CONTACTS_UPDATE
+   * Actualiza profilePicUrl en nuestra DB solo si el cliente ya existe
+   */
+  private async handleContactsUpdate(webhookData: any) {
+    const contacts = Array.isArray(webhookData?.data)
+      ? webhookData.data
+      : [webhookData?.data];
+
+    for (const contact of contacts) {
+      const remoteJid = contact?.remoteJid;
+      const profilePicUrl = contact?.profilePicUrl;
+
+      if (
+        !remoteJid ||
+        !profilePicUrl ||
+        !remoteJid.endsWith('@s.whatsapp.net')
+      )
+        continue;
+
+      const phoneNumber = remoteJid.replace('@s.whatsapp.net', '');
+      const updated = await this.clientRepository.updateProfilePicIfExists(
+        phoneNumber,
+        profilePicUrl,
+      );
+
+      if (updated.count > 0) {
+        this.logger.log(
+          `[contacts.update] Updated profilePicUrl for ${phoneNumber}`,
+        );
+      }
     }
   }
 }
