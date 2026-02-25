@@ -17,6 +17,7 @@ export class ConversationResponseDto {
     id: string;
     phoneNumber: string;
     name: string | null;
+    profilePicUrl: string | null;
     firstContactAt: Date;
     lastContactAt: Date;
   };
@@ -29,9 +30,7 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(
-    conversation: Conversation & { client: Client; phone: Phone },
-  ) {
+  constructor(conversation: Conversation & { client: Client; phone: Phone }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
     this.clientId = conversation.clientId;
@@ -47,6 +46,7 @@ export class ConversationResponseDto {
       id: conversation.client.id,
       phoneNumber: conversation.client.phoneNumber,
       name: conversation.client.name,
+      profilePicUrl: conversation.client.profilePicUrl,
       firstContactAt: conversation.client.firstContactAt,
       lastContactAt: conversation.client.lastContactAt,
     };
