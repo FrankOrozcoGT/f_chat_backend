@@ -33,7 +33,9 @@ export class ContextBuilderNode {
     });
 
     if (client) {
-      const memories = await this.clientMemoryRepository.findByClientId(client.id);
+      const memories = await this.clientMemoryRepository.findByClientId(
+        client.id,
+      );
       if (memories.length > 0) {
         parts.push('## Contexto del cliente');
         for (const mem of memories) {
@@ -50,11 +52,15 @@ export class ContextBuilderNode {
     const activeNodes = flowData.nodes.filter(
       (n) => n.status === 'active' || n.status === 'reopened',
     );
-    const collapsedNodes = flowData.nodes.filter((n) => n.status === 'collapsed');
+    const collapsedNodes = flowData.nodes.filter(
+      (n) => n.status === 'collapsed',
+    );
 
     // Foco: current node with full messages
     if (flowData.currentNodeId) {
-      const focusNode = activeNodes.find((n) => n.nodeId === flowData.currentNodeId);
+      const focusNode = activeNodes.find(
+        (n) => n.nodeId === flowData.currentNodeId,
+      );
       if (focusNode) {
         parts.push(`### Foco: ${focusNode.nodeId}`);
         parts.push(focusNode.understanding);
@@ -69,7 +75,9 @@ export class ContextBuilderNode {
           if (msgs.length > 0) {
             parts.push('');
             for (const msg of msgs) {
-              parts.push(`${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`);
+              parts.push(
+                `${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`,
+              );
             }
           }
         }
@@ -78,7 +86,9 @@ export class ContextBuilderNode {
     }
 
     // En mente: other active nodes with their messages
-    const otherActive = activeNodes.filter((n) => n.nodeId !== flowData.currentNodeId);
+    const otherActive = activeNodes.filter(
+      (n) => n.nodeId !== flowData.currentNodeId,
+    );
     if (otherActive.length > 0) {
       parts.push('### En mente:');
       for (const node of otherActive) {
@@ -90,7 +100,9 @@ export class ContextBuilderNode {
             this.prisma,
           );
           for (const msg of msgs) {
-            parts.push(`  ${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`);
+            parts.push(
+              `  ${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`,
+            );
           }
         }
       }
@@ -98,7 +110,10 @@ export class ContextBuilderNode {
     }
 
     // Collapsed: one line each, NO messages (only labels)
-    const visibleCollapsed = this.getVisibleCollapsed(collapsedNodes, flowData.nodes);
+    const visibleCollapsed = this.getVisibleCollapsed(
+      collapsedNodes,
+      flowData.nodes,
+    );
     if (visibleCollapsed.length > 0) {
       parts.push('### Resuelto:');
       for (const node of visibleCollapsed) {
@@ -111,7 +126,9 @@ export class ContextBuilderNode {
     parts.push(`### Mensaje actual:\n"${transcription}"`);
 
     const contextForLlm = parts.join('\n');
-    this.logger.log(`ContextBuilder: built ${contextForLlm.length} chars context`);
+    this.logger.log(
+      `ContextBuilder: built ${contextForLlm.length} chars context`,
+    );
 
     return { contextForLlm };
   }
@@ -120,7 +137,11 @@ export class ContextBuilderNode {
    * Get collapsed nodes that are visible (their parent is NOT collapsed)
    */
   private getVisibleCollapsed(
-    collapsedNodes: { nodeId: string; parentId: string | null; understanding: string }[],
+    collapsedNodes: {
+      nodeId: string;
+      parentId: string | null;
+      understanding: string;
+    }[],
     allNodes: { nodeId: string; status: string }[],
   ) {
     return collapsedNodes.filter((node) => {

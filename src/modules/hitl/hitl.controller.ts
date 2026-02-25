@@ -37,30 +37,48 @@ export class HitlController {
   async takeControl(@Body() dto: TakeControlDto, @Req() req) {
     const userId = req.user.id;
 
-    const conversation = await this.conversationRepository.findByIdWithRelations(dto.conversationId);
+    const conversation =
+      await this.conversationRepository.findByIdWithRelations(
+        dto.conversationId,
+      );
     if (!conversation) {
-      throw new NotFoundException(`Conversation ${dto.conversationId} not found`);
+      throw new NotFoundException(
+        `Conversation ${dto.conversationId} not found`,
+      );
     }
 
     this.hitlService.validateCanTakeControl(conversation, userId);
 
     await this.conversationRepository.updateMode(dto.conversationId, 'HITL');
 
-    const activeSession = await this.sessionRepository.findActiveByConversationId(dto.conversationId);
+    const activeSession =
+      await this.sessionRepository.findActiveByConversationId(
+        dto.conversationId,
+      );
     if (activeSession) {
-      await this.sessionRepository.close(activeSession.id, 'manual_takeover', userId);
+      await this.sessionRepository.close(
+        activeSession.id,
+        'manual_takeover',
+        userId,
+      );
     }
 
     await this.sessionRepository.createHitl(dto.conversationId, userId);
 
-    this.websocketGateway.emit('conversation:taken', {
-      conversationId: dto.conversationId,
+    this.websocketGateway.emit(
+      'conversation:taken',
+      {
+        conversationId: dto.conversationId,
+        userId,
+        userName: req.user.name,
+        timestamp: new Date().toISOString(),
+      },
       userId,
-      userName: req.user.name,
-      timestamp: new Date().toISOString(),
-    }, userId);
+    );
 
-    this.logger.log(`User ${userId} took control of conversation ${dto.conversationId}`);
+    this.logger.log(
+      `User ${userId} took control of conversation ${dto.conversationId}`,
+    );
 
     return { message: 'Control taken successfully' };
   }
@@ -70,30 +88,49 @@ export class HitlController {
   async returnToAi(@Body() dto: ReturnToAiDto, @Req() req) {
     const userId = req.user.id;
 
-    const conversation = await this.conversationRepository.findByIdWithRelations(dto.conversationId);
+    const conversation =
+      await this.conversationRepository.findByIdWithRelations(
+        dto.conversationId,
+      );
     if (!conversation) {
-      throw new NotFoundException(`Conversation ${dto.conversationId} not found`);
+      throw new NotFoundException(
+        `Conversation ${dto.conversationId} not found`,
+      );
     }
 
     this.hitlService.validateCanReturnToAi(conversation, userId);
 
     await this.conversationRepository.updateMode(dto.conversationId, 'AI');
 
-    const activeSession = await this.sessionRepository.findActiveHitlByConversationId(dto.conversationId);
+    const activeSession =
+      await this.sessionRepository.findActiveHitlByConversationId(
+        dto.conversationId,
+      );
     if (activeSession) {
-      await this.sessionRepository.close(activeSession.id, 'returned_to_ai', userId);
+      await this.sessionRepository.close(
+        activeSession.id,
+        'returned_to_ai',
+        userId,
+      );
     }
 
     await this.sessionRepository.create(dto.conversationId);
 
     // Verificar si el último mensaje es del cliente
-    const messages = await this.messageRepository.findByConversationId(dto.conversationId);
+    const messages = await this.messageRepository.findByConversationId(
+      dto.conversationId,
+    );
     if (messages && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
 
       // Si el último mensaje es del cliente (incoming y senderType client), enviarlo a la IA
-      if (lastMessage.direction === 'incoming' && lastMessage.senderType === 'client') {
-        this.logger.log(`Last message from client, triggering AI processing for conversation ${dto.conversationId}`);
+      if (
+        lastMessage.direction === 'incoming' &&
+        lastMessage.senderType === 'client'
+      ) {
+        this.logger.log(
+          `Last message from client, triggering AI processing for conversation ${dto.conversationId}`,
+        );
 
         // Obtener phone para instanceName y clientPhone
         const phone = await this.phoneRepository.findById(conversation.phoneId);
@@ -108,25 +145,37 @@ export class HitlController {
             messageType: lastMessage.type,
             content: lastMessage.content,
             mediaRelativePath: lastMessage.mediaUrl || null,
-            mediaMetadata: lastMessage.fileName ? {
-              fileName: lastMessage.fileName,
-              mimeType: lastMessage.mimeType,
-            } : null,
+            mediaMetadata: lastMessage.fileName
+              ? {
+                  fileName: lastMessage.fileName,
+                  mimeType: lastMessage.mimeType,
+                }
+              : null,
           });
 
-          this.logger.log(`Emitted ai.incoming.message for conversation ${dto.conversationId}`);
+          this.logger.log(
+            `Emitted ai.incoming.message for conversation ${dto.conversationId}`,
+          );
         }
       } else {
-        this.logger.log(`Last message is not from client (direction: ${lastMessage.direction}, senderType: ${lastMessage.senderType}), skipping AI processing`);
+        this.logger.log(
+          `Last message is not from client (direction: ${lastMessage.direction}, senderType: ${lastMessage.senderType}), skipping AI processing`,
+        );
       }
     }
 
-    this.websocketGateway.emit('conversation:returned', {
-      conversationId: dto.conversationId,
-      timestamp: new Date().toISOString(),
-    }, userId);
+    this.websocketGateway.emit(
+      'conversation:returned',
+      {
+        conversationId: dto.conversationId,
+        timestamp: new Date().toISOString(),
+      },
+      userId,
+    );
 
-    this.logger.log(`User ${userId} returned conversation ${dto.conversationId} to AI`);
+    this.logger.log(
+      `User ${userId} returned conversation ${dto.conversationId} to AI`,
+    );
 
     return { message: 'Returned to AI successfully' };
   }

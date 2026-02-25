@@ -80,6 +80,19 @@ export class ConversationRepository {
    * @param data - Datos de la conversación
    * @returns Conversación creada o actualizada
    */
+  async createManySkipDuplicates(
+    data: { phoneId: string; clientId: string }[],
+  ) {
+    return this.prisma.conversation.createMany({
+      data: data.map((d) => ({
+        phoneId: d.phoneId,
+        clientId: d.clientId,
+        isActive: true,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
   async upsert(data: { phoneId: string; clientId: string; isActive: boolean }) {
     return this.prisma.conversation.upsert({
       where: {

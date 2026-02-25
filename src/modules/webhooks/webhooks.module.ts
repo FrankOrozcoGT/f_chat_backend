@@ -11,7 +11,13 @@ import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
 
 @Module({
-  imports: [PrismaModule, WebSocketModule, ConversationsModule, EvolutionModule, FileStorageModule],
+  imports: [
+    PrismaModule,
+    WebSocketModule,
+    ConversationsModule,
+    EvolutionModule,
+    FileStorageModule,
+  ],
   controllers: [WebhooksController],
   providers: [
     WebhooksService,

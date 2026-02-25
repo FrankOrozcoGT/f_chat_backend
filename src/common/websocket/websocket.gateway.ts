@@ -17,7 +17,9 @@ import * as cookie from 'cookie';
   },
 })
 @Injectable()
-export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class AppWebSocketGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -35,7 +37,9 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
     try {
       // Extraer JWT de cookie
       const cookieHeader = client.handshake.headers.cookie;
-      this.logger.debug(`[WebSocket] Cookie header: ${cookieHeader ? 'present' : 'missing'}`);
+      this.logger.debug(
+        `[WebSocket] Cookie header: ${cookieHeader ? 'present' : 'missing'}`,
+      );
 
       if (!cookieHeader) {
         this.logger.warn(`[WebSocket] Connection rejected: No cookie header`);
@@ -45,10 +49,14 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
 
       const cookies = cookie.parse(cookieHeader);
       const token = cookies.auth_token;
-      this.logger.debug(`[WebSocket] JWT token: ${token ? 'present' : 'missing'}`);
+      this.logger.debug(
+        `[WebSocket] JWT token: ${token ? 'present' : 'missing'}`,
+      );
 
       if (!token) {
-        this.logger.warn(`[WebSocket] Connection rejected: No JWT token in cookie`);
+        this.logger.warn(
+          `[WebSocket] Connection rejected: No JWT token in cookie`,
+        );
         client.disconnect();
         return;
       }
@@ -58,7 +66,9 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
       if (!payload || !payload.userId) {
-        this.logger.warn(`[WebSocket] Connection rejected: Invalid JWT payload`);
+        this.logger.warn(
+          `[WebSocket] Connection rejected: Invalid JWT payload`,
+        );
         client.disconnect();
         return;
       }
@@ -68,7 +78,9 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
       client.data.userId = userId;
       this.connections.set(client.id, userId);
 
-      this.logger.log(`[WebSocket] Client connected: ${client.id} (userId: ${userId})`);
+      this.logger.log(
+        `[WebSocket] Client connected: ${client.id} (userId: ${userId})`,
+      );
     } catch (error) {
       this.logger.error(`[WebSocket] Connection error: ${error.message}`);
       client.disconnect();
@@ -88,21 +100,38 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
    * @param targetUserId - ID del usuario objetivo (opcional, si no se provee es broadcast)
    */
   emitApiDown(apiName: string, error: string, userId?: string) {
-    this.emit('api:down', { apiName, error, timestamp: new Date().toISOString() }, userId);
+    this.emit(
+      'api:down',
+      { apiName, error, timestamp: new Date().toISOString() },
+      userId,
+    );
   }
 
   emitApiUp(apiName: string, userId?: string) {
-    this.emit('api:up', { apiName, timestamp: new Date().toISOString() }, userId);
+    this.emit(
+      'api:up',
+      { apiName, timestamp: new Date().toISOString() },
+      userId,
+    );
   }
 
-  emitCreditsExhausted(userId: string, conversationId: string, creditsUsed: number, creditsLimit: number) {
-    this.emit('credits:exhausted', {
+  emitCreditsExhausted(
+    userId: string,
+    conversationId: string,
+    creditsUsed: number,
+    creditsLimit: number,
+  ) {
+    this.emit(
+      'credits:exhausted',
+      {
+        userId,
+        conversationId,
+        creditsUsed,
+        creditsLimit,
+        timestamp: new Date().toISOString(),
+      },
       userId,
-      conversationId,
-      creditsUsed,
-      creditsLimit,
-      timestamp: new Date().toISOString(),
-    }, userId);
+    );
   }
 
   emit(event: string, data: any, targetUserId?: string) {
@@ -116,7 +145,9 @@ export class AppWebSocketGateway implements OnGatewayConnection, OnGatewayDiscon
         this.server.to(socketId).emit(event, data);
       });
 
-      this.logger.debug(`Event ${event} emitted to user ${targetUserId} (${targetSockets.length} sockets)`);
+      this.logger.debug(
+        `Event ${event} emitted to user ${targetUserId} (${targetSockets.length} sockets)`,
+      );
     } else {
       // Broadcast a todos
       this.server.emit(event, data);

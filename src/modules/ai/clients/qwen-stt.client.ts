@@ -27,12 +27,14 @@ export class QwenSttClient {
       const base64Audio = audioBuffer.toString('base64');
       const audioDataUri = `data:audio/ogg;base64,${base64Audio}`;
 
-      this.logger.log(`STT request: ${audioBuffer.length} bytes, url=${this.apiUrl}, key=${this.apiKey.substring(0, 8)}...`);
+      this.logger.log(
+        `STT request: ${audioBuffer.length} bytes, url=${this.apiUrl}, key=${this.apiKey.substring(0, 8)}...`,
+      );
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -49,17 +51,23 @@ export class QwenSttClient {
       if (!response.ok) {
         const errorBody = await response.text();
         const errorHeaders = Object.fromEntries(response.headers.entries());
-        throw new Error(`STT API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`);
+        throw new Error(
+          `STT API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+        );
       }
 
       const data = await response.json();
       const latencyMs = Date.now() - startTime;
 
-      const transcript = data.output?.choices?.[0]?.message?.content?.[0]?.text || '';
-      const durationSeconds = data.usage?.audio_duration || (audioBuffer.length / 2000);
+      const transcript =
+        data.output?.choices?.[0]?.message?.content?.[0]?.text || '';
+      const durationSeconds =
+        data.usage?.audio_duration || audioBuffer.length / 2000;
       const costUsd = durationSeconds * QwenSttClient.COST_PER_SECOND;
 
-      this.logger.log(`STT completed: "${transcript.substring(0, 80)}" ${latencyMs}ms, $${costUsd.toFixed(6)}`);
+      this.logger.log(
+        `STT completed: "${transcript.substring(0, 80)}" ${latencyMs}ms, $${costUsd.toFixed(6)}`,
+      );
 
       return { text: transcript, costUsd, latencyMs };
     } catch (error) {

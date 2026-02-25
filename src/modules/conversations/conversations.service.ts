@@ -36,26 +36,30 @@ export class ConversationsService {
     const now = new Date();
     return contacts
       .filter((c) => c.remoteJid?.endsWith('@s.whatsapp.net'))
-      .map((c) => new ConversationResponseDto({
-        id: c.remoteJid,
-        phoneId: phone.id,
-        clientId: c.remoteJid,
-        mode: ConversationMode.HITL,
-        lastMessageAt: now,
-        lastMessagePreview: null,
-        isActive: true,
-        summary: null,
-        createdAt: now,
-        updatedAt: now,
-        client: {
-          id: c.remoteJid,
-          phoneNumber: c.remoteJid.replace(/@s\.whatsapp\.net$/, ''),
-          name: c.pushName || c.notify || null,
-          firstContactAt: now,
-          lastContactAt: now,
-        } as Client,
-        phone: phone,
-      } as Conversation & { client: Client; phone: Phone }));
+      .map(
+        (c) =>
+          new ConversationResponseDto({
+            id: c.remoteJid,
+            phoneId: phone.id,
+            clientId: c.remoteJid,
+            mode: ConversationMode.HITL,
+            lastMessageAt: now,
+            lastMessagePreview: null,
+            isActive: true,
+            summary: null,
+            createdAt: now,
+            updatedAt: now,
+            client: {
+              id: c.remoteJid,
+              phoneNumber: c.remoteJid.replace(/@s\.whatsapp\.net$/, ''),
+              name: c.pushName || c.notify || null,
+              profilePicUrl: c.profilePicUrl || null,
+              firstContactAt: now,
+              lastContactAt: now,
+            } as Client,
+            phone: phone,
+          } as Conversation & { client: Client; phone: Phone }),
+      );
   }
 
   buildDetailResponse(conversation: Conversation, client: Client | null) {

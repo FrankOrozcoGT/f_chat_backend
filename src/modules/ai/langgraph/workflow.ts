@@ -27,23 +27,37 @@ export class AiWorkflow {
     private readonly langSmithService: LangSmithService,
     private readonly configService: ConfigService,
   ) {
-    this.flowEnabled = this.configService.get<string>('FLOW_ANALYZER_ENABLED', 'false') === 'true';
-    this.logger.log(`Flow Analyzer: ${this.flowEnabled ? 'ENABLED' : 'DISABLED'}`);
+    this.flowEnabled =
+      this.configService.get<string>('FLOW_ANALYZER_ENABLED', 'false') ===
+      'true';
+    this.logger.log(
+      `Flow Analyzer: ${this.flowEnabled ? 'ENABLED' : 'DISABLED'}`,
+    );
     this.graph = this.buildGraph();
   }
 
   private buildGraph() {
     const builder = new StateGraph(WorkflowState)
-      .addNode('input_router', (state: WorkflowStateType) => this.inputRouterNode.execute(state))
+      .addNode('input_router', (state: WorkflowStateType) =>
+        this.inputRouterNode.execute(state),
+      )
       .addNode('llm', (state: WorkflowStateType) => this.llmNode.execute(state))
-      .addNode('output_router', (state: WorkflowStateType) => this.outputRouterNode.execute(state))
-      .addNode('send', (state: WorkflowStateType) => this.sendNode.execute(state))
+      .addNode('output_router', (state: WorkflowStateType) =>
+        this.outputRouterNode.execute(state),
+      )
+      .addNode('send', (state: WorkflowStateType) =>
+        this.sendNode.execute(state),
+      )
       .addEdge(START, 'input_router');
 
     if (this.flowEnabled) {
       builder
-        .addNode('flow_analyzer', (state: WorkflowStateType) => this.flowAnalyzerNode.execute(state))
-        .addNode('context_builder', (state: WorkflowStateType) => this.contextBuilderNode.execute(state))
+        .addNode('flow_analyzer', (state: WorkflowStateType) =>
+          this.flowAnalyzerNode.execute(state),
+        )
+        .addNode('context_builder', (state: WorkflowStateType) =>
+          this.contextBuilderNode.execute(state),
+        )
         .addEdge('input_router', 'flow_analyzer')
         .addEdge('flow_analyzer', 'context_builder')
         .addEdge('context_builder', 'llm');
@@ -83,7 +97,11 @@ export class AiWorkflow {
         );
         return result;
       },
-      { conversationId: payload.conversationId, clientPhone: payload.clientPhone, mode: 'AI' },
+      {
+        conversationId: payload.conversationId,
+        clientPhone: payload.clientPhone,
+        mode: 'AI',
+      },
     );
   }
 }

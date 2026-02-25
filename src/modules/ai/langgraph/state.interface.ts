@@ -21,8 +21,8 @@ export type FlowOpType = 'create' | 'close' | 'reopen' | 'focus' | 'end';
 
 export interface FlowOperation {
   op: FlowOpType;
-  label?: string;   // for 'create'
-  nodeId?: string;   // for 'close', 'reopen', 'focus'
+  label?: string; // for 'create'
+  nodeId?: string; // for 'close', 'reopen', 'focus'
 }
 
 export const WorkflowState = Annotation.Root({

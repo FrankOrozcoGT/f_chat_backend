@@ -96,8 +96,13 @@ describe('HealthMonitorService - checkAPIs', () => {
       // ASSERT: Verificar que se ejecutaron las acciones correctas
       expect(apiHealthRepository.getAPIsToMonitor).toHaveBeenCalledTimes(1);
       expect(healthService.pingAPI).toHaveBeenCalledWith('qwen_stt');
-      expect(apiHealthRepository.markAsUp).toHaveBeenCalledWith('qwen_stt', 250);
-      expect(healthService.notifyAffectedClients).toHaveBeenCalledWith('qwen_stt');
+      expect(apiHealthRepository.markAsUp).toHaveBeenCalledWith(
+        'qwen_stt',
+        250,
+      );
+      expect(healthService.notifyAffectedClients).toHaveBeenCalledWith(
+        'qwen_stt',
+      );
       expect(websocketGateway.emitApiUp).toHaveBeenCalledWith('qwen_stt');
     });
 
