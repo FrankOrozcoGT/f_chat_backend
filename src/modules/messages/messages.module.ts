@@ -8,6 +8,7 @@ import { ConversationsModule } from '@modules/conversations/conversations.module
 import { PhonesModule } from '@modules/phones/phones.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
+import { FileStorageModule } from '@common/file-storage/file-storage.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { WebSocketModule } from '@common/websocket/websocket.module';
     PhonesModule,
     EvolutionModule,
     WebSocketModule,
+    FileStorageModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService, MessageRepository, ClientRepository],

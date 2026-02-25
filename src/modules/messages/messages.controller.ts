@@ -60,66 +60,41 @@ export class MessagesController {
     // 2. Obtener conversación con relaciones (phone + client en 1 query)
     const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
 
-    // Fallback: si no existe en DB y es un remoteJid, buscar en Evolution
     if (!conversation) {
-      if (!conversationId.endsWith('@s.whatsapp.net')) {
-        throw new NotFoundException(`Conversation with id ${conversationId} not found`);
-      }
-
-      const phones = await this.phoneRepository.findAllByUserId(userId);
-      const phone = phones[0] ?? null;
-      if (!phone) {
-        throw new NotFoundException(`No phone found for user`);
-      }
-
-      this.logger.log(`Conversation not in DB, falling back to Evolution for remoteJid: ${conversationId}`);
-      const rawMessages = await this.evolutionService.findMessages(phone.instanceName, conversationId);
-
-      const phoneNumber = conversationId.replace('@s.whatsapp.net', '');
-      const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
-      this.bootstrapConversationInBackground(phone, phoneNumber, firstWithName?.pushName || phoneNumber, rawMessages, userId);
-
-      return rawMessages.map((m) => {
-        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
-        return {
-          id: m.key?.id || m.id,
-          conversationId,
-          type,
-          content,
-          mediaUrl: null,
-          fileName: null,
-          fileSize: null,
-          mimeType: null,
-          direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
-          senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
-          status: MessageStatus.delivered,
-          metadata: { keyId: m.key?.id, mediaLoading: hasMedia },
-          createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
-          updatedAt: new Date(),
-        };
-      });
+      throw new NotFoundException(
+        `Conversation with id ${conversationId} not found`,
+      );
     }
 
     // 3. Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
 
-    // 4. Obtener mensajes
-    const messages = await this.messageRepository.findByConversationId(conversationId);
+    // 4. Obtener mensajes de DB
+    let messages = await this.messageRepository.findByConversationId(conversationId);
 
-    // Fallback: si no hay mensajes en DB, consultar Evolution
+    // 5. Fallback: si no hay mensajes, buscar en Evolution y retornar inmediatamente
     if (messages.length === 0 && conversation.client) {
       const remoteJid = `${conversation.client.phoneNumber}@s.whatsapp.net`;
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
-      const rawMessages = await this.evolutionService.findMessages(conversation.phone.instanceName, remoteJid);
+      const rawMessages = await this.evolutionService.findMessages(
+        conversation.phone.evolutionInstanceId,
+        remoteJid,
+      );
 
-      this.bootstrapConversationInBackground(conversation.phone, conversation.client.phoneNumber, conversation.client.name || conversation.client.phoneNumber, rawMessages, userId);
+      this.bootstrapConversationInBackground(conversation, rawMessages, userId);
 
       return rawMessages
-        .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0))
+        .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0))
         .map((m) => {
           const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+          const msgData = m.message || {};
+          let quotedMessageId: string | undefined;
+          for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+            const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
+            if (stanzaId) { quotedMessageId = stanzaId; break; }
+          }
           return {
-            id: m.key?.id || m.id,
+            id: m.key?.id,
             conversationId,
             type,
             content,
@@ -130,7 +105,7 @@ export class MessagesController {
             direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
             senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
             status: MessageStatus.delivered,
-            metadata: { keyId: m.key?.id, mediaLoading: hasMedia },
+            metadata: { keyId: m.key?.id, mediaLoading: hasMedia, ...(quotedMessageId ? { quotedMessageId } : {}) },
             createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
             updatedAt: new Date(),
           };
@@ -418,44 +393,19 @@ export class MessagesController {
     }
   }
 
-  private mapTypeToMediaType(tipo: MessageType): EvolutionMediaType {
-    switch (tipo) {
-      case MessageType.image: return EvolutionMediaType.IMAGE;
-      case MessageType.video: return EvolutionMediaType.VIDEO;
-      case MessageType.voice:
-      case MessageType.audio: return EvolutionMediaType.AUDIO;
-      case MessageType.document: return EvolutionMediaType.DOCUMENT;
-      default: throw new BadRequestException(`Unsupported media type: ${tipo}`);
-    }
-  }
-
   private async bootstrapConversationInBackground(
-    phone: any,
-    phoneNumber: string,
-    clientName: string,
+    conversation: any,
     rawMessages: any[],
     userId: string,
   ) {
     try {
-      // 1. Upsert client
-      const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
-
-      // 2. Upsert conversation
-      const conversation = await this.conversationRepository.upsert({
-        phoneId: phone.id,
-        clientId: client.id,
-        isActive: true,
-      });
-
-      // 3. Deduplicar mensajes ya persistidos
       const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
       const newMessages = rawMessages
         .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
-        .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
+        .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0));
 
       if (newMessages.length === 0) return;
 
-      // 4. Persistir mensajes, descargando media cuando aplica
       for (const m of newMessages) {
         const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
         let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
@@ -464,22 +414,32 @@ export class MessagesController {
           try {
             mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
               this.evolutionService,
-              phone.instanceName,
+              conversation.phone.evolutionInstanceId,
               userId,
               conversation.id,
               m.key.id,
               m.key,
             );
-            // Notificar al frontend que el media ya está listo
             this.websocketGateway.emit(
               'message:media_ready',
-              { id: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
+              { keyId: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
               userId,
             );
           } catch (err) {
             this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);
           }
         }
+
+        const msgData = m.message || {};
+        let quotedMessageId: string | undefined;
+        for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+          const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
+          if (stanzaId) { quotedMessageId = stanzaId; break; }
+        }
+
+        const meta: Record<string, any> = {};
+        if (m.key?.id) meta.keyId = m.key.id;
+        if (quotedMessageId) meta.quotedMessageId = quotedMessageId;
 
         await this.messageRepository.create({
           conversationId: conversation.id,
@@ -492,14 +452,25 @@ export class MessagesController {
           direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
           senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
           status: MessageStatus.delivered,
-          metadata: { keyId: m.key?.id },
+          metadata: Object.keys(meta).length > 0 ? meta : null,
           createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : undefined,
         });
       }
 
-      this.logger.log(`Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`);
+      this.logger.log(`Background: bootstrapped ${newMessages.length} messages for conversation ${conversation.id}`);
     } catch (err) {
       this.logger.error(`Background bootstrap failed: ${err.message}`);
+    }
+  }
+
+  private mapTypeToMediaType(tipo: MessageType): EvolutionMediaType {
+    switch (tipo) {
+      case MessageType.image: return EvolutionMediaType.IMAGE;
+      case MessageType.video: return EvolutionMediaType.VIDEO;
+      case MessageType.voice:
+      case MessageType.audio: return EvolutionMediaType.AUDIO;
+      case MessageType.document: return EvolutionMediaType.DOCUMENT;
+      default: throw new BadRequestException(`Unsupported media type: ${tipo}`);
     }
   }
 
