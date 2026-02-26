@@ -113,8 +113,10 @@ export class ConversationsController {
       userId,
     );
 
-    // 4. Obtener client asociado
-    const client = await this.clientRepository.findById(conversation.clientId);
+    // 4. Obtener client asociado (null para grupos)
+    const client = conversation.clientId
+      ? await this.clientRepository.findById(conversation.clientId)
+      : null;
 
     // 5. Construir response (Service - lógica pura)
     const response = this.conversationsService.buildDetailResponse(

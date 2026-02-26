@@ -153,6 +153,10 @@ export class MessagesController {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
     }
 
+    if (!conversation.client) {
+      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
+    }
+
     // 3. Si hay mediaUrl, construir URL completa para Evolution
     const relativePath = dto.mediaUrl || null;
     const mediaUrlForEvolution = relativePath
@@ -312,6 +316,10 @@ export class MessagesController {
     // Validar que la conversación esté en modo HITL
     if (conversation.mode !== 'HITL') {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
+    }
+
+    if (!conversation.client) {
+      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
     }
 
     // 5. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)

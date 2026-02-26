@@ -9,6 +9,7 @@ import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
+import { GroupConversationRepository } from './repositories/group-conversation.repository';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MessageRepository } from './repositories/message.repository';
     PhoneRepository,
     ClientRepository,
     MessageRepository,
+    GroupConversationRepository,
   ],
 })
 export class WebhooksModule {}

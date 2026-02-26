@@ -213,6 +213,50 @@ export class WebhooksService {
   }
 
   /**
+   * Construye los datos de un mensaje de grupo entrante
+   * Extrae senderJid y senderName del webhook para guardar en metadata
+   */
+  buildGroupMessageData(
+    webhookData: any,
+    conversationId: string,
+    mediaData?: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null,
+  ) {
+    const messageData = webhookData?.data?.message || {};
+    const { type, content } =
+      this.evolutionService.parseMessageContent(messageData);
+
+    const keyId = webhookData?.data?.key?.id;
+    const senderJid = webhookData?.data?.key?.participant || null;
+    const senderName = webhookData?.data?.pushName || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+
+    const metadata: Record<string, any> = {};
+    if (keyId) metadata.keyId = keyId;
+    if (senderJid) metadata.senderJid = senderJid;
+    if (senderName) metadata.senderName = senderName;
+    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+
+    return {
+      conversationId,
+      type,
+      content,
+      mediaUrl: mediaData?.relativePath || null,
+      fileName: mediaData?.fileName || null,
+      fileSize: mediaData?.fileSize || null,
+      mimeType: mediaData?.mimeType || null,
+      direction: MessageDirection.incoming,
+      senderType: MessageSenderType.client,
+      status: MessageStatus.delivered,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
+    };
+  }
+
+  /**
    * Construye la actualización de conversación con último mensaje
    * @param message - Mensaje a usar para actualizar
    * @returns Datos de actualización

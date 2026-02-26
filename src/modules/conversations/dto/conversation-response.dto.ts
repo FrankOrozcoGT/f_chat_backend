@@ -3,7 +3,9 @@ import { Conversation, Client, Phone } from '@prisma/client';
 export class ConversationResponseDto {
   id: string;
   phoneId: string;
-  clientId: string;
+  clientId: string | null;
+  type: string;
+  groupName: string | null;
   mode: string;
   lastMessageAt: Date;
   lastMessagePreview: string | null;
@@ -12,7 +14,7 @@ export class ConversationResponseDto {
   createdAt: Date;
   updatedAt: Date;
 
-  // Datos del cliente
+  // Datos del cliente (null para grupos)
   client: {
     id: string;
     phoneNumber: string;
@@ -20,7 +22,7 @@ export class ConversationResponseDto {
     profilePicUrl: string | null;
     firstContactAt: Date;
     lastContactAt: Date;
-  };
+  } | null;
 
   // Datos del phone
   phone: {
@@ -30,10 +32,12 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(conversation: Conversation & { client: Client; phone: Phone }) {
+  constructor(conversation: Conversation & { client: Client | null; phone: Phone }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
     this.clientId = conversation.clientId;
+    this.type = conversation.type;
+    this.groupName = conversation.groupName ?? null;
     this.mode = conversation.mode;
     this.lastMessageAt = conversation.lastMessageAt;
     this.lastMessagePreview = conversation.lastMessagePreview;
@@ -42,14 +46,16 @@ export class ConversationResponseDto {
     this.createdAt = conversation.createdAt;
     this.updatedAt = conversation.updatedAt;
 
-    this.client = {
-      id: conversation.client.id,
-      phoneNumber: conversation.client.phoneNumber,
-      name: conversation.client.name,
-      profilePicUrl: conversation.client.profilePicUrl,
-      firstContactAt: conversation.client.firstContactAt,
-      lastContactAt: conversation.client.lastContactAt,
-    };
+    this.client = conversation.client
+      ? {
+          id: conversation.client.id,
+          phoneNumber: conversation.client.phoneNumber,
+          name: conversation.client.name,
+          profilePicUrl: conversation.client.profilePicUrl,
+          firstContactAt: conversation.client.firstContactAt,
+          lastContactAt: conversation.client.lastContactAt,
+        }
+      : null;
 
     this.phone = {
       id: conversation.phone.id,

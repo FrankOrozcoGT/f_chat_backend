@@ -6,6 +6,7 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
+import { GroupConversationRepository } from './repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
@@ -25,6 +26,7 @@ export class WebhooksController {
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
+    private readonly groupConversationRepository: GroupConversationRepository,
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
     private readonly eventEmitter: EventEmitter2,
@@ -156,7 +158,7 @@ export class WebhooksController {
   }
 
   /**
-   * Maneja evento MESSAGES_UPSERT
+   * Maneja evento MESSAGES_UPSERT (individuales y grupos)
    */
   private async handleMessagesUpsert(
     phoneId: string,
@@ -165,6 +167,8 @@ export class WebhooksController {
   ) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
     const messageKey = webhookData?.data?.key;
+    const remoteJid = webhookData?.data?.key?.remoteJid || '';
+    const isGroup = remoteJid.endsWith('@g.us');
 
     // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
     if (fromMe && messageKey) {
@@ -184,54 +188,49 @@ export class WebhooksController {
       this.logger.log(`Message ${messageKey.id} from WhatsApp Web, saving`);
     }
 
-    // 2. Construir datos del Client
-    const clientData = this.webhooksService.buildClientData(
-      webhookData,
-      fromMe,
-    );
-
-    // Ignorar mensajes de grupos
-    if (clientData.phoneNumber.endsWith('@g.us')) {
-      return;
-    }
-
-    // 3. Obtener phone (necesario para userId, instanceName en varios pasos)
+    // 2. Obtener phone (necesario para userId en media)
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
       this.logger.warn(`Phone ${phoneId} not found`);
       return;
     }
 
-    // 4. Upsert Client
-    const client = await this.clientRepository.upsert(clientData);
+    // 3. Upsert Conversation (individual o grupo)
+    let conversation: { id: string; mode: string };
+    let clientPhone: string | null = null;
 
-    // 5. Construir y upsert Conversation
-    const conversationData = this.webhooksService.buildConversationData(
-      phoneId,
-      client.id,
-    );
-    const conversation =
-      await this.conversationRepository.upsert(conversationData);
+    if (isGroup) {
+      const groupName = webhookData?.data?.pushName || undefined;
+      conversation = await this.groupConversationRepository.upsert({
+        phoneId,
+        groupJid: remoteJid,
+        groupName,
+      });
+    } else {
+      const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
+      clientPhone = clientData.phoneNumber;
+      const client = await this.clientRepository.upsert(clientData);
+      const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
+      conversation = await this.conversationRepository.upsert(conversationData);
 
-    // 6. Si es conversación sin historial, sincronizar en background
-    const existingCount = await this.messageRepository.countByConversationId(
-      conversation.id,
-    );
-    if (existingCount === 0) {
-      const remoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
-      this.logger.log(
-        `New conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
-      );
-      this.bootstrapConversationInBackground(
-        phone,
-        clientData.phoneNumber,
-        clientData.name || clientData.phoneNumber,
-        instanceName,
-        remoteJid,
-      );
+      // Bootstrap historial si es conversación nueva
+      const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+      if (existingCount === 0) {
+        const clientRemoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
+        this.logger.log(
+          `New conversation ${conversation.id}, bootstrapping history from Evolution for ${clientRemoteJid}`,
+        );
+        this.bootstrapConversationInBackground(
+          phone,
+          clientData.phoneNumber,
+          clientData.name || clientData.phoneNumber,
+          instanceName,
+          clientRemoteJid,
+        );
+      }
     }
 
-    // 7. Si hay media, descargar ANTES de crear el mensaje
+    // 4. Si hay media, descargar ANTES de crear el mensaje
     let mediaData: {
       relativePath: string;
       fileName: string;
@@ -257,51 +256,36 @@ export class WebhooksController {
       }
     }
 
-    // 8. Construir mensaje según dirección
-    const messageData = fromMe
-      ? this.webhooksService.buildOutgoingMessageFromWebhook(
-          webhookData,
-          conversation.id,
-          mediaData,
-        )
-      : this.webhooksService.buildIncomingMessageData(
-          webhookData,
-          conversation.id,
-          mediaData,
-        );
+    // 5. Construir mensaje
+    const messageData = isGroup
+      ? this.webhooksService.buildGroupMessageData(webhookData, conversation.id, mediaData)
+      : fromMe
+        ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
+        : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
 
-    // 9. Guardar mensaje
+    // 6. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
 
-    // 10. Actualizar último mensaje de la conversación
-    const conversationUpdate =
-      this.webhooksService.buildConversationUpdate(message);
-    await this.conversationRepository.updateLastMessage(
-      conversation.id,
-      conversationUpdate,
-    );
+    // 7. Actualizar último mensaje de la conversación
+    const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
+    await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 11. Emitir al frontend
-    if (fromMe) {
-      this.websocketGateway.emit('message:sent', {
-        ...message,
-        fromExternal: true,
-      });
-      this.logger.log(
-        `Outgoing message from WhatsApp Web for conversation ${conversation.id}`,
-      );
+    // 8. Emitir al frontend
+    if (fromMe && !isGroup) {
+      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
+      this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
       this.websocketGateway.emit('message:incoming', message);
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
-    // 12. Si mode=AI y es mensaje entrante, emitir evento para AI agent
-    if (!fromMe && conversation.mode === 'AI') {
+    // 9. Si mode=AI y es mensaje entrante individual, emitir evento para AI agent
+    if (!fromMe && !isGroup && conversation.mode === 'AI') {
       this.eventEmitter.emit('ai.incoming.message', {
         messageId: message.id,
         conversationId: conversation.id,
         instanceName,
-        clientPhone: clientData.phoneNumber,
+        clientPhone,
         userId: phone.userId,
         messageType: message.type,
         content: message.content,
