@@ -170,6 +170,18 @@ export class WebhooksController {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
     const isGroup = remoteJid.endsWith('@g.us');
 
+    // 0. Log evento completo para debug
+    this.logger.log(`[messages.upsert] FULL_EVENT remoteJid=${remoteJid} fromMe=${fromMe} data=${JSON.stringify(webhookData?.data)}`);
+
+    // Ignorar tipos de mensaje no procesables
+    const rawMessage = webhookData?.data?.message || {};
+    const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+    const ignoredType = ignoredTypes.find((t) => rawMessage[t]);
+    if (ignoredType) {
+      this.logger.log(`[messages.upsert] Ignored event type=${ignoredType} remoteJid=${remoteJid}`);
+      return;
+    }
+
     // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
     if (fromMe && messageKey) {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -198,14 +210,39 @@ export class WebhooksController {
     // 3. Upsert Conversation (individual o grupo)
     let conversation: { id: string; mode: string };
     let clientPhone: string | null = null;
+    const senderJid = webhookData?.data?.key?.participant || '';
+    const senderPhone = senderJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    const senderName = webhookData?.data?.pushName || senderPhone;
 
     if (isGroup) {
       const groupName = webhookData?.data?.pushName || undefined;
+
       conversation = await this.groupConversationRepository.upsert({
         phoneId,
         groupJid: remoteJid,
         groupName,
       });
+
+      // Upsert sender como Client y ConversationParticipant (solo si no soy yo)
+      if (!fromMe) {
+        const sender = await this.clientRepository.upsert({ phoneNumber: senderPhone, name: senderName });
+        await this.conversationRepository.upsertParticipant(conversation.id, sender.id);
+      }
+
+      // Bootstrap historial si es conversación nueva
+      const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+      if (existingCount === 0) {
+        this.logger.log(
+          `New group conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
+        );
+        this.bootstrapConversationInBackground(
+          phone,
+          remoteJid,
+          groupName || remoteJid,
+          instanceName,
+          remoteJid,
+        );
+      }
     } else {
       const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
       clientPhone = clientData.phoneNumber;
@@ -239,8 +276,15 @@ export class WebhooksController {
     } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
+    this.logger.log(
+      `[media] hasMedia=${hasMedia} isGroup=${isGroup} messageKey=${JSON.stringify(messageKey)} rawMessage=${JSON.stringify(webhookData?.data?.message)}`,
+    );
+
     if (hasMedia && messageKey) {
       try {
+        this.logger.log(
+          `[media] Attempting download instanceName=${instanceName} userId=${phone.userId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
+        );
         mediaData =
           await this.fileStorageService.downloadAndSaveMediaFromEvolution(
             this.evolutionService,
@@ -250,18 +294,20 @@ export class WebhooksController {
             messageKey.id,
             messageKey,
           );
-        this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
+        this.logger.log(`[media] Downloaded OK: ${mediaData.relativePath}`);
       } catch (error) {
-        this.logger.error(`Failed to download media: ${error.message}`);
+        this.logger.error(`[media] Failed to download: ${error.message} — stack: ${error.stack}`);
       }
+    } else {
+      this.logger.log(`[media] Skipped — hasMedia=${hasMedia} messageKey=${!!messageKey}`);
     }
 
     // 5. Construir mensaje
-    const messageData = isGroup
-      ? this.webhooksService.buildGroupMessageData(webhookData, conversation.id, mediaData)
-      : fromMe
-        ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
-        : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData);
+    const groupMeta = isGroup && !fromMe ? { senderJid, senderName } : null;
+
+    const messageData = fromMe
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
+      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData, groupMeta);
 
     // 6. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
@@ -271,7 +317,7 @@ export class WebhooksController {
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
     // 8. Emitir al frontend
-    if (fromMe && !isGroup) {
+    if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {

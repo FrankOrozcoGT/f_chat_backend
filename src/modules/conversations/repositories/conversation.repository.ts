@@ -151,6 +151,14 @@ export class ConversationRepository {
     return created;
   }
 
+  async upsertParticipant(conversationId: string, clientId: string) {
+    return this.prisma.conversationParticipant.upsert({
+      where: { conversationId_clientId: { conversationId, clientId } },
+      create: { conversationId, clientId },
+      update: {},
+    });
+  }
+
   async updateMode(conversationId: string, mode: 'AI' | 'HITL') {
     return this.prisma.conversation.update({
       where: { id: conversationId },

@@ -126,16 +126,20 @@ export class WebhooksService {
       fileSize: number;
       mimeType: string;
     } | null,
+    groupMeta?: { senderJid?: string | null; senderName?: string | null } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
     const { type, content } =
       this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
-    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
     const metadata: Record<string, any> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+    if (groupMeta?.senderJid) metadata.senderJid = groupMeta.senderJid;
+    if (groupMeta?.senderName) metadata.senderName = groupMeta.senderName;
 
     return {
       conversationId,
@@ -174,7 +178,8 @@ export class WebhooksService {
       this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
-    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
     const metadata: Record<string, any> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
@@ -197,7 +202,7 @@ export class WebhooksService {
   /**
    * Extrae el stanzaId del mensaje citado (reply) desde contextInfo
    */
-  extractQuotedStanzaId(messageData: Record<string, any>): string | null {
+  extractQuotedStanzaId(messageData: Record<string, any>, topLevelContextInfo?: Record<string, any> | null): string | null {
     const msgTypes = [
       'extendedTextMessage',
       'imageMessage',
@@ -209,51 +214,8 @@ export class WebhooksService {
       const stanzaId = messageData[msgType]?.contextInfo?.stanzaId;
       if (stanzaId) return stanzaId;
     }
+    if (topLevelContextInfo?.stanzaId) return topLevelContextInfo.stanzaId;
     return null;
-  }
-
-  /**
-   * Construye los datos de un mensaje de grupo entrante
-   * Extrae senderJid y senderName del webhook para guardar en metadata
-   */
-  buildGroupMessageData(
-    webhookData: any,
-    conversationId: string,
-    mediaData?: {
-      relativePath: string;
-      fileName: string;
-      fileSize: number;
-      mimeType: string;
-    } | null,
-  ) {
-    const messageData = webhookData?.data?.message || {};
-    const { type, content } =
-      this.evolutionService.parseMessageContent(messageData);
-
-    const keyId = webhookData?.data?.key?.id;
-    const senderJid = webhookData?.data?.key?.participant || null;
-    const senderName = webhookData?.data?.pushName || null;
-    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
-
-    const metadata: Record<string, any> = {};
-    if (keyId) metadata.keyId = keyId;
-    if (senderJid) metadata.senderJid = senderJid;
-    if (senderName) metadata.senderName = senderName;
-    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
-
-    return {
-      conversationId,
-      type,
-      content,
-      mediaUrl: mediaData?.relativePath || null,
-      fileName: mediaData?.fileName || null,
-      fileSize: mediaData?.fileSize || null,
-      mimeType: mediaData?.mimeType || null,
-      direction: MessageDirection.incoming,
-      senderType: MessageSenderType.client,
-      status: MessageStatus.delivered,
-      metadata: Object.keys(metadata).length > 0 ? metadata : null,
-    };
   }
 
   /**
