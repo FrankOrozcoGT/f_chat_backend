@@ -482,16 +482,19 @@ export class EvolutionService {
     fileName: string;
     size: number;
   }> {
+    const payload = {
+      message: { key: messageKey },
+      convertToMp4: false,
+    };
+    const url = `${this.apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
+
     try {
-      this.logger.log(`Getting base64 media for message: ${messageKey.id}`);
+      this.logger.log(`[getBase64] POST ${url} payload=${JSON.stringify(payload)}`);
 
       const response = await firstValueFrom(
         this.httpService.post<EvolutionMediaResponse>(
-          `${this.apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
-          {
-            message: { key: messageKey },
-            convertToMp4: false,
-          },
+          url,
+          payload,
           {
             headers: this.getHeaders(),
             timeout: 30000,
@@ -502,7 +505,7 @@ export class EvolutionService {
       const fileSize = response.data.size?.fileLength?.low ?? 0;
 
       this.logger.log(
-        `Media retrieved successfully: ${response.data.fileName} (${fileSize} bytes)`,
+        `[getBase64] OK: ${response.data.fileName} (${fileSize} bytes) mimetype=${response.data.mimetype}`,
       );
 
       return {
@@ -511,10 +514,11 @@ export class EvolutionService {
         fileName: response.data.fileName,
         size: fileSize,
       };
-    } catch (error: unknown) {
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const responseData = error?.response?.data;
       this.logger.error(
-        `Failed to get base64 from media message: ${messageKey.id}`,
-        (error as Error).message,
+        `[getBase64] FAILED keyId=${messageKey.id} status=${status} response=${JSON.stringify(responseData)} message=${error.message}`,
       );
       throw new BadGatewayException('Failed to download media file');
     }
@@ -576,10 +580,12 @@ export class EvolutionService {
         ),
       );
 
+      const records = response.data?.messages?.records ?? [];
+      const topKeys = Object.keys(response.data ?? {});
       this.logger.log(
-        `Messages retrieved for ${remoteJid} on instance: ${instanceName}`,
+        `Messages retrieved for ${remoteJid} on instance: ${instanceName} — topKeys=[${topKeys}] records=${records.length}`,
       );
-      return response.data?.messages?.records ?? [];
+      return records;
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find messages for ${remoteJid} on instance: ${instanceName}`,

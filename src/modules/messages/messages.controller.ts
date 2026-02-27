@@ -77,13 +77,24 @@ export class MessagesController {
     const remoteJid = isGroup
       ? conversation.groupJid
       : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
+    this.logger.log(`[messages] dbCount=${messages.length} isGroup=${isGroup} remoteJid=${remoteJid ?? 'NULL'}`);
+
+    if (messages.length === 0 && !remoteJid) {
+      const detail = isGroup
+        ? `group conversation ${conversationId} has no groupJid`
+        : `individual conversation ${conversationId} has no client/participant`;
+      throw new BadRequestException(`Cannot resolve remoteJid for fallback: ${detail}`);
+    }
 
     if (messages.length === 0 && remoteJid) {
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
+      this.logger.log(`[fallback] type=${conversation.type} groupJid=${conversation.groupJid} client=${conversation.client?.phoneNumber ?? 'null'} instanceId=${conversation.phone.evolutionInstanceId}`);
       const rawMessages = await this.evolutionService.findMessages(
         conversation.phone.evolutionInstanceId,
         remoteJid,
       );
+
+      this.logger.log(`[fallback] rawMessages.length=${rawMessages.length} firstKey=${rawMessages[0]?.key?.id ?? 'none'}`);
 
       this.bootstrapConversationInBackground(conversation, rawMessages, userId);
 
