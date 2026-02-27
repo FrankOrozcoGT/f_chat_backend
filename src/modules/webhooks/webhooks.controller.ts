@@ -218,17 +218,18 @@ export class WebhooksController {
     // 3. Upsert Conversation (individual o grupo)
     let conversation: { id: string; mode: string };
     let clientPhone: string | null = null;
-    const senderJid = webhookData?.data?.key?.participant || '';
+    const rawParticipant = webhookData?.data?.key?.participant || '';
+    const participantAlt = webhookData?.data?.key?.participantAlt || '';
+    const senderJid = rawParticipant.endsWith('@lid') && participantAlt
+      ? participantAlt
+      : rawParticipant;
     const senderPhone = senderJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
     const senderName = webhookData?.data?.pushName || senderPhone;
 
     if (isGroup) {
-      const groupName = webhookData?.data?.pushName || undefined;
-
       conversation = await this.groupConversationRepository.upsert({
         phoneId,
         groupJid: remoteJid,
-        groupName,
       });
 
       // Upsert sender como Client y ConversationParticipant (solo si no soy yo)
@@ -773,6 +774,10 @@ export class WebhooksController {
       await this.groupConversationRepository.updateGroupInfo(groupJid, { groupName: groupName || undefined, groupPictureUrl });
 
       for (const p of participants) {
+        if (p.id.endsWith('@lid')) {
+          this.logger.warn(`[groups.upsert] LID participant in group ${groupJid} — full object: ${JSON.stringify(p)}`);
+          continue;
+        }
         const phoneNumber = p.id.replace('@s.whatsapp.net', '').replace('@c.us', '');
         if (!phoneNumber) continue;
         const client = await this.clientRepository.upsert({ phoneNumber, name: phoneNumber });
