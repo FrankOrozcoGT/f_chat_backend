@@ -92,6 +92,7 @@ model Conversation {
   type               ConversationType     @default(individual)
   groupJid           String?              @unique
   groupName          String?
+  groupPictureUrl    String?
   mode               ConversationMode     @default(HITL)
   lastMessageAt      DateTime             @default(now())
   lastMessagePreview String?

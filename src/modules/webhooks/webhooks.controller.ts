@@ -79,6 +79,14 @@ export class WebhooksController {
         await this.handleContactsUpsert(phone.id, phone.userId, webhookData);
         break;
 
+      case 'chats.set':
+        await this.handleChatsSet(phone.id, webhookData);
+        break;
+
+      case 'groups.upsert':
+        await this.handleGroupsUpsert(phone.id, webhookData);
+        break;
+
       default:
         this.logger.log(
           `[${new Date().toISOString()}] [Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`,
@@ -644,6 +652,17 @@ export class WebhooksController {
       conversationsData,
     );
 
+    // 2b. Bulk insert ConversationParticipants
+    const conversations = await this.conversationRepository.findManyByPhoneIdAndClientIds(
+      phoneId,
+      conversationsData.map((d) => d.clientId),
+    );
+    await this.conversationRepository.createManyParticipantsSkipDuplicates(
+      conversations
+        .filter((c): c is { id: string; clientId: string } => c.clientId !== null)
+        .map((c) => ({ conversationId: c.id, clientId: c.clientId })),
+    );
+
     // 3. Acumular contador y emitir progreso
     const prev = this.syncContactsCount.get(phoneId) ?? 0;
     const total = prev + contacts.length;
@@ -690,6 +709,53 @@ export class WebhooksController {
         this.logger.log(
           `[contacts.update] Updated profilePicUrl for ${phoneNumber}`,
         );
+      }
+    }
+  }
+
+  /**
+   * Maneja evento CHATS_SET
+   * Llega durante el sync inicial con lista de chats (incluye grupos con nombre)
+   */
+  private async handleChatsSet(phoneId: string, webhookData: any) {
+    const chats: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [];
+    const groups = chats.filter((c) => c.remoteJid?.endsWith('@g.us'));
+    this.logger.log(`[chats.set] total=${chats.length} groups=${groups.length}`);
+    if (groups.length === 0) return;
+
+    for (const group of groups) {
+      const groupJid = group.remoteJid;
+      const groupName = group.name || null;
+      this.logger.log(`[chats.set] upsert groupJid=${groupJid} groupName=${groupName}`);
+      await this.groupConversationRepository.upsert({ phoneId, groupJid, groupName: groupName || undefined });
+    }
+    this.logger.log(`[chats.set] done groups=${groups.length}`);
+  }
+
+  /**
+   * Maneja evento GROUPS_UPSERT
+   * Evolution manda metadata del grupo: nombre, foto, participantes
+   */
+  private async handleGroupsUpsert(phoneId: string, webhookData: any) {
+    const groups: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [webhookData?.data];
+
+    for (const group of groups) {
+      if (!group?.id) continue;
+      const groupJid = group.id;
+      const groupName = group.subject || null;
+      const groupPictureUrl = group.pictureUrl || null;
+      const participants: { id: string }[] = group.participants || [];
+
+      this.logger.log(`[groups.upsert] groupJid=${groupJid} groupName=${groupName} participants=${participants.length}`);
+
+      const conversation = await this.groupConversationRepository.upsert({ phoneId, groupJid, groupName: groupName || undefined });
+      await this.groupConversationRepository.updateGroupInfo(groupJid, { groupName: groupName || undefined, groupPictureUrl });
+
+      for (const p of participants) {
+        const phoneNumber = p.id.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        if (!phoneNumber) continue;
+        const client = await this.clientRepository.upsert({ phoneNumber, name: phoneNumber });
+        await this.conversationRepository.upsertParticipant(conversation.id, client.id);
       }
     }
   }

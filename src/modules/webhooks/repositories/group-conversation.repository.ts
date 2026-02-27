@@ -25,4 +25,14 @@ export class GroupConversationRepository {
       },
     });
   }
+
+  async updateGroupInfo(groupJid: string, data: { groupName?: string; groupPictureUrl?: string | null }) {
+    await this.prisma.conversation.updateMany({
+      where: { groupJid },
+      data: {
+        ...(data.groupName && { groupName: data.groupName }),
+        groupPictureUrl: data.groupPictureUrl ?? null,
+      },
+    });
+  }
 }

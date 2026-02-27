@@ -6,6 +6,7 @@ export class ConversationResponseDto {
   clientId: string | null;
   type: string;
   groupName: string | null;
+  groupPictureUrl: string | null;
   mode: string;
   lastMessageAt: Date;
   lastMessagePreview: string | null;
@@ -46,6 +47,7 @@ export class ConversationResponseDto {
     this.clientId = conversation.clientId;
     this.type = conversation.type;
     this.groupName = conversation.groupName ?? null;
+    this.groupPictureUrl = (conversation as any).groupPictureUrl ?? null;
     this.mode = conversation.mode;
     this.lastMessageAt = conversation.lastMessageAt;
     this.lastMessagePreview = conversation.lastMessagePreview;

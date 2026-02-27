@@ -149,6 +149,17 @@ export class ConversationRepository {
     return created;
   }
 
+  async findManyByPhoneIdAndClientIds(phoneId: string, clientIds: string[]) {
+    return this.prisma.conversation.findMany({
+      where: { phoneId, clientId: { in: clientIds }, type: 'individual' },
+      select: { id: true, clientId: true },
+    });
+  }
+
+  async createManyParticipantsSkipDuplicates(data: { conversationId: string; clientId: string }[]) {
+    return this.prisma.conversationParticipant.createMany({ data, skipDuplicates: true });
+  }
+
   async upsertParticipant(conversationId: string, clientId: string) {
     return this.prisma.conversationParticipant.upsert({
       where: { conversationId_clientId: { conversationId, clientId } },

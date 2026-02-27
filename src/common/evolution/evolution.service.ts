@@ -592,6 +592,35 @@ export class EvolutionService {
   }
 
   /**
+   * Obtener todos los grupos con metadata - GET /group/fetchAllGroups/:instance
+   * Timeout: 30s (puede ser lento con muchos grupos), NO retry
+   */
+  async fetchAllGroups(instanceName: string): Promise<Array<{ id: string; subject: string; pictureUrl: string | null }>> {
+    try {
+      this.logger.log(`Fetching all groups for instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<Array<{ id: string; subject: string; pictureUrl: string | null }>>(
+          `${this.apiUrl}/group/fetchAllGroups/${instanceName}`,
+          {
+            headers: this.getHeaders(),
+            timeout: 30000,
+          },
+        ),
+      );
+
+      this.logger.log(`Groups fetched for instance: ${instanceName} total=${response.data?.length ?? 0}`);
+      return response.data ?? [];
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to fetch groups for instance: ${instanceName}`,
+        (error as Error).message,
+      );
+      return [];
+    }
+  }
+
+  /**
    * Parsea el contenido de un mensaje de Evolution al formato interno
    */
   parseMessageContent(messageData: EvolutionMessage['message']): ParsedMessageContent {

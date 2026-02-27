@@ -73,8 +73,12 @@ export class MessagesController {
     let messages = await this.messageRepository.findByConversationId(conversationId);
 
     // 5. Fallback: si no hay mensajes, buscar en Evolution y retornar inmediatamente
-    if (messages.length === 0 && conversation.client) {
-      const remoteJid = `${conversation.client.phoneNumber}@s.whatsapp.net`;
+    const isGroup = conversation.type === 'group';
+    const remoteJid = isGroup
+      ? conversation.groupJid
+      : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
+
+    if (messages.length === 0 && remoteJid) {
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
       const rawMessages = await this.evolutionService.findMessages(
         conversation.phone.evolutionInstanceId,
