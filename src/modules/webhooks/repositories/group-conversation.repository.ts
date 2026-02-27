@@ -35,4 +35,12 @@ export class GroupConversationRepository {
       },
     });
   }
+
+  async deleteManyByGroupJids(groupJids: string[]): Promise<number> {
+    if (groupJids.length === 0) return 0;
+    const result = await this.prisma.conversation.deleteMany({
+      where: { groupJid: { in: groupJids } },
+    });
+    return result.count;
+  }
 }

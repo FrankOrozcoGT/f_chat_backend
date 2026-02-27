@@ -243,12 +243,11 @@ export class WebhooksController {
         this.logger.log(
           `New group conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
         );
-        this.bootstrapConversationInBackground(
-          phone,
-          remoteJid,
-          groupName || remoteJid,
+        this.bootstrapMessagesInBackground(
+          conversation.id,
           instanceName,
           remoteJid,
+          phone.userId,
         );
       }
     } else {
@@ -265,12 +264,11 @@ export class WebhooksController {
         this.logger.log(
           `New conversation ${conversation.id}, bootstrapping history from Evolution for ${clientRemoteJid}`,
         );
-        this.bootstrapConversationInBackground(
-          phone,
-          clientData.phoneNumber,
-          clientData.name || clientData.phoneNumber,
+        this.bootstrapMessagesInBackground(
+          conversation.id,
           instanceName,
           clientRemoteJid,
+          phone.userId,
         );
       }
     }
@@ -354,12 +352,28 @@ export class WebhooksController {
     }
   }
 
+  /** @deprecated Usar bootstrapMessagesInBackground */
   private async bootstrapConversationInBackground(
     phone: { id: string; userId: string; instanceName: string },
     phoneNumber: string,
     clientName: string,
     instanceName: string,
     remoteJid: string,
+  ) {
+    const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
+    const conversation = await this.conversationRepository.upsert({
+      phoneId: phone.id,
+      clientId: client.id,
+      isActive: true,
+    });
+    return this.bootstrapMessagesInBackground(conversation.id, instanceName, remoteJid, phone.userId);
+  }
+
+  private async bootstrapMessagesInBackground(
+    conversationId: string,
+    instanceName: string,
+    remoteJid: string,
+    userId: string,
   ) {
     try {
       const rawMessages = await this.evolutionService.findMessages(
@@ -368,31 +382,25 @@ export class WebhooksController {
       );
       if (rawMessages.length === 0) return;
 
-      // Upsert client y conversation
-      const client = await this.clientRepository.upsert({
-        phoneNumber,
-        name: clientName,
-      });
-      const conversation = await this.conversationRepository.upsert({
-        phoneId: phone.id,
-        clientId: client.id,
-        isActive: true,
-      });
-
       // Deduplicar
       const existingKeyIds =
-        await this.messageRepository.findKeyIdsByConversationId(
-          conversation.id,
-        );
+        await this.messageRepository.findKeyIdsByConversationId(conversationId);
       const newMessages = rawMessages
         .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
         .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
 
       if (newMessages.length === 0) return;
 
+      const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+
       for (const m of newMessages) {
+        // Filtrar tipos no procesables (igual que handleMessagesUpsert)
+        const rawMsg = m.message || {};
+        const ignoredType = ignoredTypes.find((t) => rawMsg[t]);
+        if (ignoredType) continue;
+
         const { type, content, hasMedia } =
-          this.evolutionService.parseMessageContent(m.message || {});
+          this.evolutionService.parseMessageContent(rawMsg);
         let mediaData: {
           relativePath: string;
           fileName: string;
@@ -406,8 +414,8 @@ export class WebhooksController {
               await this.fileStorageService.downloadAndSaveMediaFromEvolution(
                 this.evolutionService,
                 instanceName,
-                phone.userId,
-                conversation.id,
+                userId,
+                conversationId,
                 m.key.id,
                 m.key,
               );
@@ -415,10 +423,10 @@ export class WebhooksController {
               'message:media_ready',
               {
                 id: m.key.id,
-                conversationId: conversation.id,
+                conversationId,
                 mediaUrl: mediaData.relativePath,
               },
-              phone.userId,
+              userId,
             );
           } catch (err) {
             this.logger.warn(
@@ -428,7 +436,7 @@ export class WebhooksController {
         }
 
         await this.messageRepository.create({
-          conversationId: conversation.id,
+          conversationId,
           type,
           content,
           mediaUrl: mediaData?.relativePath || null,
@@ -453,7 +461,7 @@ export class WebhooksController {
       }
 
       this.logger.log(
-        `Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`,
+        `Background: bootstrapped conversation ${conversationId} with ${newMessages.length} messages`,
       );
     } catch (err) {
       this.logger.error(`Background bootstrap failed: ${err.message}`);
@@ -738,9 +746,22 @@ export class WebhooksController {
    */
   private async handleGroupsUpsert(phoneId: string, webhookData: any) {
     const groups: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [webhookData?.data];
+    const validGroups = groups.filter((g) => g?.id);
 
-    for (const group of groups) {
-      if (!group?.id) continue;
+    // Bulk delete comunidades que chats.set pudo haber creado
+    const communityJids = validGroups
+      .filter((g) => g.isCommunity === true)
+      .map((g) => g.id as string);
+
+    if (communityJids.length > 0) {
+      const deleted = await this.groupConversationRepository.deleteManyByGroupJids(communityJids);
+      this.logger.log(`[groups.upsert] Deleted ${deleted} communities: ${communityJids.join(', ')}`);
+    }
+
+    // Procesar solo grupos reales
+    const realGroups = validGroups.filter((g) => g.isCommunity !== true);
+
+    for (const group of realGroups) {
       const groupJid = group.id;
       const groupName = group.subject || null;
       const groupPictureUrl = group.pictureUrl || null;
