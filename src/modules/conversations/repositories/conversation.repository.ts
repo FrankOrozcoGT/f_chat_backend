@@ -17,8 +17,6 @@ export class ConversationRepository {
     const search = options?.search?.trim();
 
     const where = {
-      // TODO task 5.2: quitar filtro type para incluir grupos cuando el frontend los soporte
-      type: 'individual' as const,
       phone: {
         userId,
         ...(phoneId && { id: phoneId }),
@@ -52,7 +50,7 @@ export class ConversationRepository {
         where,
         include: {
           phone: true,
-          participants: { include: { client: true }, take: 1 },
+          participants: { include: { client: true } },
         },
         orderBy: { lastMessageAt: 'desc' },
         skip: (page - 1) * limit,
@@ -80,7 +78,7 @@ export class ConversationRepository {
       where: { id },
       include: {
         phone: true,
-        participants: { include: { client: true }, take: 1 },
+        participants: { include: { client: true } },
       },
     });
     if (!conv) return null;

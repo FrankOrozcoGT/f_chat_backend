@@ -1,4 +1,4 @@
-import { Conversation, Client, Phone } from '@prisma/client';
+import { Conversation, Client, Phone, ConversationParticipant } from '@prisma/client';
 
 export class ConversationResponseDto {
   id: string;
@@ -24,6 +24,14 @@ export class ConversationResponseDto {
     lastContactAt: Date;
   } | null;
 
+  // Participantes (todos para grupos, 1 para individuales)
+  participants: {
+    id: string;
+    phoneNumber: string;
+    name: string | null;
+    profilePicUrl: string | null;
+  }[];
+
   // Datos del phone
   phone: {
     id: string;
@@ -32,7 +40,7 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(conversation: Conversation & { client: Client | null; phone: Phone }) {
+  constructor(conversation: Conversation & { client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[] }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
     this.clientId = conversation.clientId;
@@ -56,6 +64,13 @@ export class ConversationResponseDto {
           lastContactAt: conversation.client.lastContactAt,
         }
       : null;
+
+    this.participants = (conversation.participants ?? []).map((p) => ({
+      id: p.client.id,
+      phoneNumber: p.client.phoneNumber,
+      name: p.client.name,
+      profilePicUrl: p.client.profilePicUrl,
+    }));
 
     this.phone = {
       id: conversation.phone.id,
