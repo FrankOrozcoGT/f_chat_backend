@@ -1,9 +1,8 @@
-import { Conversation, Client, Phone, ConversationParticipant } from '@prisma/client';
+import { Client, Phone, ConversationParticipant } from '@prisma/client';
 
 export class ConversationResponseDto {
   id: string;
   phoneId: string;
-  clientId: string | null;
   type: string;
   groupName: string | null;
   groupPictureUrl: string | null;
@@ -41,10 +40,9 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(conversation: Conversation & { client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[] }) {
+  constructor(conversation: { id: string; phoneId: string; type: string; groupJid?: string | null; groupName?: string | null; groupPictureUrl?: string | null; mode: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; summary: string | null; createdAt: Date; updatedAt: Date; client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[] }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
-    this.clientId = conversation.clientId;
     this.type = conversation.type;
     this.groupName = conversation.groupName ?? null;
     this.groupPictureUrl = (conversation as any).groupPictureUrl ?? null;

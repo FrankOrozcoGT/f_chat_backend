@@ -65,9 +65,8 @@ model Client {
   metadata       Json?
   firstContactAt DateTime                  @default(now())
   lastContactAt  DateTime                  @updatedAt
-  conversations  Conversation[]
   memories       ClientMemory[]
-  groupParticipations ConversationParticipant[]
+  participations ConversationParticipant[]
 
   @@index([phoneNumber])
 }
@@ -88,7 +87,6 @@ model ClientMemory {
 model Conversation {
   id                 String               @id @default(uuid())
   phoneId            String
-  clientId           String?
   type               ConversationType     @default(individual)
   groupJid           String?              @unique
   groupName          String?
@@ -101,13 +99,11 @@ model Conversation {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   phone              Phone                @relation(fields: [phoneId], references: [id], onDelete: Cascade)
-  client             Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   messages           Message[]
   sessions           Session[]
   participants       ConversationParticipant[]
 
   @@index([phoneId])
-  @@index([clientId])
   @@index([lastMessageAt])
 }
 
