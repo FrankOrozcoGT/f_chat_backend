@@ -12,6 +12,10 @@ import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { ConversationsService } from './conversations.service';
+import { ProductRepository } from '@modules/conversation-analysis/repositories/product.repository';
+import { DiscountRepository } from '@modules/conversation-analysis/repositories/discount.repository';
+import { PromotionRepository } from '@modules/conversation-analysis/repositories/promotion.repository';
+import { PromotionDiscountRepository } from '@modules/conversation-analysis/repositories/promotion-discount.repository';
 
 @Controller('api/conversations')
 export class ConversationsController {
@@ -20,6 +24,10 @@ export class ConversationsController {
   constructor(
     private readonly conversationRepository: ConversationRepository,
     private readonly conversationsService: ConversationsService,
+    private readonly productRepository: ProductRepository,
+    private readonly discountRepository: DiscountRepository,
+    private readonly promotionRepository: PromotionRepository,
+    private readonly promotionDiscountRepository: PromotionDiscountRepository,
   ) {}
 
   @Get()
@@ -101,14 +109,36 @@ export class ConversationsController {
       userId,
     );
 
-    // 3. Construir response (Service - lógica pura)
+    // 3. Construir response base (Service - lógica pura)
     const response = this.conversationsService.buildDetailResponse(
       conversation,
       conversation.client,
     );
 
+    // 4. Enriquecer con datos de negocio del Client
+    const clientId = conversation.client?.id;
+    const [products, clientDiscounts, clientPromotionDiscounts] =
+      await Promise.all([
+        this.productRepository.findByUserId(userId),
+        clientId
+          ? this.discountRepository.findByClientId(clientId)
+          : Promise.resolve([]),
+        clientId
+          ? this.promotionDiscountRepository.findByClientId(clientId)
+          : Promise.resolve([]),
+      ]);
+
+    // 5. Obtener promociones del usuario
+    const promotions = await this.promotionRepository.findByUserId(userId);
+
     this.logger.log(`Conversation detail retrieved successfully for id: ${id}`);
 
-    return response;
+    return {
+      ...response,
+      products,
+      clientDiscounts,
+      promotions,
+      clientPromotionDiscounts,
+    };
   }
 }

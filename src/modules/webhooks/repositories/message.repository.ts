@@ -284,6 +284,56 @@ export class MessageRepository {
    * @param newStatus - Nuevo status
    * @returns Mensaje actualizado o null si no se encuentra
    */
+  /**
+   * Obtiene los últimos N mensajes no analizados de una conversación
+   */
+  async findLastNUnanalyzed(conversationId: string, limit: number) {
+    return this.prisma.message.findMany({
+      where: { conversationId, analyzedAt: null },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Marca mensajes como analizados
+   */
+  async markAsAnalyzed(messageIds: string[]) {
+    return this.prisma.message.updateMany({
+      where: { id: { in: messageIds } },
+      data: { analyzedAt: new Date() },
+    });
+  }
+
+  /**
+   * Cuenta mensajes no analizados de una conversación
+   */
+  async countUnanalyzed(conversationId: string): Promise<number> {
+    return this.prisma.message.count({
+      where: { conversationId, analyzedAt: null },
+    });
+  }
+
+  /**
+   * Guarda la transcripción de un mensaje de audio
+   */
+  async updateTranscription(messageId: string, transcription: string) {
+    return this.prisma.message.update({
+      where: { id: messageId },
+      data: { transcription },
+    });
+  }
+
+  /**
+   * Mueve mensajes a otra conversación (update conversationId)
+   */
+  async updateConversationId(messageIds: string[], newConversationId: string) {
+    return this.prisma.message.updateMany({
+      where: { id: { in: messageIds } },
+      data: { conversationId: newConversationId },
+    });
+  }
+
   async updateLatestPendingOutgoingMessage(
     phoneId: string,
     newStatus: MessageStatus,
