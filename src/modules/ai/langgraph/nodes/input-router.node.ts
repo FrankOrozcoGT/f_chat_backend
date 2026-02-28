@@ -4,8 +4,7 @@ import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { QwenSttClient } from '../../clients/qwen-stt.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
-import { UserRepository } from '@modules/users/repositories/user.repository';
+import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 
@@ -18,8 +17,7 @@ export class InputRouterNode {
     private readonly sttClient: QwenSttClient,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
-    private readonly conversationRepository: ConversationRepository,
-    private readonly userRepository: UserRepository,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -46,7 +44,7 @@ export class InputRouterNode {
 
       // Obtener userId para tracking de créditos (sin validación)
       const conversation =
-        await this.conversationRepository.findByIdWithRelations(conversationId);
+        await this.internalApi.getConversation(conversationId);
       if (!conversation) {
         return {
           error: {
@@ -78,7 +76,7 @@ export class InputRouterNode {
         const actualCredits = this.limitsService.calculateCreditsFromSeconds(
           estimatedDurationSeconds,
         );
-        await this.userRepository.incrementCreditsUsed(userId, actualCredits);
+        await this.internalApi.incrementCreditsUsed(userId, actualCredits);
 
         this.logger.log(
           `InputRouter: audio → STT transcription: "${sttResult.text.substring(0, 80)}"`,
