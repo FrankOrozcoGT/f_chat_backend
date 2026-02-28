@@ -126,7 +126,7 @@ export class WebhooksService {
       fileSize: number;
       mimeType: string;
     } | null,
-    groupMeta?: { senderJid?: string | null; senderName?: string | null } | null,
+    groupMeta?: { senderJid?: string | null; senderName?: string | null; senderProfilePicUrl?: string | null } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
     const { type, content } =
@@ -140,6 +140,7 @@ export class WebhooksService {
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
     if (groupMeta?.senderJid) metadata.senderJid = groupMeta.senderJid;
     if (groupMeta?.senderName) metadata.senderName = groupMeta.senderName;
+    if (groupMeta?.senderProfilePicUrl) metadata.senderProfilePicUrl = groupMeta.senderProfilePicUrl;
 
     return {
       conversationId,

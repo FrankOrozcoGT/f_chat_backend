@@ -224,7 +224,9 @@ export class WebhooksController {
       ? participantAlt
       : rawParticipant;
     const senderPhone = senderJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
-    const senderName = webhookData?.data?.pushName || senderPhone;
+    let senderName = webhookData?.data?.pushName || senderPhone;
+
+    let senderProfilePicUrl: string | null = null;
 
     if (isGroup) {
       conversation = await this.groupConversationRepository.upsert({
@@ -236,6 +238,20 @@ export class WebhooksController {
       if (!fromMe) {
         const sender = await this.clientRepository.upsert({ phoneNumber: senderPhone, name: senderName });
         await this.conversationRepository.upsertParticipant(conversation.id, sender.id);
+
+        // Usar nombre de DB si existe, sino el pushName ya está en senderName
+        if (sender.name) senderName = sender.name;
+
+        // Fetch profilePicUrl de Evolution si no la tenemos en DB
+        if (sender.profilePicUrl) {
+          senderProfilePicUrl = sender.profilePicUrl;
+        } else {
+          const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, senderJid);
+          if (picUrl) {
+            await this.clientRepository.updateProfilePicIfExists(senderPhone, picUrl);
+            senderProfilePicUrl = picUrl;
+          }
+        }
       }
 
       // Bootstrap historial si es conversación nueva
@@ -310,7 +326,10 @@ export class WebhooksController {
     }
 
     // 5. Construir mensaje
-    const groupMeta = isGroup && !fromMe ? { senderJid, senderName } : null;
+    const groupMeta = isGroup && !fromMe ? { senderJid, senderName, senderProfilePicUrl } : null;
+    if (groupMeta) {
+      this.logger.log(`[group-meta] senderName=${groupMeta.senderName} senderProfilePicUrl=${groupMeta.senderProfilePicUrl ?? 'null'} senderJid=${groupMeta.senderJid}`);
+    }
 
     const messageData = fromMe
       ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
@@ -403,6 +422,46 @@ export class WebhooksController {
 
       const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
 
+      // Mapeo LID → phoneNumber → Client para grupos
+      let lidToClientMap = new Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>();
+      if (isGroupConversation) {
+        const participants = await this.evolutionService.fetchGroupParticipants(instanceName, remoteJid);
+        const lidToPhone = new Map<string, string>();
+        for (const p of participants) {
+          if (p.phoneNumber) {
+            const lid = p.id.replace('@lid', '');
+            const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            lidToPhone.set(lid, phone);
+          }
+        }
+
+        const phoneNumbers = [...new Set(lidToPhone.values())];
+        if (phoneNumbers.length > 0) {
+          const clients = await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
+          const clientByPhone = new Map(clients.map((c) => [c.phoneNumber, c]));
+
+          const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
+          for (const phone of phonesWithoutPic) {
+            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${phone}@s.whatsapp.net`);
+            if (picUrl) {
+              await this.clientRepository.updateProfilePicIfExists(phone, picUrl);
+              const existing = clientByPhone.get(phone);
+              if (existing) existing.profilePicUrl = picUrl;
+            }
+          }
+
+          for (const [lid, phone] of lidToPhone) {
+            const client = clientByPhone.get(phone);
+            lidToClientMap.set(lid, {
+              phoneNumber: phone,
+              name: client?.name || null,
+              profilePicUrl: client?.profilePicUrl || null,
+            });
+          }
+        }
+        this.logger.log(`[bootstrap] lidToClientMap built with ${lidToClientMap.size} entries for ${remoteJid}`);
+      }
+
       for (const m of newMessages) {
         // Filtrar tipos no procesables (igual que handleMessagesUpsert)
         const rawMsg = m.message || {};
@@ -458,9 +517,19 @@ export class WebhooksController {
           status: 'delivered',
           metadata: (() => {
             const meta: Record<string, any> = { keyId: m.key?.id };
-            const senderJid = m.key?.participant || m.key?.participantAlt;
-            if (senderJid) meta.senderJid = senderJid;
-            if (m.pushName) meta.senderName = m.pushName;
+            // Usar LID → phoneNumber mapping para resolver sender
+            if (isGroupConversation && !m.key?.fromMe && m.pushName) {
+              const clientInfo = lidToClientMap.get(m.pushName);
+              if (clientInfo) {
+                meta.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+                meta.senderName = clientInfo.name || clientInfo.phoneNumber;
+                if (clientInfo.profilePicUrl) meta.senderProfilePicUrl = clientInfo.profilePicUrl;
+              } else {
+                meta.senderName = m.pushName;
+              }
+            } else if (m.pushName) {
+              meta.senderName = m.pushName;
+            }
             const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(
               m.message || {},
             );
