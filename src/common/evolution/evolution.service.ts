@@ -33,6 +33,8 @@ interface EvolutionMessage {
     remoteJid: string;
     fromMe: boolean;
     id: string;
+    participant?: string;
+    participantAlt?: string;
   };
   message?: {
     conversation?: string;
@@ -44,6 +46,12 @@ interface EvolutionMessage {
   };
   messageTimestamp?: number;
   pushName?: string;
+  contextInfo?: {
+    stanzaId?: string;
+    participant?: string;
+    quotedMessage?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 }
 
 interface EvolutionFindMessagesResponse {
@@ -482,16 +490,19 @@ export class EvolutionService {
     fileName: string;
     size: number;
   }> {
+    const payload = {
+      message: { key: messageKey },
+      convertToMp4: false,
+    };
+    const url = `${this.apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
+
     try {
-      this.logger.log(`Getting base64 media for message: ${messageKey.id}`);
+      this.logger.log(`[getBase64] POST ${url} payload=${JSON.stringify(payload)}`);
 
       const response = await firstValueFrom(
         this.httpService.post<EvolutionMediaResponse>(
-          `${this.apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
-          {
-            message: { key: messageKey },
-            convertToMp4: false,
-          },
+          url,
+          payload,
           {
             headers: this.getHeaders(),
             timeout: 30000,
@@ -502,7 +513,7 @@ export class EvolutionService {
       const fileSize = response.data.size?.fileLength?.low ?? 0;
 
       this.logger.log(
-        `Media retrieved successfully: ${response.data.fileName} (${fileSize} bytes)`,
+        `[getBase64] OK: ${response.data.fileName} (${fileSize} bytes) mimetype=${response.data.mimetype}`,
       );
 
       return {
@@ -511,10 +522,11 @@ export class EvolutionService {
         fileName: response.data.fileName,
         size: fileSize,
       };
-    } catch (error: unknown) {
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const responseData = error?.response?.data;
       this.logger.error(
-        `Failed to get base64 from media message: ${messageKey.id}`,
-        (error as Error).message,
+        `[getBase64] FAILED keyId=${messageKey.id} status=${status} response=${JSON.stringify(responseData)} message=${error.message}`,
       );
       throw new BadGatewayException('Failed to download media file');
     }
@@ -576,10 +588,12 @@ export class EvolutionService {
         ),
       );
 
+      const records = response.data?.messages?.records ?? [];
+      const topKeys = Object.keys(response.data ?? {});
       this.logger.log(
-        `Messages retrieved for ${remoteJid} on instance: ${instanceName}`,
+        `Messages retrieved for ${remoteJid} on instance: ${instanceName} — topKeys=[${topKeys}] records=${records.length}`,
       );
-      return response.data?.messages?.records ?? [];
+      return records;
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find messages for ${remoteJid} on instance: ${instanceName}`,
@@ -589,6 +603,77 @@ export class EvolutionService {
         'Failed to retrieve messages from WhatsApp',
       );
     }
+  }
+
+  /**
+   * Obtener todos los grupos con metadata - GET /group/fetchAllGroups/:instance
+   * Timeout: 30s (puede ser lento con muchos grupos), NO retry
+   */
+  async fetchAllGroups(instanceName: string): Promise<Array<{ id: string; subject: string; pictureUrl: string | null }>> {
+    try {
+      this.logger.log(`Fetching all groups for instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<Array<{ id: string; subject: string; pictureUrl: string | null }>>(
+          `${this.apiUrl}/group/fetchAllGroups/${instanceName}`,
+          {
+            headers: this.getHeaders(),
+            timeout: 30000,
+          },
+        ),
+      );
+
+      this.logger.log(`Groups fetched for instance: ${instanceName} total=${response.data?.length ?? 0}`);
+      return response.data ?? [];
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to fetch groups for instance: ${instanceName}`,
+        (error as Error).message,
+      );
+      throw new BadGatewayException('Failed to fetch groups from WhatsApp');
+    }
+  }
+
+  /**
+   * Obtener la URL de la foto de perfil de un contacto o grupo
+   * POST /chat/fetchProfilePictureUrl/:instance
+   */
+  async fetchProfilePictureUrl(instanceName: string, number: string): Promise<string | null> {
+    this.logger.log(`[fetchProfilePictureUrl] Fetching for ${number} on instance ${instanceName}`);
+    const response = await firstValueFrom(
+      this.httpService.post<{ wuid: string; profilePictureUrl: string }>(
+        `${this.apiUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
+        { number },
+        { headers: this.getHeaders(), timeout: 8000 },
+      ),
+    );
+    const url = response.data?.profilePictureUrl || null;
+    this.logger.log(`[fetchProfilePictureUrl] Result for ${number}: ${url ? url.substring(0, 80) + '...' : 'null'}`);
+    return url;
+  }
+
+  /**
+   * Obtener participantes de un grupo con mapeo LID → phoneNumber
+   * GET /group/participants/:instance?groupJid=...
+   */
+  async fetchGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<{ id: string; phoneNumber: string | null; admin: string | null }[]> {
+    this.logger.log(`[fetchGroupParticipants] Fetching for ${groupJid} on instance ${instanceName}`);
+    const response = await firstValueFrom(
+      this.httpService.get<{ participants: { id: string; phoneNumber: string; admin: string | null }[] }>(
+        `${this.apiUrl}/group/participants/${instanceName}?groupJid=${groupJid}`,
+        { headers: this.getHeaders(), timeout: 10000 },
+      ),
+    );
+    const participants = response.data?.participants || [];
+    this.logger.log(`[fetchGroupParticipants] Got ${participants.length} participants for ${groupJid}`);
+    return participants.map((p) => ({
+      id: p.id,
+      phoneNumber: p.phoneNumber || null,
+      admin: p.admin || null,
+    }));
   }
 
   /**

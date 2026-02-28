@@ -134,7 +134,7 @@ export class HitlController {
 
         // Obtener phone para instanceName y clientPhone
         const phone = await this.phoneRepository.findById(conversation.phoneId);
-        if (phone) {
+        if (phone && conversation.client) {
           // Emitir evento para que el agente IA lo procese como si viniera del webhook
           this.eventEmitter.emit('ai.incoming.message', {
             messageId: lastMessage.id,

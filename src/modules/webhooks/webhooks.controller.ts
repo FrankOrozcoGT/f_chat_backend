@@ -6,6 +6,7 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from './repositories/message.repository';
+import { GroupConversationRepository } from './repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
@@ -25,6 +26,7 @@ export class WebhooksController {
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
+    private readonly groupConversationRepository: GroupConversationRepository,
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
     private readonly eventEmitter: EventEmitter2,
@@ -75,6 +77,14 @@ export class WebhooksController {
 
       case 'contacts.upsert':
         await this.handleContactsUpsert(phone.id, phone.userId, webhookData);
+        break;
+
+      case 'chats.set':
+        await this.handleChatsSet(phone.id, webhookData);
+        break;
+
+      case 'groups.upsert':
+        await this.handleGroupsUpsert(phone.id, phone.instanceName, webhookData);
         break;
 
       default:
@@ -156,7 +166,7 @@ export class WebhooksController {
   }
 
   /**
-   * Maneja evento MESSAGES_UPSERT
+   * Maneja evento MESSAGES_UPSERT (individuales y grupos)
    */
   private async handleMessagesUpsert(
     phoneId: string,
@@ -165,6 +175,20 @@ export class WebhooksController {
   ) {
     const fromMe = webhookData?.data?.key?.fromMe || false;
     const messageKey = webhookData?.data?.key;
+    const remoteJid = webhookData?.data?.key?.remoteJid || '';
+    const isGroup = remoteJid.endsWith('@g.us');
+
+    // 0. Log evento completo para debug
+    this.logger.log(`[messages.upsert] FULL_EVENT remoteJid=${remoteJid} fromMe=${fromMe} data=${JSON.stringify(webhookData?.data)}`);
+
+    // Ignorar tipos de mensaje no procesables
+    const rawMessage = webhookData?.data?.message || {};
+    const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+    const ignoredType = ignoredTypes.find((t) => rawMessage[t]);
+    if (ignoredType) {
+      this.logger.log(`[messages.upsert] Ignored event type=${ignoredType} remoteJid=${remoteJid}`);
+      return;
+    }
 
     // 1. Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition
     if (fromMe && messageKey) {
@@ -184,54 +208,89 @@ export class WebhooksController {
       this.logger.log(`Message ${messageKey.id} from WhatsApp Web, saving`);
     }
 
-    // 2. Construir datos del Client
-    const clientData = this.webhooksService.buildClientData(
-      webhookData,
-      fromMe,
-    );
-
-    // Ignorar mensajes de grupos
-    if (clientData.phoneNumber.endsWith('@g.us')) {
-      return;
-    }
-
-    // 3. Obtener phone (necesario para userId, instanceName en varios pasos)
+    // 2. Obtener phone (necesario para userId en media)
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
       this.logger.warn(`Phone ${phoneId} not found`);
       return;
     }
 
-    // 4. Upsert Client
-    const client = await this.clientRepository.upsert(clientData);
+    // 3. Upsert Conversation (individual o grupo)
+    let conversation: { id: string; mode: string };
+    let clientPhone: string | null = null;
+    const rawParticipant = webhookData?.data?.key?.participant || '';
+    const participantAlt = webhookData?.data?.key?.participantAlt || '';
+    const senderJid = rawParticipant.endsWith('@lid') && participantAlt
+      ? participantAlt
+      : rawParticipant;
+    const senderPhone = senderJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    let senderName = webhookData?.data?.pushName || senderPhone;
 
-    // 5. Construir y upsert Conversation
-    const conversationData = this.webhooksService.buildConversationData(
-      phoneId,
-      client.id,
-    );
-    const conversation =
-      await this.conversationRepository.upsert(conversationData);
+    let senderProfilePicUrl: string | null = null;
 
-    // 6. Si es conversación sin historial, sincronizar en background
-    const existingCount = await this.messageRepository.countByConversationId(
-      conversation.id,
-    );
-    if (existingCount === 0) {
-      const remoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
-      this.logger.log(
-        `New conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
-      );
-      this.bootstrapConversationInBackground(
-        phone,
-        clientData.phoneNumber,
-        clientData.name || clientData.phoneNumber,
-        instanceName,
-        remoteJid,
-      );
+    if (isGroup) {
+      conversation = await this.groupConversationRepository.upsert({
+        phoneId,
+        groupJid: remoteJid,
+      });
+
+      // Upsert sender como Client y ConversationParticipant (solo si no soy yo)
+      if (!fromMe) {
+        const sender = await this.clientRepository.upsert({ phoneNumber: senderPhone, name: senderName });
+        await this.conversationRepository.upsertParticipant(conversation.id, sender.id);
+
+        // Usar nombre de DB si existe, sino el pushName ya está en senderName
+        if (sender.name) senderName = sender.name;
+
+        // Fetch profilePicUrl de Evolution si no la tenemos en DB
+        if (sender.profilePicUrl) {
+          senderProfilePicUrl = sender.profilePicUrl;
+        } else {
+          const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, senderJid);
+          if (picUrl) {
+            await this.clientRepository.updateProfilePicIfExists(senderPhone, picUrl);
+            senderProfilePicUrl = picUrl;
+          }
+        }
+      }
+
+      // Bootstrap historial si es conversación nueva
+      const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+      if (existingCount === 0) {
+        this.logger.log(
+          `New group conversation ${conversation.id}, bootstrapping history from Evolution for ${remoteJid}`,
+        );
+        this.bootstrapMessagesInBackground(
+          conversation.id,
+          instanceName,
+          remoteJid,
+          phone.userId,
+        );
+      }
+    } else {
+      const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
+      clientPhone = clientData.phoneNumber;
+      const client = await this.clientRepository.upsert(clientData);
+      const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
+      conversation = await this.conversationRepository.upsert(conversationData);
+
+      // Bootstrap historial si es conversación nueva
+      const existingCount = await this.messageRepository.countByConversationId(conversation.id);
+      if (existingCount === 0) {
+        const clientRemoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
+        this.logger.log(
+          `New conversation ${conversation.id}, bootstrapping history from Evolution for ${clientRemoteJid}`,
+        );
+        this.bootstrapMessagesInBackground(
+          conversation.id,
+          instanceName,
+          clientRemoteJid,
+          phone.userId,
+        );
+      }
     }
 
-    // 7. Si hay media, descargar ANTES de crear el mensaje
+    // 4. Si hay media, descargar ANTES de crear el mensaje
     let mediaData: {
       relativePath: string;
       fileName: string;
@@ -240,8 +299,15 @@ export class WebhooksController {
     } | null = null;
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
+    this.logger.log(
+      `[media] hasMedia=${hasMedia} isGroup=${isGroup} messageKey=${JSON.stringify(messageKey)} rawMessage=${JSON.stringify(webhookData?.data?.message)}`,
+    );
+
     if (hasMedia && messageKey) {
       try {
+        this.logger.log(
+          `[media] Attempting download instanceName=${instanceName} userId=${phone.userId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
+        );
         mediaData =
           await this.fileStorageService.downloadAndSaveMediaFromEvolution(
             this.evolutionService,
@@ -251,57 +317,47 @@ export class WebhooksController {
             messageKey.id,
             messageKey,
           );
-        this.logger.log(`Media downloaded: ${mediaData.relativePath}`);
+        this.logger.log(`[media] Downloaded OK: ${mediaData.relativePath}`);
       } catch (error) {
-        this.logger.error(`Failed to download media: ${error.message}`);
+        this.logger.error(`[media] Failed to download: ${error.message} — stack: ${error.stack}`);
       }
+    } else {
+      this.logger.log(`[media] Skipped — hasMedia=${hasMedia} messageKey=${!!messageKey}`);
     }
 
-    // 8. Construir mensaje según dirección
-    const messageData = fromMe
-      ? this.webhooksService.buildOutgoingMessageFromWebhook(
-          webhookData,
-          conversation.id,
-          mediaData,
-        )
-      : this.webhooksService.buildIncomingMessageData(
-          webhookData,
-          conversation.id,
-          mediaData,
-        );
+    // 5. Construir mensaje
+    const groupMeta = isGroup && !fromMe ? { senderJid, senderName, senderProfilePicUrl } : null;
+    if (groupMeta) {
+      this.logger.log(`[group-meta] senderName=${groupMeta.senderName} senderProfilePicUrl=${groupMeta.senderProfilePicUrl ?? 'null'} senderJid=${groupMeta.senderJid}`);
+    }
 
-    // 9. Guardar mensaje
+    const messageData = fromMe
+      ? this.webhooksService.buildOutgoingMessageFromWebhook(webhookData, conversation.id, mediaData)
+      : this.webhooksService.buildIncomingMessageData(webhookData, conversation.id, mediaData, groupMeta);
+
+    // 6. Guardar mensaje
     const message = await this.messageRepository.create(messageData);
 
-    // 10. Actualizar último mensaje de la conversación
-    const conversationUpdate =
-      this.webhooksService.buildConversationUpdate(message);
-    await this.conversationRepository.updateLastMessage(
-      conversation.id,
-      conversationUpdate,
-    );
+    // 7. Actualizar último mensaje de la conversación
+    const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
+    await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
-    // 11. Emitir al frontend
+    // 8. Emitir al frontend
     if (fromMe) {
-      this.websocketGateway.emit('message:sent', {
-        ...message,
-        fromExternal: true,
-      });
-      this.logger.log(
-        `Outgoing message from WhatsApp Web for conversation ${conversation.id}`,
-      );
+      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
+      this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
       this.websocketGateway.emit('message:incoming', message);
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
-    // 12. Si mode=AI y es mensaje entrante, emitir evento para AI agent
-    if (!fromMe && conversation.mode === 'AI') {
+    // 9. Si mode=AI y es mensaje entrante individual, emitir evento para AI agent
+    if (!fromMe && !isGroup && conversation.mode === 'AI') {
       this.eventEmitter.emit('ai.incoming.message', {
         messageId: message.id,
         conversationId: conversation.id,
         instanceName,
-        clientPhone: clientData.phoneNumber,
+        clientPhone,
         userId: phone.userId,
         messageType: message.type,
         content: message.content,
@@ -316,6 +372,7 @@ export class WebhooksController {
     }
   }
 
+  /** @deprecated Usar bootstrapMessagesInBackground */
   private async bootstrapConversationInBackground(
     phone: { id: string; userId: string; instanceName: string },
     phoneNumber: string,
@@ -323,38 +380,96 @@ export class WebhooksController {
     instanceName: string,
     remoteJid: string,
   ) {
-    try {
-      const rawMessages = await this.evolutionService.findMessages(
-        instanceName,
-        remoteJid,
-      );
-      if (rawMessages.length === 0) return;
+    const client = await this.clientRepository.upsert({ phoneNumber, name: clientName });
+    const conversation = await this.conversationRepository.upsert({
+      phoneId: phone.id,
+      clientId: client.id,
+      isActive: true,
+    });
+    return this.bootstrapMessagesInBackground(conversation.id, instanceName, remoteJid, phone.userId);
+  }
 
-      // Upsert client y conversation
-      const client = await this.clientRepository.upsert({
-        phoneNumber,
-        name: clientName,
-      });
-      const conversation = await this.conversationRepository.upsert({
-        phoneId: phone.id,
-        clientId: client.id,
-        isActive: true,
-      });
+  private async bootstrapMessagesInBackground(
+    conversationId: string,
+    instanceName: string,
+    remoteJid: string,
+    userId: string,
+  ) {
+    try {
+      const isGroupConversation = remoteJid.endsWith('@g.us');
+
+      const [rawMessages, groupPictureUrl] = await Promise.all([
+        this.evolutionService.findMessages(instanceName, remoteJid),
+        isGroupConversation
+          ? this.evolutionService.fetchProfilePictureUrl(instanceName, remoteJid)
+          : Promise.resolve(null),
+      ]);
+
+      if (isGroupConversation && groupPictureUrl) {
+        await this.groupConversationRepository.updateGroupInfo(remoteJid, { groupPictureUrl });
+      }
+
+      if (rawMessages.length === 0) return;
 
       // Deduplicar
       const existingKeyIds =
-        await this.messageRepository.findKeyIdsByConversationId(
-          conversation.id,
-        );
+        await this.messageRepository.findKeyIdsByConversationId(conversationId);
       const newMessages = rawMessages
         .filter((m) => m.key?.id && !existingKeyIds.has(m.key.id))
         .sort((a, b) => (b.messageTimestamp ?? 0) - (a.messageTimestamp ?? 0));
 
       if (newMessages.length === 0) return;
 
+      const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+
+      // Mapeo LID → phoneNumber → Client para grupos
+      let lidToClientMap = new Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>();
+      if (isGroupConversation) {
+        const participants = await this.evolutionService.fetchGroupParticipants(instanceName, remoteJid);
+        const lidToPhone = new Map<string, string>();
+        for (const p of participants) {
+          if (p.phoneNumber) {
+            const lid = p.id.replace('@lid', '');
+            const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            lidToPhone.set(lid, phone);
+          }
+        }
+
+        const phoneNumbers = [...new Set(lidToPhone.values())];
+        if (phoneNumbers.length > 0) {
+          const clients = await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
+          const clientByPhone = new Map(clients.map((c) => [c.phoneNumber, c]));
+
+          const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
+          for (const phone of phonesWithoutPic) {
+            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${phone}@s.whatsapp.net`);
+            if (picUrl) {
+              await this.clientRepository.updateProfilePicIfExists(phone, picUrl);
+              const existing = clientByPhone.get(phone);
+              if (existing) existing.profilePicUrl = picUrl;
+            }
+          }
+
+          for (const [lid, phone] of lidToPhone) {
+            const client = clientByPhone.get(phone);
+            lidToClientMap.set(lid, {
+              phoneNumber: phone,
+              name: client?.name || null,
+              profilePicUrl: client?.profilePicUrl || null,
+            });
+          }
+        }
+        this.logger.log(`[bootstrap] lidToClientMap: ${lidToClientMap.size} entries`);
+      }
+
       for (const m of newMessages) {
+        // Filtrar tipos no procesables (igual que handleMessagesUpsert)
+        const rawMsg = m.message || {};
+        const ignoredType = ignoredTypes.find((t) => rawMsg[t]);
+        if (ignoredType) continue;
+
         const { type, content, hasMedia } =
-          this.evolutionService.parseMessageContent(m.message || {});
+          this.evolutionService.parseMessageContent(rawMsg);
         let mediaData: {
           relativePath: string;
           fileName: string;
@@ -368,8 +483,8 @@ export class WebhooksController {
               await this.fileStorageService.downloadAndSaveMediaFromEvolution(
                 this.evolutionService,
                 instanceName,
-                phone.userId,
-                conversation.id,
+                userId,
+                conversationId,
                 m.key.id,
                 m.key,
               );
@@ -377,10 +492,10 @@ export class WebhooksController {
               'message:media_ready',
               {
                 id: m.key.id,
-                conversationId: conversation.id,
+                conversationId,
                 mediaUrl: mediaData.relativePath,
               },
-              phone.userId,
+              userId,
             );
           } catch (err) {
             this.logger.warn(
@@ -390,7 +505,7 @@ export class WebhooksController {
         }
 
         await this.messageRepository.create({
-          conversationId: conversation.id,
+          conversationId,
           type,
           content,
           mediaUrl: mediaData?.relativePath || null,
@@ -402,6 +517,19 @@ export class WebhooksController {
           status: 'delivered',
           metadata: (() => {
             const meta: Record<string, any> = { keyId: m.key?.id };
+            // Usar LID → phoneNumber mapping para resolver sender
+            if (isGroupConversation && !m.key?.fromMe && m.pushName) {
+              const clientInfo = lidToClientMap.get(m.pushName);
+              if (clientInfo) {
+                meta.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+                meta.senderName = clientInfo.name || clientInfo.phoneNumber;
+                if (clientInfo.profilePicUrl) meta.senderProfilePicUrl = clientInfo.profilePicUrl;
+              } else {
+                meta.senderName = m.pushName;
+              }
+            } else if (m.pushName) {
+              meta.senderName = m.pushName;
+            }
             const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(
               m.message || {},
             );
@@ -415,10 +543,11 @@ export class WebhooksController {
       }
 
       this.logger.log(
-        `Background: bootstrapped conversation ${conversation.id} with ${newMessages.length} messages`,
+        `Background: bootstrapped conversation ${conversationId} with ${newMessages.length} messages`,
       );
     } catch (err) {
-      this.logger.error(`Background bootstrap failed: ${err.message}`);
+      this.logger.error(`Background bootstrap failed for ${conversationId} (remoteJid=${remoteJid}): ${err.message}`, err.stack);
+      throw err;
     }
   }
 
@@ -536,8 +665,9 @@ export class WebhooksController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to update message with keyId ${keyId}: ${error.message}`,
+        `Failed to update message with keyId ${keyId}: ${error.message}`, error.stack,
       );
+      throw error;
     }
   }
 
@@ -614,6 +744,17 @@ export class WebhooksController {
       conversationsData,
     );
 
+    // 2b. Bulk insert ConversationParticipants
+    const conversations = await this.conversationRepository.findManyByPhoneIdAndClientIds(
+      phoneId,
+      conversationsData.map((d) => d.clientId),
+    );
+    await this.conversationRepository.createManyParticipantsSkipDuplicates(
+      conversations
+        .filter((c): c is { id: string; clientId: string } => c.clientId !== null)
+        .map((c) => ({ conversationId: c.id, clientId: c.clientId })),
+    );
+
     // 3. Acumular contador y emitir progreso
     const prev = this.syncContactsCount.get(phoneId) ?? 0;
     const total = prev + contacts.length;
@@ -660,6 +801,76 @@ export class WebhooksController {
         this.logger.log(
           `[contacts.update] Updated profilePicUrl for ${phoneNumber}`,
         );
+      }
+    }
+  }
+
+  /**
+   * Maneja evento CHATS_SET
+   * Llega durante el sync inicial con lista de chats (incluye grupos con nombre)
+   */
+  private async handleChatsSet(phoneId: string, webhookData: any) {
+    const chats: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [];
+    const groups = chats.filter((c) => c.remoteJid?.endsWith('@g.us'));
+    this.logger.log(`[chats.set] total=${chats.length} groups=${groups.length}`);
+    if (groups.length === 0) return;
+
+    for (const group of groups) {
+      const groupJid = group.remoteJid;
+      const groupName = group.name || null;
+      this.logger.log(`[chats.set] upsert groupJid=${groupJid} groupName=${groupName}`);
+      await this.groupConversationRepository.upsert({ phoneId, groupJid, groupName: groupName || undefined });
+    }
+    this.logger.log(`[chats.set] done groups=${groups.length}`);
+  }
+
+  /**
+   * Maneja evento GROUPS_UPSERT
+   * Evolution manda metadata del grupo: nombre, foto, participantes
+   */
+  private async handleGroupsUpsert(phoneId: string, instanceName: string, webhookData: any) {
+    const groups: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [webhookData?.data];
+    const validGroups = groups.filter((g) => g?.id);
+
+    // Bulk delete comunidades que chats.set pudo haber creado
+    const communityJids = validGroups
+      .filter((g) => g.isCommunity === true)
+      .map((g) => g.id as string);
+
+    if (communityJids.length > 0) {
+      const deleted = await this.groupConversationRepository.deleteManyByGroupJids(communityJids);
+      this.logger.log(`[groups.upsert] Deleted ${deleted} communities: ${communityJids.join(', ')}`);
+    }
+
+    // Procesar solo grupos reales
+    const realGroups = validGroups.filter((g) => g.isCommunity !== true);
+
+    for (const group of realGroups) {
+      const groupJid = group.id;
+      const groupName = group.subject || null;
+      const groupPictureUrl = group.pictureUrl || null;
+      const participants: { id: string }[] = group.participants || [];
+
+      this.logger.log(`[groups.upsert] groupJid=${groupJid} groupName=${groupName} pictureUrl=${groupPictureUrl} participants=${participants.length} keys=${Object.keys(group).join(',')}`);
+
+      const conversation = await this.groupConversationRepository.upsert({ phoneId, groupJid, groupName: groupName || undefined });
+
+      const pictureUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, groupJid);
+      this.logger.log(`[groups.upsert] fetchProfilePictureUrl result for ${groupJid}: ${pictureUrl}`);
+      await this.groupConversationRepository.updateGroupInfo(groupJid, {
+        groupName: groupName || undefined,
+        groupPictureUrl: pictureUrl ?? groupPictureUrl,
+      });
+
+      for (const p of participants) {
+        if (p.id.endsWith('@lid')) {
+          this.logger.warn(`[groups.upsert] LID participant in group ${groupJid} — full object: ${JSON.stringify(p)}`);
+          continue;
+        }
+        const phoneNumber = p.id.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        if (!phoneNumber) continue;
+        const client = await this.clientRepository.upsert({ phoneNumber, name: phoneNumber });
+        await this.conversationRepository.upsertParticipant(conversation.id, client.id);
       }
     }
   }

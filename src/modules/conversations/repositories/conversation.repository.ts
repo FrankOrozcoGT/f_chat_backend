@@ -1,16 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
 export class ConversationRepository {
+  private readonly logger = new Logger(ConversationRepository.name);
+
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Lista conversaciones por userId y opcionalmente por phoneId
-   * @param userId - ID del usuario
-   * @param phoneId - ID del teléfono (opcional)
-   * @returns Lista de conversaciones con datos de client y phone
-   */
   async findByUserIdAndPhone(
     userId: string,
     phoneId?: string,
@@ -26,19 +22,36 @@ export class ConversationRepository {
         ...(phoneId && { id: phoneId }),
       },
       ...(search && {
-        client: {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' as const } },
-            { phoneNumber: { contains: search, mode: 'insensitive' as const } },
-          ],
-        },
+        OR: [
+          {
+            participants: {
+              some: {
+                client: {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' as const } },
+                    {
+                      phoneNumber: {
+                        contains: search,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          { groupName: { contains: search, mode: 'insensitive' as const } },
+        ],
       }),
     };
 
-    const [data, total] = await Promise.all([
+    const [raw, total] = await Promise.all([
       this.prisma.conversation.findMany({
         where,
-        include: { client: true, phone: true },
+        include: {
+          phone: true,
+          participants: { include: { client: true } },
+        },
         orderBy: { lastMessageAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -46,77 +59,168 @@ export class ConversationRepository {
       this.prisma.conversation.count({ where }),
     ]);
 
+    const data = raw.map((conv) => ({
+      ...conv,
+      client: conv.participants[0]?.client ?? null,
+    }));
+
     return { data, total, page, limit };
   }
 
-  /**
-   * Busca una conversación por ID
-   * @param id - ID de la conversación
-   * @returns Conversación o null
-   */
   async findById(id: string) {
     return this.prisma.conversation.findUnique({
       where: { id },
     });
   }
 
-  /**
-   * Busca una conversación por ID con relaciones (phone y client)
-   * @param id - ID de la conversación
-   * @returns Conversación con phone y client o null
-   */
   async findByIdWithRelations(id: string) {
-    return this.prisma.conversation.findUnique({
+    const conv = await this.prisma.conversation.findUnique({
       where: { id },
       include: {
         phone: true,
-        client: true,
+        participants: { include: { client: true } },
       },
     });
+    if (!conv) return null;
+    return {
+      ...conv,
+      client: conv.participants[0]?.client ?? null,
+    };
   }
 
   /**
-   * Crea o actualiza una conversación por phoneId y clientId
-   * @param data - Datos de la conversación
-   * @returns Conversación creada o actualizada
+   * @deprecated Usar upsertIndividual en su lugar
+   */
+  async upsert(data: { phoneId: string; clientId: string; isActive: boolean }) {
+    return this.upsertIndividual(data);
+  }
+
+  /**
+   * @deprecated Usar createManyIndividualWithParticipants en su lugar
    */
   async createManySkipDuplicates(
     data: { phoneId: string; clientId: string }[],
   ) {
-    return this.prisma.conversation.createMany({
-      data: data.map((d) => ({
-        phoneId: d.phoneId,
-        clientId: d.clientId,
-        isActive: true,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  async upsert(data: { phoneId: string; clientId: string; isActive: boolean }) {
-    return this.prisma.conversation.upsert({
-      where: {
-        phoneId_clientId: {
-          phoneId: data.phoneId,
-          clientId: data.clientId,
-        },
-      },
-      create: {
-        phoneId: data.phoneId,
-        clientId: data.clientId,
-        isActive: data.isActive,
-      },
-      update: {
-        isActive: data.isActive,
-      },
-    });
+    return this.createManyIndividualWithParticipants(data);
   }
 
   /**
-   * Actualiza el último mensaje de una conversación
-   * @param conversationId - ID de la conversación
-   * @param data - Datos de actualización
+   * @deprecated Usar findManyIndividualByPhoneAndClientIds en su lugar
    */
+  async findManyByPhoneIdAndClientIds(phoneId: string, clientIds: string[]) {
+    const convs = await this.findManyIndividualByPhoneAndClientIds(phoneId, clientIds);
+    return convs.map((c) => ({
+      id: c.id,
+      clientId: c.participants[0]?.clientId ?? null,
+    }));
+  }
+
+  async upsertIndividual(data: { phoneId: string; clientId: string; isActive: boolean }) {
+    const existing = await this.prisma.conversation.findFirst({
+      where: {
+        phoneId: data.phoneId,
+        type: 'individual',
+        participants: { some: { clientId: data.clientId } },
+      },
+    });
+
+    if (existing) {
+      await this.upsertParticipant(existing.id, data.clientId);
+      return this.prisma.conversation.update({
+        where: { id: existing.id },
+        data: { isActive: data.isActive },
+      });
+    }
+
+    const created = await this.prisma.conversation.create({
+      data: {
+        phoneId: data.phoneId,
+        isActive: data.isActive,
+        type: 'individual',
+      },
+    });
+
+    await this.prisma.conversationParticipant.create({
+      data: {
+        conversationId: created.id,
+        clientId: data.clientId,
+      },
+    });
+
+    return created;
+  }
+
+  async createManyIndividualWithParticipants(entries: { phoneId: string; clientId: string }[]) {
+    if (entries.length === 0) return { count: 0 };
+
+    const phoneId = entries[0].phoneId;
+    const allClientIds = entries.map((e) => e.clientId);
+
+    // Buscar cuáles ya existen via participants
+    const existing = await this.prisma.conversation.findMany({
+      where: {
+        phoneId,
+        type: 'individual',
+        participants: { some: { clientId: { in: allClientIds } } },
+      },
+      include: { participants: { select: { clientId: true } } },
+    });
+
+    const existingClientIds = new Set(
+      existing.flatMap((c) => c.participants.map((p) => p.clientId)),
+    );
+
+    const newEntries = entries.filter((e) => !existingClientIds.has(e.clientId));
+    if (newEntries.length === 0) return { count: 0 };
+
+    let count = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const entry of newEntries) {
+        const conv = await tx.conversation.create({
+          data: {
+            phoneId: entry.phoneId,
+            type: 'individual',
+            isActive: true,
+          },
+        });
+        await tx.conversationParticipant.create({
+          data: {
+            conversationId: conv.id,
+            clientId: entry.clientId,
+          },
+        });
+        count++;
+      }
+    });
+
+    return { count };
+  }
+
+  async findManyIndividualByPhoneAndClientIds(phoneId: string, clientIds: string[]) {
+    return this.prisma.conversation.findMany({
+      where: {
+        phoneId,
+        type: 'individual',
+        participants: { some: { clientId: { in: clientIds } } },
+      },
+      include: {
+        participants: { select: { clientId: true }, where: { clientId: { in: clientIds } } },
+      },
+    });
+  }
+
+  async createManyParticipantsSkipDuplicates(data: { conversationId: string; clientId: string }[]) {
+    return this.prisma.conversationParticipant.createMany({ data, skipDuplicates: true });
+  }
+
+  async upsertParticipant(conversationId: string, clientId: string) {
+    return this.prisma.conversationParticipant.upsert({
+      where: { conversationId_clientId: { conversationId, clientId } },
+      create: { conversationId, clientId },
+      update: {},
+    });
+  }
+
   async updateMode(conversationId: string, mode: 'AI' | 'HITL') {
     return this.prisma.conversation.update({
       where: { id: conversationId },

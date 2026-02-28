@@ -126,16 +126,21 @@ export class WebhooksService {
       fileSize: number;
       mimeType: string;
     } | null,
+    groupMeta?: { senderJid?: string | null; senderName?: string | null; senderProfilePicUrl?: string | null } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
     const { type, content } =
       this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
-    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
     const metadata: Record<string, any> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+    if (groupMeta?.senderJid) metadata.senderJid = groupMeta.senderJid;
+    if (groupMeta?.senderName) metadata.senderName = groupMeta.senderName;
+    if (groupMeta?.senderProfilePicUrl) metadata.senderProfilePicUrl = groupMeta.senderProfilePicUrl;
 
     return {
       conversationId,
@@ -174,7 +179,8 @@ export class WebhooksService {
       this.evolutionService.parseMessageContent(messageData);
 
     const keyId = webhookData?.data?.key?.id;
-    const quotedStanzaId = this.extractQuotedStanzaId(messageData);
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
     const metadata: Record<string, any> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
@@ -197,7 +203,7 @@ export class WebhooksService {
   /**
    * Extrae el stanzaId del mensaje citado (reply) desde contextInfo
    */
-  extractQuotedStanzaId(messageData: Record<string, any>): string | null {
+  extractQuotedStanzaId(messageData: Record<string, any>, topLevelContextInfo?: Record<string, any> | null): string | null {
     const msgTypes = [
       'extendedTextMessage',
       'imageMessage',
@@ -209,6 +215,7 @@ export class WebhooksService {
       const stanzaId = messageData[msgType]?.contextInfo?.stanzaId;
       if (stanzaId) return stanzaId;
     }
+    if (topLevelContextInfo?.stanzaId) return topLevelContextInfo.stanzaId;
     return null;
   }
 

@@ -58,7 +58,7 @@ export class ClientRepository {
   async findManyByPhoneNumbers(phoneNumbers: string[]) {
     return this.prisma.client.findMany({
       where: { phoneNumber: { in: phoneNumbers } },
-      select: { id: true, phoneNumber: true },
+      select: { id: true, phoneNumber: true, name: true, profilePicUrl: true },
     });
   }
 

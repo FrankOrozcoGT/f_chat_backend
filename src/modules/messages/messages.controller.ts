@@ -73,15 +73,72 @@ export class MessagesController {
     let messages = await this.messageRepository.findByConversationId(conversationId);
 
     // 5. Fallback: si no hay mensajes, buscar en Evolution y retornar inmediatamente
-    if (messages.length === 0 && conversation.client) {
-      const remoteJid = `${conversation.client.phoneNumber}@s.whatsapp.net`;
+    const isGroup = conversation.type === 'group';
+    const remoteJid = isGroup
+      ? conversation.groupJid
+      : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
+    this.logger.log(`[messages] dbCount=${messages.length} isGroup=${isGroup} remoteJid=${remoteJid ?? 'NULL'}`);
+
+    if (messages.length === 0 && !remoteJid) {
+      const detail = isGroup
+        ? `group conversation ${conversationId} has no groupJid`
+        : `individual conversation ${conversationId} has no client/participant`;
+      throw new BadRequestException(`Cannot resolve remoteJid for fallback: ${detail}`);
+    }
+
+    if (messages.length === 0 && remoteJid) {
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
       const rawMessages = await this.evolutionService.findMessages(
         conversation.phone.evolutionInstanceId,
         remoteJid,
       );
 
-      this.bootstrapConversationInBackground(conversation, rawMessages, userId);
+      // Mapeo LID → phoneNumber → Client para grupos
+      const instanceName = conversation.phone.evolutionInstanceId;
+      let lidToClientMap = new Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>();
+      if (isGroup && rawMessages.length > 0) {
+        // 1. Obtener participantes del grupo (LID → phoneNumber)
+        const participants = await this.evolutionService.fetchGroupParticipants(instanceName, remoteJid);
+        const lidToPhone = new Map<string, string>();
+        for (const p of participants) {
+          if (p.phoneNumber) {
+            const lid = p.id.replace('@lid', '');
+            const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            lidToPhone.set(lid, phone);
+          }
+        }
+
+        // 2. Buscar clients en DB por los phoneNumbers
+        const phoneNumbers = [...new Set(lidToPhone.values())];
+        if (phoneNumbers.length > 0) {
+          const clients = await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
+          const clientByPhone = new Map(clients.map((c) => [c.phoneNumber, c]));
+
+          // 3. Fetch profilePicUrl de Evolution para los que no tienen
+          const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
+          for (const phone of phonesWithoutPic) {
+            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${phone}@s.whatsapp.net`);
+            if (picUrl) {
+              await this.clientRepository.updateProfilePicIfExists(phone, picUrl);
+              const existing = clientByPhone.get(phone);
+              if (existing) existing.profilePicUrl = picUrl;
+            }
+          }
+
+          // 4. Construir mapa LID → client info
+          for (const [lid, phone] of lidToPhone) {
+            const client = clientByPhone.get(phone);
+            lidToClientMap.set(lid, {
+              phoneNumber: phone,
+              name: client?.name || null,
+              profilePicUrl: client?.profilePicUrl || null,
+            });
+          }
+        }
+        this.logger.log(`[fallback] lidToClientMap: ${lidToClientMap.size} entries`);
+      }
+
+      this.bootstrapConversationInBackground(conversation, rawMessages, userId, isGroup ? lidToClientMap : undefined);
 
       return rawMessages
         .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0))
@@ -89,10 +146,29 @@ export class MessagesController {
           const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
           const msgData = m.message || {};
           let quotedMessageId: string | undefined;
-          for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+          for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage']) {
             const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
             if (stanzaId) { quotedMessageId = stanzaId; break; }
           }
+          if (!quotedMessageId && m.contextInfo?.stanzaId) {
+            quotedMessageId = m.contextInfo.stanzaId;
+          }
+
+          const metadata: Record<string, any> = { keyId: m.key?.id, mediaLoading: hasMedia };
+          if (quotedMessageId) metadata.quotedMessageId = quotedMessageId;
+
+          // Agregar sender info para grupos usando LID → phoneNumber mapping
+          if (isGroup && !m.key?.fromMe && m.pushName) {
+            const clientInfo = lidToClientMap.get(m.pushName);
+            if (clientInfo) {
+              metadata.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+              metadata.senderName = clientInfo.name || clientInfo.phoneNumber;
+              if (clientInfo.profilePicUrl) metadata.senderProfilePicUrl = clientInfo.profilePicUrl;
+            } else {
+              metadata.senderName = m.pushName;
+            }
+          }
+
           return {
             id: m.key?.id,
             conversationId,
@@ -105,7 +181,7 @@ export class MessagesController {
             direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
             senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
             status: MessageStatus.delivered,
-            metadata: { keyId: m.key?.id, mediaLoading: hasMedia, ...(quotedMessageId ? { quotedMessageId } : {}) },
+            metadata,
             createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
             updatedAt: new Date(),
           };
@@ -151,6 +227,10 @@ export class MessagesController {
     // Validar que la conversación esté en modo HITL
     if (conversation.mode !== 'HITL') {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
+    }
+
+    if (!conversation.client) {
+      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
     }
 
     // 3. Si hay mediaUrl, construir URL completa para Evolution
@@ -314,6 +394,10 @@ export class MessagesController {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
     }
 
+    if (!conversation.client) {
+      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
+    }
+
     // 5. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
     const { randomUUID } = await import('crypto');
     const messageId = randomUUID();
@@ -397,6 +481,7 @@ export class MessagesController {
     conversation: any,
     rawMessages: any[],
     userId: string,
+    lidToClientMap?: Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>,
   ) {
     try {
       const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
@@ -406,8 +491,17 @@ export class MessagesController {
 
       if (newMessages.length === 0) return;
 
+      const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+
       for (const m of newMessages) {
-        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        const rawMsg = m.message || {};
+        const ignoredType = ignoredTypes.find((t) => rawMsg[t]);
+        if (ignoredType) continue;
+
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(rawMsg);
+        if (m.key?.id === '3EB002DDAAC79D95457293') {
+          this.logger.log(`[bootstrap-debug] RAW: ${JSON.stringify(m, null, 2)}`);
+        }
         let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
 
         if (hasMedia && m.key?.id) {
@@ -432,14 +526,30 @@ export class MessagesController {
 
         const msgData = m.message || {};
         let quotedMessageId: string | undefined;
-        for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+        for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage']) {
           const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
           if (stanzaId) { quotedMessageId = stanzaId; break; }
+        }
+        // Fallback: contextInfo al nivel raíz del mensaje (ej: conversation con reply)
+        if (!quotedMessageId && m.contextInfo?.stanzaId) {
+          quotedMessageId = m.contextInfo.stanzaId;
         }
 
         const meta: Record<string, any> = {};
         if (m.key?.id) meta.keyId = m.key.id;
         if (quotedMessageId) meta.quotedMessageId = quotedMessageId;
+
+        // Agregar sender info para grupos usando LID → phoneNumber mapping
+        if (lidToClientMap && !m.key?.fromMe && m.pushName) {
+          const clientInfo = lidToClientMap.get(m.pushName);
+          if (clientInfo) {
+            meta.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+            meta.senderName = clientInfo.name || clientInfo.phoneNumber;
+            if (clientInfo.profilePicUrl) meta.senderProfilePicUrl = clientInfo.profilePicUrl;
+          } else {
+            meta.senderName = m.pushName;
+          }
+        }
 
         await this.messageRepository.create({
           conversationId: conversation.id,
@@ -459,7 +569,8 @@ export class MessagesController {
 
       this.logger.log(`Background: bootstrapped ${newMessages.length} messages for conversation ${conversation.id}`);
     } catch (err) {
-      this.logger.error(`Background bootstrap failed: ${err.message}`);
+      this.logger.error(`Background bootstrap failed for conversation ${conversation.id}: ${err.message}`, err.stack);
+      throw err;
     }
   }
 
