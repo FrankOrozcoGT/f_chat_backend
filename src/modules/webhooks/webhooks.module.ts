@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { WebhooksController } from './webhooks.controller';
+import { InternalWebhooksController } from './internal-webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
@@ -19,7 +20,7 @@ import { GroupConversationRepository } from './repositories/group-conversation.r
     EvolutionModule,
     FileStorageModule,
   ],
-  controllers: [WebhooksController],
+  controllers: [WebhooksController, InternalWebhooksController],
   providers: [
     WebhooksService,
     PhoneRepository,

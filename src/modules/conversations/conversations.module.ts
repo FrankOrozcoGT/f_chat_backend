@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConversationsController } from './conversations.controller';
+import { InternalConversationsController } from './internal-conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { ConversationRepository } from './repositories/conversation.repository';
@@ -8,7 +9,7 @@ import { ConversationAnalysisModule } from '@modules/conversation-analysis/conve
 
 @Module({
   imports: [PrismaModule, EvolutionModule, ConversationAnalysisModule],
-  controllers: [ConversationsController],
+  controllers: [ConversationsController, InternalConversationsController],
   providers: [ConversationsService, ConversationRepository],
   exports: [ConversationRepository],
 })
