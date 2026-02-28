@@ -240,4 +240,41 @@ export class ConversationRepository {
       },
     });
   }
+
+  async updateSummary(conversationId: string, summary: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { summary },
+    });
+  }
+
+  /**
+   * Crea una conversación con su participant en una transacción
+   */
+  async createWithParticipant(data: {
+    phoneId: string;
+    clientId: string;
+    summary?: string;
+    isActive: boolean;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const conversation = await tx.conversation.create({
+        data: {
+          phoneId: data.phoneId,
+          type: 'individual',
+          isActive: data.isActive,
+          summary: data.summary,
+        },
+      });
+
+      await tx.conversationParticipant.create({
+        data: {
+          conversationId: conversation.id,
+          clientId: data.clientId,
+        },
+      });
+
+      return conversation;
+    });
+  }
 }
