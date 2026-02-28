@@ -46,6 +46,12 @@ interface EvolutionMessage {
   };
   messageTimestamp?: number;
   pushName?: string;
+  contextInfo?: {
+    stanzaId?: string;
+    participant?: string;
+    quotedMessage?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 }
 
 interface EvolutionFindMessagesResponse {

@@ -88,13 +88,10 @@ export class MessagesController {
 
     if (messages.length === 0 && remoteJid) {
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
-      this.logger.log(`[fallback] type=${conversation.type} groupJid=${conversation.groupJid} client=${conversation.client?.phoneNumber ?? 'null'} instanceId=${conversation.phone.evolutionInstanceId}`);
       const rawMessages = await this.evolutionService.findMessages(
         conversation.phone.evolutionInstanceId,
         remoteJid,
       );
-
-      this.logger.log(`[fallback] rawMessages.length=${rawMessages.length} firstKey=${rawMessages[0]?.key?.id ?? 'none'}`);
 
       // Mapeo LID → phoneNumber → Client para grupos
       const instanceName = conversation.phone.evolutionInstanceId;
@@ -138,7 +135,7 @@ export class MessagesController {
             });
           }
         }
-        this.logger.log(`[fallback] lidToClientMap built with ${lidToClientMap.size} entries for ${remoteJid}`);
+        this.logger.log(`[fallback] lidToClientMap: ${lidToClientMap.size} entries`);
       }
 
       this.bootstrapConversationInBackground(conversation, rawMessages, userId, isGroup ? lidToClientMap : undefined);
@@ -149,9 +146,12 @@ export class MessagesController {
           const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
           const msgData = m.message || {};
           let quotedMessageId: string | undefined;
-          for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+          for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage']) {
             const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
             if (stanzaId) { quotedMessageId = stanzaId; break; }
+          }
+          if (!quotedMessageId && m.contextInfo?.stanzaId) {
+            quotedMessageId = m.contextInfo.stanzaId;
           }
 
           const metadata: Record<string, any> = { keyId: m.key?.id, mediaLoading: hasMedia };
@@ -491,8 +491,17 @@ export class MessagesController {
 
       if (newMessages.length === 0) return;
 
+      const ignoredTypes = ['reactionMessage', 'protocolMessage', 'pollUpdateMessage'];
+
       for (const m of newMessages) {
-        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(m.message || {});
+        const rawMsg = m.message || {};
+        const ignoredType = ignoredTypes.find((t) => rawMsg[t]);
+        if (ignoredType) continue;
+
+        const { type, content, hasMedia } = this.evolutionService.parseMessageContent(rawMsg);
+        if (m.key?.id === '3EB002DDAAC79D95457293') {
+          this.logger.log(`[bootstrap-debug] RAW: ${JSON.stringify(m, null, 2)}`);
+        }
         let mediaData: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null = null;
 
         if (hasMedia && m.key?.id) {
@@ -517,9 +526,13 @@ export class MessagesController {
 
         const msgData = m.message || {};
         let quotedMessageId: string | undefined;
-        for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage']) {
+        for (const msgType of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage']) {
           const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
           if (stanzaId) { quotedMessageId = stanzaId; break; }
+        }
+        // Fallback: contextInfo al nivel raíz del mensaje (ej: conversation con reply)
+        if (!quotedMessageId && m.contextInfo?.stanzaId) {
+          quotedMessageId = m.contextInfo.stanzaId;
         }
 
         const meta: Record<string, any> = {};

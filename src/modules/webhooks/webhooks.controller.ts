@@ -459,7 +459,7 @@ export class WebhooksController {
             });
           }
         }
-        this.logger.log(`[bootstrap] lidToClientMap built with ${lidToClientMap.size} entries for ${remoteJid}`);
+        this.logger.log(`[bootstrap] lidToClientMap: ${lidToClientMap.size} entries`);
       }
 
       for (const m of newMessages) {
