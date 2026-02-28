@@ -18,6 +18,7 @@ import { AiModule } from '@modules/ai/ai.module';
 import { HitlModule } from '@modules/hitl/hitl.module';
 import { AdminModule } from '@modules/admin/admin.module';
 import { UserSettingsModule } from '@modules/user-settings/user-settings.module';
+import { CatalogModule } from '@modules/catalog/catalog.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 
 @Module({
@@ -43,6 +44,7 @@ import { ConversationAnalysisModule } from '@modules/conversation-analysis/conve
     HitlModule,
     AdminModule,
     UserSettingsModule,
+    CatalogModule,
     ConversationAnalysisModule,
     WebhooksModule,
   ],
