@@ -12,10 +12,10 @@ import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { ConversationsService } from './conversations.service';
-import { ProductRepository } from '@modules/conversation-analysis/repositories/product.repository';
-import { DiscountRepository } from '@modules/conversation-analysis/repositories/discount.repository';
-import { PromotionRepository } from '@modules/conversation-analysis/repositories/promotion.repository';
-import { PromotionDiscountRepository } from '@modules/conversation-analysis/repositories/promotion-discount.repository';
+import { ProductRepository } from '@modules/catalog/repositories/product.repository';
+import { DiscountRepository } from '@modules/catalog/repositories/discount.repository';
+import { PromotionRepository } from '@modules/catalog/repositories/promotion.repository';
+import { PromotionDiscountRepository } from '@modules/catalog/repositories/promotion-discount.repository';
 
 @Controller('api/conversations')
 export class ConversationsController {

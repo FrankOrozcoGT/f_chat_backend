@@ -17,6 +17,7 @@ export class ConversationRepository {
     const search = options?.search?.trim();
 
     const where = {
+      isActive: true,
       phone: {
         userId,
         ...(phoneId && { id: phoneId }),
