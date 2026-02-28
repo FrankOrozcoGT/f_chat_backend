@@ -47,5 +47,10 @@ import { LimitsModule } from '@common/services/limits.module';
     FlowCacheService,
     NodeMessageService,
   ],
+  exports: [
+    InternalApiClient,
+    KimiClient,
+    QwenSttClient,
+  ],
 })
 export class AiModule {}

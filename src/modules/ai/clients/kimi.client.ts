@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LlmResponse } from './interfaces/llm-response.interface';
-import { loadPrompt } from '../prompts/load-prompt';
+import { loadPrompt } from '@common/utils/load-prompt';
+import { join } from 'path';
 
-const CHAT_SYSTEM_PROMPT = loadPrompt('chat-system.md');
+const PROMPTS_DIR = join(__dirname, '..', 'prompts');
+const CHAT_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'chat-system.md');
 
 type ChatMessage = {
   role: string;

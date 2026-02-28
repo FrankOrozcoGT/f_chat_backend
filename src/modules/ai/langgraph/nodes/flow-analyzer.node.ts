@@ -15,9 +15,11 @@ import {
 } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { ApiType } from '@prisma/client';
-import { loadPrompt } from '../../prompts/load-prompt';
+import { loadPrompt } from '@common/utils/load-prompt';
+import { join } from 'path';
 
-const ANALYZER_SYSTEM_PROMPT = loadPrompt('analyzer-system.md');
+const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
+const ANALYZER_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'analyzer-system.md');
 
 const VALID_OPS: FlowOpType[] = ['create', 'close', 'reopen', 'focus', 'end'];
 
