@@ -82,4 +82,11 @@ export class ClientRepository {
       where: { id },
     });
   }
+
+  async updateName(id: string, name: string) {
+    return this.prisma.client.update({
+      where: { id },
+      data: { name },
+    });
+  }
 }
