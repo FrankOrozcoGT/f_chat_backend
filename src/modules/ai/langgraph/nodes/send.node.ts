@@ -3,16 +3,13 @@ import {
   EvolutionService,
   EvolutionMediaType,
 } from '@common/evolution/evolution.service';
-import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
-import { MessagesService } from '@modules/messages/messages.service';
 import { AiRepository } from '../../repositories/ai.repository';
-import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { SessionRepository } from '../../repositories/session.repository';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { ApiHealthRepository } from '@modules/health/repositories/api-health.repository';
-import { UserRepository } from '@modules/users/repositories/user.repository';
+import { InternalApiClient } from '../../clients/internal-api.client';
 import { MessageType } from '@prisma/client';
 import { WorkflowStateType } from '../state.interface';
+import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 
 @Injectable()
 export class SendNode {
@@ -20,14 +17,10 @@ export class SendNode {
 
   constructor(
     private readonly evolutionService: EvolutionService,
-    private readonly messageRepository: MessageRepository,
-    private readonly messagesService: MessagesService,
     private readonly aiRepository: AiRepository,
-    private readonly conversationRepository: ConversationRepository,
     private readonly sessionRepository: SessionRepository,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly apiHealthRepository: ApiHealthRepository,
-    private readonly userRepository: UserRepository,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -51,8 +44,8 @@ export class SendNode {
 
     // Si hubo error en un node anterior → activar HITL (transparente para el cliente)
     if (error) {
-      await this.apiHealthRepository.markAsDown(error.apiName, error.message);
-      await this.conversationRepository.updateMode(conversationId, 'HITL');
+      await this.internalApi.markApiDown(error.apiName, error.message);
+      await this.internalApi.updateConversationMode(conversationId, 'HITL');
 
       const activeSession =
         await this.sessionRepository.findActiveByConversationId(conversationId);
@@ -119,7 +112,7 @@ export class SendNode {
     );
 
     // 2. Guardar en BD
-    const messageData = this.messagesService.buildOutgoingMessageData(
+    const messageData = buildOutgoingMessageData(
       conversationId,
       tipo,
       responseText,
@@ -132,7 +125,7 @@ export class SendNode {
       'bot',
     );
 
-    const { message } = await this.messageRepository.sendMessageTransaction(
+    const { message } = await this.internalApi.sendMessageTransaction(
       conversationId,
       userId,
       messageData,
@@ -153,7 +146,7 @@ export class SendNode {
     );
 
     // 4. Verificar créditos
-    const user = await this.userRepository.findById(userId);
+    const user = await this.internalApi.getUser(userId);
     if (user && user.creditsUsed > user.creditsLimit) {
       this.logger.warn(
         `Credits exceeded after processing for user ${userId}, conversation ${conversationId}`,
@@ -165,7 +158,7 @@ export class SendNode {
         user.creditsUsed,
         user.creditsLimit,
       );
-      await this.conversationRepository.updateMode(conversationId, 'HITL');
+      await this.internalApi.updateConversationMode(conversationId, 'HITL');
 
       const activeSession =
         await this.sessionRepository.findActiveByConversationId(conversationId);
@@ -184,7 +177,7 @@ export class SendNode {
 
     // 5. Switch a HITL si el intent lo requiere
     if (intent === 'switch_hitl') {
-      await this.conversationRepository.updateMode(conversationId, 'HITL');
+      await this.internalApi.updateConversationMode(conversationId, 'HITL');
 
       const activeSession =
         await this.sessionRepository.findActiveByConversationId(conversationId);

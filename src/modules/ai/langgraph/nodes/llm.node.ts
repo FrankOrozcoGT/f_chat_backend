@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
-import { PrismaService } from '@common/prisma/prisma.service';
 import { KimiClient } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
-import { UserRepository } from '@modules/users/repositories/user.repository';
+import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { LlmResponse } from '../../clients/interfaces/llm-response.interface';
@@ -17,10 +15,8 @@ export class LlmNode {
   constructor(
     private readonly kimiClient: KimiClient,
     private readonly langSmithService: LangSmithService,
-    private readonly prisma: PrismaService,
     private readonly limitsService: LimitsService,
-    private readonly conversationRepository: ConversationRepository,
-    private readonly userRepository: UserRepository,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -48,15 +44,13 @@ export class LlmNode {
       history = [{ role: 'user', content: contextForLlm }];
     } else {
       // Flujo simple: cargar últimos 30 mensajes de la conversación
-      const messages = await this.prisma.message.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: 'desc' },
-        take: 31, // 30 + 1 (el mensaje actual)
-        select: { content: true, direction: true },
-      });
+      const messages = await this.internalApi.getMessageHistory(
+        conversationId,
+        31,
+      );
 
-      // Reverse para orden cronológico, excluir el último (mensaje actual)
-      const previousMessages = messages.reverse().slice(0, -1);
+      // Excluir el último (mensaje actual)
+      const previousMessages = messages.slice(0, -1);
 
       history = previousMessages
         .filter((m) => m.content)
@@ -70,9 +64,9 @@ export class LlmNode {
       );
     }
 
-    // Validar créditos ANTES de llamar a LLM
+    // Obtener userId para tracking de créditos
     const conversation =
-      await this.conversationRepository.findByIdWithRelations(conversationId);
+      await this.internalApi.getConversation(conversationId);
     if (!conversation) {
       return {
         error: {
@@ -130,7 +124,7 @@ export class LlmNode {
       const totalTokens = llmResult.tokensInput + llmResult.tokensOutput;
       const actualCredits =
         this.limitsService.calculateCreditsFromTokens(totalTokens);
-      await this.userRepository.incrementCreditsUsed(userId, actualCredits);
+      await this.internalApi.incrementCreditsUsed(userId, actualCredits);
       this.logger.log(
         `LlmNode: incremented ${actualCredits.toFixed(3)} credits (${totalTokens} tokens)`,
       );

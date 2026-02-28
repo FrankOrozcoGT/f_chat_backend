@@ -10,6 +10,7 @@ import { SendNode } from './langgraph/nodes/send.node';
 import { QwenSttClient } from './clients/qwen-stt.client';
 import { KimiClient } from './clients/kimi.client';
 import { QwenTtsClient } from './clients/qwen-tts.client';
+import { InternalApiClient } from './clients/internal-api.client';
 import { AiRepository } from './repositories/ai.repository';
 import { SessionRepository } from './repositories/session.repository';
 import { ClientMemoryRepository } from './repositories/client-memory.repository';
@@ -17,23 +18,15 @@ import { FlowCacheService } from './services/flow-cache.service';
 import { NodeMessageService } from './services/node-message.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
-import { MessagesModule } from '@modules/messages/messages.module';
-import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
-import { HealthModule } from '@modules/health/health.module';
 import { LimitsModule } from '@common/services/limits.module';
-import { UsersModule } from '@modules/users/users.module';
 
 @Module({
   imports: [
     PrismaModule,
     EvolutionModule,
-    MessagesModule,
-    ConversationsModule,
     WebSocketModule,
-    HealthModule,
     LimitsModule,
-    UsersModule,
   ],
   providers: [
     AiAgentService,
@@ -47,6 +40,7 @@ import { UsersModule } from '@modules/users/users.module';
     QwenSttClient,
     KimiClient,
     QwenTtsClient,
+    InternalApiClient,
     AiRepository,
     SessionRepository,
     ClientMemoryRepository,

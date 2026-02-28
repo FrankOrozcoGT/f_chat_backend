@@ -3,7 +3,7 @@ import { QwenTtsClient } from '../../clients/qwen-tts.client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { UserRepository } from '@modules/users/repositories/user.repository';
+import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 
@@ -16,7 +16,7 @@ export class OutputRouterNode {
     private readonly fileStorageService: FileStorageService,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
-    private readonly userRepository: UserRepository,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -65,7 +65,7 @@ export class OutputRouterNode {
       const actualCredits = this.limitsService.calculateCreditsFromChars(
         responseText.length,
       );
-      await this.userRepository.incrementCreditsUsed(userId, actualCredits);
+      await this.internalApi.incrementCreditsUsed(userId, actualCredits);
 
       const { randomUUID } = await import('crypto');
       const responseMessageId = randomUUID();

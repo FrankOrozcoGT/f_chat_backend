@@ -4,9 +4,8 @@ import { MessageType } from '@prisma/client';
 import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { InternalApiClient } from './clients/internal-api.client';
 import { SessionRepository } from './repositories/session.repository';
-import { UserRepository } from '@modules/users/repositories/user.repository';
 
 export interface IncomingMessageEvent {
   messageId: string;
@@ -28,9 +27,8 @@ export class AiAgentService {
     private readonly workflow: AiWorkflow,
     private readonly limitsService: LimitsService,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly conversationRepository: ConversationRepository,
+    private readonly internalApi: InternalApiClient,
     private readonly sessionRepository: SessionRepository,
-    private readonly userRepository: UserRepository,
   ) {}
 
   @OnEvent('ai.incoming.message')
@@ -63,7 +61,7 @@ export class AiAgentService {
         );
 
         // Obtener datos actuales del usuario para emitir WebSocket
-        const user = await this.userRepository.findById(payload.userId);
+        const user = await this.internalApi.getUser(payload.userId);
         if (user) {
           this.websocketGateway.emitCreditsExhausted(
             payload.userId,
@@ -74,7 +72,7 @@ export class AiAgentService {
         }
 
         // Cambiar conversación a HITL
-        await this.conversationRepository.updateMode(
+        await this.internalApi.updateConversationMode(
           payload.conversationId,
           'HITL',
         );
