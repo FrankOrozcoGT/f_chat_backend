@@ -1,23 +1,25 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@common/prisma/prisma.module';
-import { ProductRepository } from './repositories/product.repository';
-import { DiscountRepository } from './repositories/discount.repository';
-import { PromotionRepository } from './repositories/promotion.repository';
-import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
+import { AiModule } from '@modules/ai/ai.module';
+import { LimitsModule } from '@common/services/limits.module';
+import { FileStorageModule } from '@common/file-storage/file-storage.module';
+import { ConversationAnalysisController } from './conversation-analysis.controller';
+import { ConversationAnalysisService } from './conversation-analysis.service';
+import { AnalysisWorkflow } from './langgraph/analysis-workflow';
+import { AnalysisInputRouterNode } from './langgraph/nodes/input-router.node';
+import { AnalysisNode } from './langgraph/nodes/analysis.node';
 
 @Module({
-  imports: [PrismaModule],
-  providers: [
-    ProductRepository,
-    DiscountRepository,
-    PromotionRepository,
-    PromotionDiscountRepository,
+  imports: [
+    AiModule,
+    LimitsModule,
+    FileStorageModule,
   ],
-  exports: [
-    ProductRepository,
-    DiscountRepository,
-    PromotionRepository,
-    PromotionDiscountRepository,
+  controllers: [ConversationAnalysisController],
+  providers: [
+    ConversationAnalysisService,
+    AnalysisWorkflow,
+    AnalysisInputRouterNode,
+    AnalysisNode,
   ],
 })
 export class ConversationAnalysisModule {}
