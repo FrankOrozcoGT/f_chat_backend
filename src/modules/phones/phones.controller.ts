@@ -319,7 +319,8 @@ export class PhonesController {
         `Background: persisted ${newMessages.length} messages for conversation ${conversationId} (${withoutMedia.length} bulk, ${withMedia.length} with media)`,
       );
     } catch (err) {
-      this.logger.error(`Background persistence failed: ${err.message}`);
+      this.logger.error(`Background persistence failed for conversation ${conversationId}: ${err.message}`, err.stack);
+      throw err;
     }
   }
 

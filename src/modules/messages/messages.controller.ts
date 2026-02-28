@@ -482,7 +482,8 @@ export class MessagesController {
 
       this.logger.log(`Background: bootstrapped ${newMessages.length} messages for conversation ${conversation.id}`);
     } catch (err) {
-      this.logger.error(`Background bootstrap failed: ${err.message}`);
+      this.logger.error(`Background bootstrap failed for conversation ${conversation.id}: ${err.message}`, err.stack);
+      throw err;
     }
   }
 
