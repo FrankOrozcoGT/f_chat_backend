@@ -58,14 +58,15 @@ model Phone {
 }
 
 model Client {
-  id             String         @id @default(uuid())
-  phoneNumber    String         @unique
+  id             String                    @id @default(uuid())
+  phoneNumber    String                    @unique
   name           String?
+  profilePicUrl  String?
   metadata       Json?
-  firstContactAt DateTime       @default(now())
-  lastContactAt  DateTime       @updatedAt
-  conversations  Conversation[]
+  firstContactAt DateTime                  @default(now())
+  lastContactAt  DateTime                  @updatedAt
   memories       ClientMemory[]
+  participations ConversationParticipant[]
 
   @@index([phoneNumber])
 }
@@ -84,25 +85,40 @@ model ClientMemory {
 }
 
 model Conversation {
-  id                 String           @id @default(uuid())
+  id                 String               @id @default(uuid())
   phoneId            String
-  clientId           String
-  mode               ConversationMode @default(HITL)
-  lastMessageAt      DateTime         @default(now())
+  type               ConversationType     @default(individual)
+  groupJid           String?              @unique
+  groupName          String?
+  groupPictureUrl    String?
+  mode               ConversationMode     @default(HITL)
+  lastMessageAt      DateTime             @default(now())
   lastMessagePreview String?
-  isActive           Boolean          @default(true)
+  isActive           Boolean              @default(true)
   summary            String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  phone              Phone            @relation(fields: [phoneId], references: [id], onDelete: Cascade)
-  client             Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  phone              Phone                @relation(fields: [phoneId], references: [id], onDelete: Cascade)
   messages           Message[]
   sessions           Session[]
+  participants       ConversationParticipant[]
 
-  @@unique([phoneId, clientId])
   @@index([phoneId])
-  @@index([clientId])
   @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  clientId       String
+  role           String       @default("member")
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, clientId])
+  @@index([conversationId])
+  @@index([clientId])
 }
 
 model Message {
@@ -231,6 +247,11 @@ enum MessageStatus {
 enum ConversationMode {
   AI
   HITL
+}
+
+enum ConversationType {
+  individual
+  group
 }
 
 enum SessionType {

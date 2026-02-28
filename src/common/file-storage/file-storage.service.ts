@@ -48,7 +48,10 @@ export class FileStorageService {
 
       // 3. Generar nombre estandarizado: messageId_timestamp.ext
       const timestamp = Date.now();
-      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const sanitizedFilename = file.originalname.replace(
+        /[^a-zA-Z0-9._-]/g,
+        '_',
+      );
 
       // Obtener extensión correcta del archivo
       const extension = this.getFileExtension(sanitizedFilename, file.mimetype);
@@ -87,7 +90,9 @@ export class FileStorageService {
         const stats = await fs.stat(filePath);
         finalFileSize = stats.size;
 
-        this.logger.log(`Conversion complete: ${fileName} (${finalFileSize} bytes)`);
+        this.logger.log(
+          `Conversion complete: ${fileName} (${finalFileSize} bytes)`,
+        );
       }
 
       // 6. Path relativo (sin dominio)
@@ -202,8 +207,19 @@ export class FileStorageService {
     messageId: string,
     extension: string,
     mimeType: string,
-  ): Promise<{ relativePath: string; fileName: string; fileSize: number; mimeType: string }> {
-    const storageDir = path.join(process.cwd(), 'storage', 'conversations', userId, conversationId);
+  ): Promise<{
+    relativePath: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+  }> {
+    const storageDir = path.join(
+      process.cwd(),
+      'storage',
+      'conversations',
+      userId,
+      conversationId,
+    );
     await fs.mkdir(storageDir, { recursive: true });
 
     const fileName = `${messageId}_${Date.now()}${extension}`;
@@ -238,7 +254,9 @@ export class FileStorageService {
     const baseUrl = dockerUrl || backendUrl;
     const fullUrl = `${baseUrl}${relativePath}`;
 
-    this.logger.log(`Building Docker URL - BACKEND_URL_FOR_DOCKER: ${dockerUrl}, BACKEND_URL: ${backendUrl}, Final URL: ${fullUrl}`);
+    this.logger.log(
+      `Building Docker URL - BACKEND_URL_FOR_DOCKER: ${dockerUrl}, BACKEND_URL: ${backendUrl}, Final URL: ${fullUrl}`,
+    );
 
     return fullUrl;
   }
@@ -263,7 +281,10 @@ export class FileStorageService {
 
       return outputPath;
     } catch (error) {
-      this.logger.error(`Failed to convert webm to ogg: ${inputPath}`, error.message);
+      this.logger.error(
+        `Failed to convert webm to ogg: ${inputPath}`,
+        error.message,
+      );
       throw error;
     }
   }

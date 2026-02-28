@@ -1,6 +1,16 @@
-import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Conversation, Phone, Message, MessageType, MessageStatus } from '@prisma/client';
+import {
+  Conversation,
+  Phone,
+  Message,
+  MessageType,
+  MessageStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class MessagesService {
@@ -32,7 +42,7 @@ export class MessagesService {
   buildMessagesWithFullUrls(messages: Message[]): Message[] {
     const backendUrl = this.configService.get<string>('BACKEND_URL');
 
-    return messages.map(message => ({
+    return messages.map((message) => ({
       ...message,
       mediaUrl: message.mediaUrl ? `${backendUrl}${message.mediaUrl}` : null,
     }));
@@ -52,13 +62,17 @@ export class MessagesService {
       }
 
       if (content.length > 4096) {
-        throw new BadRequestException('Text message exceeds maximum length of 4096 characters');
+        throw new BadRequestException(
+          'Text message exceeds maximum length of 4096 characters',
+        );
       }
     }
 
     // Para multimedia (image, video, audio, voice, document), el contenido es opcional (caption)
     if (content && content.length > 1024) {
-      throw new BadRequestException('Media caption exceeds maximum length of 1024 characters');
+      throw new BadRequestException(
+        'Media caption exceeds maximum length of 1024 characters',
+      );
     }
   }
 
@@ -86,7 +100,12 @@ export class MessagesService {
     fileSize?: number | null,
     mimeType?: string | null,
     senderType: 'agent' | 'bot' | 'system' = 'agent',
+    quotedMessageId?: string,
   ) {
+    const metadata: Record<string, any> = {};
+    if (evolutionKeyId) metadata.keyId = evolutionKeyId;
+    if (quotedMessageId) metadata.quotedMessageId = quotedMessageId;
+
     return {
       conversationId,
       type,
@@ -98,7 +117,7 @@ export class MessagesService {
       direction: 'outgoing' as const,
       senderType,
       status,
-      metadata: evolutionKeyId ? { keyId: evolutionKeyId } : null,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
     };
   }
 

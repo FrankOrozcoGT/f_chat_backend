@@ -3,14 +3,12 @@ import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { ConversationRepository } from './repositories/conversation.repository';
-import { PhonesModule } from '@modules/phones/phones.module';
-import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 
 @Module({
-  imports: [PrismaModule, PhonesModule, EvolutionModule],
+  imports: [PrismaModule, EvolutionModule],
   controllers: [ConversationsController],
-  providers: [ConversationsService, ConversationRepository, ClientRepository],
+  providers: [ConversationsService, ConversationRepository],
   exports: [ConversationRepository],
 })
 export class ConversationsModule {}

@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { differenceInMonths } from 'date-fns';
 import { UserRepository } from '@modules/users/repositories/user.repository';
@@ -30,7 +34,10 @@ export class LimitsService {
     }
   }
 
-  async validateCredits(userId: string, estimatedCredits: number): Promise<void> {
+  async validateCredits(
+    userId: string,
+    estimatedCredits: number,
+  ): Promise<void> {
     // 1. Obtener usuario
     const user = await this.userRepository.findById(userId);
     if (!user) {
@@ -55,7 +62,10 @@ export class LimitsService {
     }
   }
 
-  async checkAndResetBillingPeriod(userId: string, billingPeriodStart: Date): Promise<void> {
+  async checkAndResetBillingPeriod(
+    userId: string,
+    billingPeriodStart: Date,
+  ): Promise<void> {
     const monthsDiff = differenceInMonths(new Date(), billingPeriodStart);
 
     if (monthsDiff >= 1) {
@@ -64,19 +74,31 @@ export class LimitsService {
   }
 
   calculateCreditsFromTokens(tokens: number): number {
-    const tokensPerCredit = this.configService.get<number>('TOKENS_PER_CREDIT', 1000);
+    const tokensPerCredit = this.configService.get<number>(
+      'TOKENS_PER_CREDIT',
+      1000,
+    );
     return tokens / tokensPerCredit;
   }
 
   calculateCreditsFromSeconds(seconds: number): number {
-    const tokensPerSecond = this.configService.get<number>('TOKENS_PER_AUDIO_SECOND', 5);
-    const tokensPerCredit = this.configService.get<number>('TOKENS_PER_CREDIT', 1000);
+    const tokensPerSecond = this.configService.get<number>(
+      'TOKENS_PER_AUDIO_SECOND',
+      5,
+    );
+    const tokensPerCredit = this.configService.get<number>(
+      'TOKENS_PER_CREDIT',
+      1000,
+    );
     return (seconds * tokensPerSecond) / tokensPerCredit;
   }
 
   calculateCreditsFromChars(chars: number): number {
     const charsPerToken = this.configService.get<number>('CHARS_PER_TOKEN', 4);
-    const tokensPerCredit = this.configService.get<number>('TOKENS_PER_CREDIT', 1000);
-    return (chars / charsPerToken) / tokensPerCredit;
+    const tokensPerCredit = this.configService.get<number>(
+      'TOKENS_PER_CREDIT',
+      1000,
+    );
+    return chars / charsPerToken / tokensPerCredit;
   }
 }

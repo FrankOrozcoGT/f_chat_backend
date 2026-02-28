@@ -63,7 +63,9 @@ export class NodeMessageService {
       });
     }
 
-    this.logger.debug(`Loaded ${result.length} messages for node (${messageIds.length} IDs)`);
+    this.logger.debug(
+      `Loaded ${result.length} messages for node (${messageIds.length} IDs)`,
+    );
     return result;
   }
 }

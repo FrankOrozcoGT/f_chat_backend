@@ -9,7 +9,7 @@ export class QwenTtsClient {
   private readonly apiKey: string;
 
   // Pricing: $0.10 per 10K characters
-  private static readonly COST_PER_CHAR = 0.10 / 10_000;
+  private static readonly COST_PER_CHAR = 0.1 / 10_000;
 
   constructor(private readonly configService: ConfigService) {
     this.apiUrl = this.configService.get<string>(
@@ -23,13 +23,15 @@ export class QwenTtsClient {
     const startTime = Date.now();
 
     try {
-      this.logger.log(`TTS request: ${text.length} chars, url=${this.apiUrl}, key=${this.apiKey.substring(0, 8)}...`);
+      this.logger.log(
+        `TTS request: ${text.length} chars, url=${this.apiUrl}, key=${this.apiKey.substring(0, 8)}...`,
+      );
 
       // 1. Request TTS generation
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -45,7 +47,9 @@ export class QwenTtsClient {
       if (!response.ok) {
         const errorBody = await response.text();
         const errorHeaders = Object.fromEntries(response.headers.entries());
-        throw new Error(`Qwen TTS API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`);
+        throw new Error(
+          `Qwen TTS API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+        );
       }
 
       const data = await response.json();
@@ -53,13 +57,17 @@ export class QwenTtsClient {
       // 2. Download audio from returned URL
       const audioUrl = data.output?.audio?.url;
       if (!audioUrl) {
-        throw new Error(`Qwen TTS: no audio URL in response: ${JSON.stringify(data)}`);
+        throw new Error(
+          `Qwen TTS: no audio URL in response: ${JSON.stringify(data)}`,
+        );
       }
 
       const audioResponse = await fetch(audioUrl);
       if (!audioResponse.ok) {
         const dlErrorBody = await audioResponse.text();
-        throw new Error(`Failed to download TTS audio: ${audioResponse.status} ${audioResponse.statusText} | Body: ${dlErrorBody}`);
+        throw new Error(
+          `Failed to download TTS audio: ${audioResponse.status} ${audioResponse.statusText} | Body: ${dlErrorBody}`,
+        );
       }
 
       const arrayBuffer = await audioResponse.arrayBuffer();
@@ -68,7 +76,9 @@ export class QwenTtsClient {
 
       const costUsd = text.length * QwenTtsClient.COST_PER_CHAR;
 
-      this.logger.log(`TTS completed: ${text.length} chars, ${audioBuffer.length} bytes, ${latencyMs}ms, $${costUsd.toFixed(6)}`);
+      this.logger.log(
+        `TTS completed: ${text.length} chars, ${audioBuffer.length} bytes, ${latencyMs}ms, $${costUsd.toFixed(6)}`,
+      );
 
       return { audioBuffer, costUsd, latencyMs };
     } catch (error) {

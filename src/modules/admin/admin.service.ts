@@ -60,7 +60,10 @@ export class AdminService {
       // Agregar por tipo de API
       if (apiCall.apiType === 'qwen_stt') {
         totalSTT += cost;
-      } else if (apiCall.apiType === 'kimi_llm' || apiCall.apiType === 'kimi_flow_analyzer') {
+      } else if (
+        apiCall.apiType === 'kimi_llm' ||
+        apiCall.apiType === 'kimi_flow_analyzer'
+      ) {
         totalLLM += cost;
       } else if (apiCall.apiType === 'qwen_tts') {
         totalTTS += cost;

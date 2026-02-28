@@ -35,7 +35,9 @@ export class AdminController {
   @Get('costs')
   async getCosts(@Query() query: CostsQueryDto): Promise<CostsResponseDto> {
     // 1. Obtener datos de DB vía Repository (TODOS los usuarios)
-    const apiCalls = await this.costsRepository.getApiCallsByPeriod(query.period);
+    const apiCalls = await this.costsRepository.getApiCallsByPeriod(
+      query.period,
+    );
 
     // 2. Transformar datos con Service (lógica pura, agrupa por USER)
     const aggregatedCosts = this.adminService.aggregateCosts(apiCalls);

@@ -30,7 +30,8 @@ export class AuthController {
     const { token } = await this.authService.handleGoogleLogin(req.user);
 
     // Set HttpOnly cookie
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
     res.cookie('auth_token', token, {
       httpOnly: true,
       secure: isProduction,
@@ -39,7 +40,8 @@ export class AuthController {
     });
 
     // Redirect to frontend dashboard
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     return res.redirect(`${frontendUrl}/dashboard`);
   }
 

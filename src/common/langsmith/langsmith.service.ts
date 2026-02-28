@@ -21,7 +21,9 @@ export class LangSmithService {
       process.env.LANGSMITH_PROJECT = project;
       this.logger.log(`LangSmith tracing enabled for project: ${project}`);
     } else {
-      this.logger.warn('LangSmith not configured (missing LANGSMITH_API_KEY or LANGSMITH_PROJECT)');
+      this.logger.warn(
+        'LangSmith not configured (missing LANGSMITH_API_KEY or LANGSMITH_PROJECT)',
+      );
     }
   }
 
@@ -47,7 +49,7 @@ export class LangSmithService {
       async (input: { messages?: { role: string; content: string }[] }) => fn(),
       { name: 'llm', run_type: 'llm' },
     );
-    return traced({ messages }) as Promise<T>;
+    return traced({ messages });
   }
 
   /**
@@ -62,7 +64,10 @@ export class LangSmithService {
   /**
    * Wraps the full AI pipeline as a traceable function
    */
-  tracePipeline<T>(fn: () => Promise<T>, metadata?: Record<string, any>): Promise<T> {
+  tracePipeline<T>(
+    fn: () => Promise<T>,
+    metadata?: Record<string, any>,
+  ): Promise<T> {
     if (!this.isEnabled) return fn();
     const traced = traceable(fn, {
       name: 'ai-voice-pipeline',

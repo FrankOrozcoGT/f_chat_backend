@@ -6,7 +6,13 @@ import { FlowCacheService } from '../../services/flow-cache.service';
 import { NodeMessageService } from '../../services/node-message.service';
 import { SessionRepository } from '../../repositories/session.repository';
 import { ClientMemoryRepository } from '../../repositories/client-memory.repository';
-import { WorkflowStateType, FlowData, FlowOperation, FlowOpType, FlowNode } from '../state.interface';
+import {
+  WorkflowStateType,
+  FlowData,
+  FlowOperation,
+  FlowOpType,
+  FlowNode,
+} from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { ApiType } from '@prisma/client';
 import { loadPrompt } from '../../prompts/load-prompt';
@@ -46,19 +52,33 @@ export class FlowAnalyzerNode {
     const sessionId = session.id;
 
     // 2. Load flow data from Redis (or DB on cache miss)
-    const flowData = await this.flowCacheService.load(conversationId, sessionId);
+    const flowData = await this.flowCacheService.load(
+      conversationId,
+      sessionId,
+    );
 
     // 3. Build context for analyzer
-    const activeNodes = flowData.nodes.filter((n) => n.status === 'active' || n.status === 'reopened');
-    const collapsedNodes = flowData.nodes.filter((n) => n.status === 'collapsed');
+    const activeNodes = flowData.nodes.filter(
+      (n) => n.status === 'active' || n.status === 'reopened',
+    );
+    const collapsedNodes = flowData.nodes.filter(
+      (n) => n.status === 'collapsed',
+    );
 
     let nodesList = '';
     if (activeNodes.length > 0) {
-      nodesList += 'Nodos activos:\n' +
-        activeNodes.map((n) => `- ${n.nodeId}${n.nodeId === flowData.currentNodeId ? ' (foco)' : ''}`).join('\n');
+      nodesList +=
+        'Nodos activos:\n' +
+        activeNodes
+          .map(
+            (n) =>
+              `- ${n.nodeId}${n.nodeId === flowData.currentNodeId ? ' (foco)' : ''}`,
+          )
+          .join('\n');
     }
     if (collapsedNodes.length > 0) {
-      nodesList += '\nNodos cerrados:\n' +
+      nodesList +=
+        '\nNodos cerrados:\n' +
         collapsedNodes.map((n) => `- ${n.nodeId}`).join('\n');
     }
     if (!nodesList) {
@@ -68,7 +88,9 @@ export class FlowAnalyzerNode {
     // Load messages from current active node
     let nodeConversation = '';
     if (flowData.currentNodeId) {
-      const currentNode = activeNodes.find((n) => n.nodeId === flowData.currentNodeId);
+      const currentNode = activeNodes.find(
+        (n) => n.nodeId === flowData.currentNodeId,
+      );
       if (currentNode?.messageIds?.length) {
         const msgs = await this.nodeMessageService.loadNodeMessages(
           currentNode.messageIds,
@@ -76,8 +98,13 @@ export class FlowAnalyzerNode {
           this.prisma,
         );
         if (msgs.length > 0) {
-          nodeConversation = '\n\nConversación del nodo actual:\n' +
-            msgs.map((m) => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n');
+          nodeConversation =
+            '\n\nConversación del nodo actual:\n' +
+            msgs
+              .map(
+                (m) => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`,
+              )
+              .join('\n');
         }
       }
     }
@@ -119,17 +146,24 @@ export class FlowAnalyzerNode {
 
       // Parse failed — retry with error feedback
       if (attempt === 1) {
-        this.logger.warn(`FlowAnalyzer: parse failed (attempt 1), retrying with error feedback`);
+        this.logger.warn(
+          `FlowAnalyzer: parse failed (attempt 1), retrying with error feedback`,
+        );
         chatMessages.push(
           { role: 'assistant', content: llmResult.response },
-          { role: 'user', content: `Error: tu respuesta no es un JSON válido con el formato { "operations": [...] }. Corrige y responde SOLO el JSON.` },
+          {
+            role: 'user',
+            content: `Error: tu respuesta no es un JSON válido con el formato { "operations": [...] }. Corrige y responde SOLO el JSON.`,
+          },
         );
       }
     }
 
     // If both attempts failed, mark as unanalyzed
     if (operations === null) {
-      this.logger.error(`FlowAnalyzer: parse failed after 2 attempts, skipping analysis`);
+      this.logger.error(
+        `FlowAnalyzer: parse failed after 2 attempts, skipping analysis`,
+      );
       operations = [];
 
       // Add message to current node anyway so it's not lost
@@ -146,13 +180,22 @@ export class FlowAnalyzerNode {
     }
 
     // 5. Log operations
-    const opsLog = operations.length === 0
-      ? 'ops=[]'
-      : 'ops=[' + operations.map((o) => `${o.op}(${o.label || o.nodeId || ''})`).join(', ') + ']';
+    const opsLog =
+      operations.length === 0
+        ? 'ops=[]'
+        : 'ops=[' +
+          operations
+            .map((o) => `${o.op}(${o.label || o.nodeId || ''})`)
+            .join(', ') +
+          ']';
     this.logger.log(`FlowAnalyzer: ${opsLog}`);
 
     // 6. Apply operations to flow data
-    const updatedFlowData = this.applyOperations(flowData, operations, messageId);
+    const updatedFlowData = this.applyOperations(
+      flowData,
+      operations,
+      messageId,
+    );
 
     // 7. Handle end operation
     const hasEnd = operations.some((o) => o.op === 'end');
@@ -181,7 +224,10 @@ export class FlowAnalyzerNode {
    */
   private parseOperations(response: string): FlowOperation[] | null {
     try {
-      const cleaned = response.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+      const cleaned = response
+        .replace(/```json?\s*/g, '')
+        .replace(/```/g, '')
+        .trim();
       const parsed = JSON.parse(cleaned);
 
       if (!Array.isArray(parsed.operations)) return null;
@@ -189,7 +235,11 @@ export class FlowAnalyzerNode {
       return parsed.operations.filter((op: any) => {
         if (!op?.op || !VALID_OPS.includes(op.op)) return false;
         if (op.op === 'create' && !op.label) return false;
-        if ((op.op === 'close' || op.op === 'reopen' || op.op === 'focus') && !op.nodeId) return false;
+        if (
+          (op.op === 'close' || op.op === 'reopen' || op.op === 'focus') &&
+          !op.nodeId
+        )
+          return false;
         return true;
       });
     } catch {
@@ -198,8 +248,14 @@ export class FlowAnalyzerNode {
     return null;
   }
 
-  private applyOperations(flowData: FlowData, operations: FlowOperation[], messageId?: string): FlowData {
-    const nodes = [...flowData.nodes.map((n) => ({ ...n, messageIds: [...n.messageIds] }))];
+  private applyOperations(
+    flowData: FlowData,
+    operations: FlowOperation[],
+    messageId?: string,
+  ): FlowData {
+    const nodes = [
+      ...flowData.nodes.map((n) => ({ ...n, messageIds: [...n.messageIds] })),
+    ];
     let currentNodeId = flowData.currentNodeId;
 
     for (const op of operations) {
@@ -222,7 +278,9 @@ export class FlowAnalyzerNode {
           if (node) {
             node.status = 'collapsed';
             if (currentNodeId === op.nodeId) {
-              const firstActive = nodes.find((n) => n.status === 'active' || n.status === 'reopened');
+              const firstActive = nodes.find(
+                (n) => n.status === 'active' || n.status === 'reopened',
+              );
               currentNodeId = firstActive?.nodeId || null;
             }
           }
@@ -230,7 +288,9 @@ export class FlowAnalyzerNode {
         }
 
         case 'reopen': {
-          const node = nodes.find((n) => n.nodeId === op.nodeId && n.status === 'collapsed');
+          const node = nodes.find(
+            (n) => n.nodeId === op.nodeId && n.status === 'collapsed',
+          );
           if (node) {
             node.status = 'active';
           }
@@ -238,7 +298,11 @@ export class FlowAnalyzerNode {
         }
 
         case 'focus': {
-          const node = nodes.find((n) => n.nodeId === op.nodeId && (n.status === 'active' || n.status === 'reopened'));
+          const node = nodes.find(
+            (n) =>
+              n.nodeId === op.nodeId &&
+              (n.status === 'active' || n.status === 'reopened'),
+          );
           if (node) {
             currentNodeId = node.nodeId;
           }

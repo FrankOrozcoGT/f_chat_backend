@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PhoneStatus, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import {
+  PhoneStatus,
+  MessageDirection,
+  MessageSenderType,
+  MessageStatus,
+} from '@prisma/client';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
 @Injectable()
@@ -46,19 +51,33 @@ export class WebhooksService {
    * @param fromMe - Indica si el mensaje fue enviado por mí
    * @returns Datos del cliente (phoneNumber, name)
    */
-  buildClientData(webhookData: any, fromMe: boolean): { phoneNumber: string; name: string } {
+  buildClientData(
+    webhookData: any,
+    fromMe: boolean,
+  ): { phoneNumber: string; name: string; profilePicUrl?: string | null } {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
 
     // Si fromMe=true, pushName es MI nombre (del número registrado), no del destinatario
     // Solo usar pushName cuando fromMe=false (mensaje entrante del cliente)
-    const pushName = !fromMe ? (webhookData?.data?.pushName || 'Unknown') : 'Unknown';
+    const pushName = !fromMe
+      ? webhookData?.data?.pushName || 'Unknown'
+      : 'Unknown';
 
     // Limpiar formato: 5521999999999@s.whatsapp.net -> 5521999999999
-    const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+    const phoneNumber = remoteJid
+      .replace('@s.whatsapp.net', '')
+      .replace('@c.us', '');
+
+    const profilePicUrl = webhookData?.data?.profilePicUrl || null;
+
+    this.logger.log(
+      `[buildClientData] phoneNumber=${phoneNumber} pushName=${pushName} profilePicUrl=${profilePicUrl}`,
+    );
 
     return {
       phoneNumber,
       name: pushName,
+      profilePicUrl,
     };
   }
 
@@ -101,10 +120,27 @@ export class WebhooksService {
   buildIncomingMessageData(
     webhookData: any,
     conversationId: string,
-    mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
+    mediaData?: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null,
+    groupMeta?: { senderJid?: string | null; senderName?: string | null; senderProfilePicUrl?: string | null } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-    const { type, content } = this.evolutionService.parseMessageContent(messageData);
+    const { type, content } =
+      this.evolutionService.parseMessageContent(messageData);
+
+    const keyId = webhookData?.data?.key?.id;
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
+    const metadata: Record<string, any> = {};
+    if (keyId) metadata.keyId = keyId;
+    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
+    if (groupMeta?.senderJid) metadata.senderJid = groupMeta.senderJid;
+    if (groupMeta?.senderName) metadata.senderName = groupMeta.senderName;
+    if (groupMeta?.senderProfilePicUrl) metadata.senderProfilePicUrl = groupMeta.senderProfilePicUrl;
 
     return {
       conversationId,
@@ -117,6 +153,7 @@ export class WebhooksService {
       direction: MessageDirection.incoming,
       senderType: MessageSenderType.client,
       status: MessageStatus.delivered,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
     };
   }
 
@@ -130,10 +167,23 @@ export class WebhooksService {
   buildOutgoingMessageFromWebhook(
     webhookData: any,
     conversationId: string,
-    mediaData?: { relativePath: string; fileName: string; fileSize: number; mimeType: string } | null,
+    mediaData?: {
+      relativePath: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+    } | null,
   ) {
     const messageData = webhookData?.data?.message || {};
-    const { type, content } = this.evolutionService.parseMessageContent(messageData);
+    const { type, content } =
+      this.evolutionService.parseMessageContent(messageData);
+
+    const keyId = webhookData?.data?.key?.id;
+    const topLevelContextInfo = webhookData?.data?.contextInfo || null;
+    const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
+    const metadata: Record<string, any> = {};
+    if (keyId) metadata.keyId = keyId;
+    if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
 
     return {
       conversationId,
@@ -146,7 +196,27 @@ export class WebhooksService {
       direction: MessageDirection.outgoing,
       senderType: MessageSenderType.agent,
       status: MessageStatus.sent,
+      metadata: Object.keys(metadata).length > 0 ? metadata : null,
     };
+  }
+
+  /**
+   * Extrae el stanzaId del mensaje citado (reply) desde contextInfo
+   */
+  extractQuotedStanzaId(messageData: Record<string, any>, topLevelContextInfo?: Record<string, any> | null): string | null {
+    const msgTypes = [
+      'extendedTextMessage',
+      'imageMessage',
+      'videoMessage',
+      'audioMessage',
+      'documentMessage',
+    ];
+    for (const msgType of msgTypes) {
+      const stanzaId = messageData[msgType]?.contextInfo?.stanzaId;
+      if (stanzaId) return stanzaId;
+    }
+    if (topLevelContextInfo?.stanzaId) return topLevelContextInfo.stanzaId;
+    return null;
   }
 
   /**
@@ -160,5 +230,4 @@ export class WebhooksService {
       lastMessagePreview: message.content.substring(0, 100),
     };
   }
-
 }

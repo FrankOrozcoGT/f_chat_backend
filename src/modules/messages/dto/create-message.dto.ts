@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsUUID, IsEnum, IsUrl, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  IsEnum,
+  IsUrl,
+  IsOptional,
+} from 'class-validator';
 import { MessageType } from '@prisma/client';
 
 export class CreateMessageDto {
@@ -17,4 +24,8 @@ export class CreateMessageDto {
   @IsUrl()
   @IsOptional()
   mediaUrl?: string | null;
+
+  @IsString()
+  @IsOptional()
+  quotedMessageId?: string;
 }

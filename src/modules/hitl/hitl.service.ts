@@ -3,7 +3,10 @@ import { Conversation, Phone } from '@prisma/client';
 
 @Injectable()
 export class HitlService {
-  validateCanTakeControl(conversation: Conversation & { phone: Phone }, userId: string) {
+  validateCanTakeControl(
+    conversation: Conversation & { phone: Phone },
+    userId: string,
+  ) {
     if (conversation.phone.userId !== userId) {
       throw new BadRequestException('You do not own this conversation');
     }
@@ -12,7 +15,10 @@ export class HitlService {
     }
   }
 
-  validateCanReturnToAi(conversation: Conversation & { phone: Phone }, userId: string) {
+  validateCanReturnToAi(
+    conversation: Conversation & { phone: Phone },
+    userId: string,
+  ) {
     if (conversation.phone.userId !== userId) {
       throw new BadRequestException('You do not own this conversation');
     }

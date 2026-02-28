@@ -41,9 +41,13 @@ export class HealthService {
       const isUp = response.status < 500;
 
       if (isUp) {
-        this.logger.log(`[HealthService] ${apiName} is UP (${response.status}) - ${responseTimeMs}ms`);
+        this.logger.log(
+          `[HealthService] ${apiName} is UP (${response.status}) - ${responseTimeMs}ms`,
+        );
       } else {
-        this.logger.warn(`[HealthService] ${apiName} returned ${response.status} - ${responseTimeMs}ms`);
+        this.logger.warn(
+          `[HealthService] ${apiName} returned ${response.status} - ${responseTimeMs}ms`,
+        );
       }
 
       return {
@@ -53,7 +57,9 @@ export class HealthService {
       };
     } catch (error) {
       const responseTimeMs = Date.now() - startTime;
-      this.logger.error(`[HealthService] ${apiName} ping failed: ${error.message} (${responseTimeMs}ms)`);
+      this.logger.error(
+        `[HealthService] ${apiName} ping failed: ${error.message} (${responseTimeMs}ms)`,
+      );
 
       return {
         isUp: false,
@@ -69,7 +75,9 @@ export class HealthService {
    * @param apiName - Nombre de la API que se recuperó
    */
   async notifyAffectedClients(apiName: ApiName): Promise<void> {
-    this.logger.log(`[HealthService] Notifying affected clients about ${apiName} recovery`);
+    this.logger.log(
+      `[HealthService] Notifying affected clients about ${apiName} recovery`,
+    );
 
     // TODO: Implementar búsqueda de conversaciones afectadas
     // Requiere:

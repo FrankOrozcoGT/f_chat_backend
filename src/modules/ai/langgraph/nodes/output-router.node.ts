@@ -20,7 +20,16 @@ export class OutputRouterNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { preferredFormat, responseText, userId, conversationId, messageId, apiCalls: existingApiCalls, totalCost: existingCost, error: previousError } = state;
+    const {
+      preferredFormat,
+      responseText,
+      userId,
+      conversationId,
+      messageId,
+      apiCalls: existingApiCalls,
+      totalCost: existingCost,
+      error: previousError,
+    } = state;
 
     // Si un node anterior falló, skip
     if (previousError) return {};
@@ -40,8 +49,8 @@ export class OutputRouterNode {
 
     // audio: TTS + save file
     try {
-      const ttsResult = await this.langSmithService.traceTTS(
-        () => this.ttsClient.synthesize(responseText),
+      const ttsResult = await this.langSmithService.traceTTS(() =>
+        this.ttsClient.synthesize(responseText),
       );
 
       const apiCall: CreateApiCallData = {
@@ -53,7 +62,9 @@ export class OutputRouterNode {
       };
 
       // Incrementar créditos usados basado en longitud del texto
-      const actualCredits = this.limitsService.calculateCreditsFromChars(responseText.length);
+      const actualCredits = this.limitsService.calculateCreditsFromChars(
+        responseText.length,
+      );
       await this.userRepository.incrementCreditsUsed(userId, actualCredits);
 
       const { randomUUID } = await import('crypto');
@@ -68,9 +79,13 @@ export class OutputRouterNode {
         'audio/ogg',
       );
 
-      const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(savedFile.relativePath);
+      const mediaUrl = this.fileStorageService.buildDockerAccessibleUrl(
+        savedFile.relativePath,
+      );
 
-      this.logger.log(`OutputRouter: audio → TTS + saved ${savedFile.relativePath}`);
+      this.logger.log(
+        `OutputRouter: audio → TTS + saved ${savedFile.relativePath}`,
+      );
 
       return {
         responseMediaRelativePath: savedFile.relativePath,

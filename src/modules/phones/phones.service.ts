@@ -11,7 +11,9 @@ export class PhonesService {
     }
 
     if (name.length > 50) {
-      throw new BadRequestException('Instance name cannot exceed 50 characters');
+      throw new BadRequestException(
+        'Instance name cannot exceed 50 characters',
+      );
     }
   }
 
@@ -24,7 +26,8 @@ export class PhonesService {
       userId,
       instanceName: dto.instanceName,
       // Use instanceName for webhook matching (Evolution sends instanceName in webhooks)
-      evolutionInstanceId: evolutionData.instance.instanceName || dto.instanceName,
+      evolutionInstanceId:
+        evolutionData.instance.instanceName || dto.instanceName,
       status: PhoneStatus.pending,
       phoneNumber: '',
       qrCode: evolutionData.qrcode?.code,

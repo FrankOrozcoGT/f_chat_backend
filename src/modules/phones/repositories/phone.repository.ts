@@ -26,7 +26,9 @@ export class PhoneRepository {
     });
   }
 
-  async findByEvolutionInstanceId(evolutionInstanceId: string): Promise<Phone | null> {
+  async findByEvolutionInstanceId(
+    evolutionInstanceId: string,
+  ): Promise<Phone | null> {
     return this.prisma.phone.findUnique({
       where: { evolutionInstanceId },
     });

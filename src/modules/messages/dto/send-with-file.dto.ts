@@ -1,4 +1,10 @@
-import { IsUUID, IsNotEmpty, IsEnum, IsString, IsOptional } from 'class-validator';
+import {
+  IsUUID,
+  IsNotEmpty,
+  IsEnum,
+  IsString,
+  IsOptional,
+} from 'class-validator';
 import { MessageType } from '@prisma/client';
 
 export class SendWithFileDto {

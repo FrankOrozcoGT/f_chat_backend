@@ -24,7 +24,17 @@ export class LlmNode {
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
-    const { transcription, contextForLlm, conversationId, messageId, messageType, imageUrl, apiCalls: existingApiCalls, totalCost: existingCost, error: previousError } = state;
+    const {
+      transcription,
+      contextForLlm,
+      conversationId,
+      messageId,
+      messageType,
+      imageUrl,
+      apiCalls: existingApiCalls,
+      totalCost: existingCost,
+      error: previousError,
+    } = state;
 
     // Si un node anterior falló, skip
     if (previousError) return {};
@@ -52,36 +62,51 @@ export class LlmNode {
         .filter((m) => m.content)
         .map((m) => ({
           role: m.direction === 'incoming' ? 'user' : 'assistant',
-          content: m.content!,
+          content: m.content,
         }));
 
-      this.logger.log(`LlmNode: loaded ${history.length} messages from conversation history`);
+      this.logger.log(
+        `LlmNode: loaded ${history.length} messages from conversation history`,
+      );
     }
 
     // Validar créditos ANTES de llamar a LLM
-    const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+    const conversation =
+      await this.conversationRepository.findByIdWithRelations(conversationId);
     if (!conversation) {
       return {
-        error: { step: 'llm', apiName: 'kimi_llm', message: 'Conversation not found' },
+        error: {
+          step: 'llm',
+          apiName: 'kimi_llm',
+          message: 'Conversation not found',
+        },
       };
     }
     const userId = conversation.phone.userId;
 
     // NO validar créditos - permitir que el flujo se complete aunque quede en negativo
     // La deuda se arrastrará al siguiente periodo de facturación
-    this.logger.log(`LlmNode: processing for user ${userId} (no credit validation)`);
+    this.logger.log(
+      `LlmNode: processing for user ${userId} (no credit validation)`,
+    );
 
     try {
       let llmResult: LlmResponse;
 
       const traceMessages = [
         ...history,
-        { role: 'user', content: imageUrl ? `${transcription} [imagen: ${imageUrl}]` : transcription },
+        {
+          role: 'user',
+          content: imageUrl
+            ? `${transcription} [imagen: ${imageUrl}]`
+            : transcription,
+        },
       ];
 
       if (imageUrl) {
         llmResult = await this.langSmithService.traceLLM(
-          () => this.kimiClient.chatWithVision(transcription, imageUrl, history),
+          () =>
+            this.kimiClient.chatWithVision(transcription, imageUrl, history),
           traceMessages,
         );
       } else {
@@ -103,16 +128,22 @@ export class LlmNode {
 
       // Incrementar créditos usados basado en tokens reales
       const totalTokens = llmResult.tokensInput + llmResult.tokensOutput;
-      const actualCredits = this.limitsService.calculateCreditsFromTokens(totalTokens);
+      const actualCredits =
+        this.limitsService.calculateCreditsFromTokens(totalTokens);
       await this.userRepository.incrementCreditsUsed(userId, actualCredits);
-      this.logger.log(`LlmNode: incremented ${actualCredits.toFixed(3)} credits (${totalTokens} tokens)`);
+      this.logger.log(
+        `LlmNode: incremented ${actualCredits.toFixed(3)} credits (${totalTokens} tokens)`,
+      );
 
       // Decide preferred format: respond with audio if input was audio, text otherwise
       const preferredFormat: 'audio' | 'text' =
-        messageType === MessageType.voice || messageType === MessageType.audio ? 'audio' : 'text';
+        messageType === MessageType.voice || messageType === MessageType.audio
+          ? 'audio'
+          : 'text';
 
-      this.logger.log(`LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`);
-
+      this.logger.log(
+        `LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`,
+      );
 
       return {
         responseText: llmResult.response,

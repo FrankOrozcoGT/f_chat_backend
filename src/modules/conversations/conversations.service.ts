@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { Conversation, Client, Phone, ConversationMode } from '@prisma/client';
+import { Client, Phone, ConversationMode } from '@prisma/client';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class ConversationsService {
    * @throws ForbiddenException si el usuario no es dueño
    */
   checkUserOwnsConversation(
-    conversation: Conversation,
+    conversation: { id: string; phoneId: string },
     phone: Phone,
     userId: string,
   ): void {
@@ -36,29 +36,34 @@ export class ConversationsService {
     const now = new Date();
     return contacts
       .filter((c) => c.remoteJid?.endsWith('@s.whatsapp.net'))
-      .map((c) => new ConversationResponseDto({
-        id: c.remoteJid,
-        phoneId: phone.id,
-        clientId: c.remoteJid,
-        mode: ConversationMode.HITL,
-        lastMessageAt: now,
-        lastMessagePreview: null,
-        isActive: true,
-        summary: null,
-        createdAt: now,
-        updatedAt: now,
-        client: {
+      .map((c) => {
+        const client = {
           id: c.remoteJid,
           phoneNumber: c.remoteJid.replace(/@s\.whatsapp\.net$/, ''),
           name: c.pushName || c.notify || null,
+          profilePicUrl: c.profilePicUrl || null,
           firstContactAt: now,
           lastContactAt: now,
-        } as Client,
-        phone: phone,
-      } as Conversation & { client: Client; phone: Phone }));
+        } as Client;
+
+        return new ConversationResponseDto({
+          id: c.remoteJid,
+          phoneId: phone.id,
+          type: 'individual',
+          mode: ConversationMode.HITL,
+          lastMessageAt: now,
+          lastMessagePreview: null,
+          isActive: true,
+          summary: null,
+          createdAt: now,
+          updatedAt: now,
+          client,
+          phone,
+        });
+      });
   }
 
-  buildDetailResponse(conversation: Conversation, client: Client | null) {
+  buildDetailResponse(conversation: { id: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; mode: string }, client: Client | null) {
     const summary = {
       conversationId: conversation.id,
       clientName: client?.name || 'Unknown',

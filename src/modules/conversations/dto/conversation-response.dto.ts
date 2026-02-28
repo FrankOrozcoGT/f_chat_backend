@@ -1,9 +1,11 @@
-import { Conversation, Client, Phone } from '@prisma/client';
+import { Client, Phone, ConversationParticipant } from '@prisma/client';
 
 export class ConversationResponseDto {
   id: string;
   phoneId: string;
-  clientId: string;
+  type: string;
+  groupName: string | null;
+  groupPictureUrl: string | null;
   mode: string;
   lastMessageAt: Date;
   lastMessagePreview: string | null;
@@ -12,14 +14,23 @@ export class ConversationResponseDto {
   createdAt: Date;
   updatedAt: Date;
 
-  // Datos del cliente
+  // Datos del cliente (null para grupos)
   client: {
     id: string;
     phoneNumber: string;
     name: string | null;
+    profilePicUrl: string | null;
     firstContactAt: Date;
     lastContactAt: Date;
-  };
+  } | null;
+
+  // Participantes (todos para grupos, 1 para individuales)
+  participants: {
+    id: string;
+    phoneNumber: string;
+    name: string | null;
+    profilePicUrl: string | null;
+  }[];
 
   // Datos del phone
   phone: {
@@ -29,12 +40,12 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(
-    conversation: Conversation & { client: Client; phone: Phone },
-  ) {
+  constructor(conversation: { id: string; phoneId: string; type: string; groupJid?: string | null; groupName?: string | null; groupPictureUrl?: string | null; mode: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; summary: string | null; createdAt: Date; updatedAt: Date; client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[] }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
-    this.clientId = conversation.clientId;
+    this.type = conversation.type;
+    this.groupName = conversation.groupName ?? null;
+    this.groupPictureUrl = (conversation as any).groupPictureUrl ?? null;
     this.mode = conversation.mode;
     this.lastMessageAt = conversation.lastMessageAt;
     this.lastMessagePreview = conversation.lastMessagePreview;
@@ -43,13 +54,23 @@ export class ConversationResponseDto {
     this.createdAt = conversation.createdAt;
     this.updatedAt = conversation.updatedAt;
 
-    this.client = {
-      id: conversation.client.id,
-      phoneNumber: conversation.client.phoneNumber,
-      name: conversation.client.name,
-      firstContactAt: conversation.client.firstContactAt,
-      lastContactAt: conversation.client.lastContactAt,
-    };
+    this.client = conversation.client
+      ? {
+          id: conversation.client.id,
+          phoneNumber: conversation.client.phoneNumber,
+          name: conversation.client.name,
+          profilePicUrl: conversation.client.profilePicUrl,
+          firstContactAt: conversation.client.firstContactAt,
+          lastContactAt: conversation.client.lastContactAt,
+        }
+      : null;
+
+    this.participants = (conversation.participants ?? []).map((p) => ({
+      id: p.client.id,
+      phoneNumber: p.client.phoneNumber,
+      name: p.client.name,
+      profilePicUrl: p.client.profilePicUrl,
+    }));
 
     this.phone = {
       id: conversation.phone.id,

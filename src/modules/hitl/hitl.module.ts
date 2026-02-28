@@ -11,6 +11,11 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 @Module({
   imports: [PrismaModule, ConversationsModule, WebSocketModule],
   controllers: [HitlController],
-  providers: [HitlService, SessionRepository, MessageRepository, PhoneRepository],
+  providers: [
+    HitlService,
+    SessionRepository,
+    MessageRepository,
+    PhoneRepository,
+  ],
 })
 export class HitlModule {}

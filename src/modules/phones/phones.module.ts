@@ -12,9 +12,21 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
 import { PrismaModule } from '@common/prisma/prisma.module';
 
 @Module({
-  imports: [EvolutionModule, ConfigModule, LimitsModule, UsersModule, PrismaModule],
+  imports: [
+    EvolutionModule,
+    ConfigModule,
+    LimitsModule,
+    UsersModule,
+    PrismaModule,
+  ],
   controllers: [PhonesController],
-  providers: [PhoneRepository, PhonesService, ClientRepository, MessageRepository, ConversationRepository],
+  providers: [
+    PhoneRepository,
+    PhonesService,
+    ClientRepository,
+    MessageRepository,
+    ConversationRepository,
+  ],
   exports: [PhoneRepository],
 })
 export class PhonesModule {}

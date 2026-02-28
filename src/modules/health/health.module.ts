@@ -8,11 +8,7 @@ import { HealthService } from './health.service';
 import { HealthMonitorService } from './health-monitor.service';
 
 @Module({
-  imports: [
-    PrismaModule,
-    ScheduleModule.forRoot(),
-    WebSocketModule,
-  ],
+  imports: [PrismaModule, ScheduleModule.forRoot(), WebSocketModule],
   controllers: [HealthController],
   providers: [ApiHealthRepository, HealthService, HealthMonitorService],
   exports: [ApiHealthRepository, HealthService],

@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { MessageType, MessageDirection, MessageSenderType, MessageStatus } from '@prisma/client';
+import {
+  MessageType,
+  MessageDirection,
+  MessageSenderType,
+  MessageStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class MessageRepository {
@@ -25,20 +30,23 @@ export class MessageRepository {
    * @param messageId - ID opcional del mensaje (para nombres de archivo estandarizados)
    * @returns Mensaje creado
    */
-  async create(data: {
-    conversationId: string;
-    type: MessageType;
-    content: string;
-    mediaUrl: string | null;
-    fileName?: string | null;
-    fileSize?: number | null;
-    mimeType?: string | null;
-    direction: MessageDirection;
-    senderType: MessageSenderType;
-    status: MessageStatus;
-    metadata?: any;
-    createdAt?: Date;
-  }, messageId?: string) {
+  async create(
+    data: {
+      conversationId: string;
+      type: MessageType;
+      content: string;
+      mediaUrl: string | null;
+      fileName?: string | null;
+      fileSize?: number | null;
+      mimeType?: string | null;
+      direction: MessageDirection;
+      senderType: MessageSenderType;
+      status: MessageStatus;
+      metadata?: any;
+      createdAt?: Date;
+    },
+    messageId?: string,
+  ) {
     return this.prisma.message.create({
       data: {
         id: messageId, // Prisma usará este ID si se proporciona, sino generará uno
@@ -149,17 +157,42 @@ export class MessageRepository {
   /**
    * Crea múltiples mensajes ignorando duplicados
    */
-  async createMany(data: Array<{
-    conversationId: string;
-    type: MessageType;
-    content: string;
-    mediaUrl: string | null;
-    direction: MessageDirection;
-    senderType: MessageSenderType;
-    status: MessageStatus;
-    metadata?: any;
-  }>) {
+  async createMany(
+    data: Array<{
+      conversationId: string;
+      type: MessageType;
+      content: string;
+      mediaUrl: string | null;
+      direction: MessageDirection;
+      senderType: MessageSenderType;
+      status: MessageStatus;
+      metadata?: any;
+    }>,
+  ) {
     return this.prisma.message.createMany({ data });
+  }
+
+  /**
+   * Bulk insert mensajes con todos los campos, skipDuplicates por keyId no soportado en Prisma
+   * Se filtra externamente antes de llamar
+   */
+  async createManyFull(
+    data: Array<{
+      conversationId: string;
+      type: MessageType;
+      content: string;
+      mediaUrl: string | null;
+      fileName?: string | null;
+      fileSize?: number | null;
+      mimeType?: string | null;
+      direction: MessageDirection;
+      senderType: MessageSenderType;
+      status: MessageStatus;
+      metadata?: any;
+      createdAt?: Date;
+    }>,
+  ) {
+    return this.prisma.message.createMany({ data, skipDuplicates: true });
   }
 
   async countByConversationId(conversationId: string): Promise<number> {
@@ -171,7 +204,9 @@ export class MessageRepository {
    * @param conversationId - ID de la conversación
    * @returns Set de keyIds ya persistidos
    */
-  async findKeyIdsByConversationId(conversationId: string): Promise<Set<string>> {
+  async findKeyIdsByConversationId(
+    conversationId: string,
+  ): Promise<Set<string>> {
     const results = await this.prisma.$queryRaw<Array<{ keyId: string }>>`
       SELECT metadata->>'keyId' as "keyId"
       FROM "Message"
@@ -179,6 +214,13 @@ export class MessageRepository {
         AND metadata->>'keyId' IS NOT NULL
     `;
     return new Set(results.map((r) => r.keyId));
+  }
+
+  /**
+   * Busca un mensaje por su id de DB
+   */
+  async findById(id: string) {
+    return this.prisma.message.findUnique({ where: { id } });
   }
 
   /**
@@ -242,7 +284,10 @@ export class MessageRepository {
    * @param newStatus - Nuevo status
    * @returns Mensaje actualizado o null si no se encuentra
    */
-  async updateLatestPendingOutgoingMessage(phoneId: string, newStatus: MessageStatus) {
+  async updateLatestPendingOutgoingMessage(
+    phoneId: string,
+    newStatus: MessageStatus,
+  ) {
     // Buscar el mensaje más reciente con status 'pending' y direction 'outgoing'
     const latestPendingMessage = await this.prisma.message.findFirst({
       where: {

@@ -7,7 +7,9 @@ const CHAT_SYSTEM_PROMPT = loadPrompt('chat-system.md');
 
 type ChatMessage = {
   role: string;
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  content:
+    | string
+    | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 };
 
 @Injectable()
@@ -17,15 +19,21 @@ export class KimiClient {
   private readonly apiUrl: string;
 
   // Pricing per 1M tokens: $0.60 input, $2.50 output
-  private static readonly COST_PER_INPUT_TOKEN = 0.60 / 1_000_000;
-  private static readonly COST_PER_OUTPUT_TOKEN = 2.50 / 1_000_000;
+  private static readonly COST_PER_INPUT_TOKEN = 0.6 / 1_000_000;
+  private static readonly COST_PER_OUTPUT_TOKEN = 2.5 / 1_000_000;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('KIMI_API_KEY', '');
-    this.apiUrl = this.configService.get<string>('KIMI_API_URL', 'https://api.moonshot.ai/v1/chat/completions');
+    this.apiUrl = this.configService.get<string>(
+      'KIMI_API_URL',
+      'https://api.moonshot.ai/v1/chat/completions',
+    );
   }
 
-  async chat(text: string, history: { role: string; content: string }[] = []): Promise<LlmResponse> {
+  async chat(
+    text: string,
+    history: { role: string; content: string }[] = [],
+  ): Promise<LlmResponse> {
     const messages = [
       {
         role: 'system',
@@ -37,10 +45,15 @@ export class KimiClient {
 
     const result = await this.rawChat(messages, 500);
 
-    const intent = result.response.toLowerCase().includes('switch_hitl') ? 'switch_hitl' : 'normal';
+    const intent = result.response.toLowerCase().includes('switch_hitl')
+      ? 'switch_hitl'
+      : 'normal';
 
     return {
-      response: intent === 'switch_hitl' ? result.response.replace(/switch_hitl/gi, '').trim() : result.response,
+      response:
+        intent === 'switch_hitl'
+          ? result.response.replace(/switch_hitl/gi, '').trim()
+          : result.response,
       intent,
       tokensInput: result.tokensInput,
       tokensOutput: result.tokensOutput,
@@ -70,10 +83,15 @@ export class KimiClient {
 
     const result = await this.rawChat(messages, 500);
 
-    const intent = result.response.toLowerCase().includes('switch_hitl') ? 'switch_hitl' : 'normal';
+    const intent = result.response.toLowerCase().includes('switch_hitl')
+      ? 'switch_hitl'
+      : 'normal';
 
     return {
-      response: intent === 'switch_hitl' ? result.response.replace(/switch_hitl/gi, '').trim() : result.response,
+      response:
+        intent === 'switch_hitl'
+          ? result.response.replace(/switch_hitl/gi, '').trim()
+          : result.response,
       intent,
       tokensInput: result.tokensInput,
       tokensOutput: result.tokensOutput,
@@ -92,7 +110,7 @@ export class KimiClient {
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -106,7 +124,9 @@ export class KimiClient {
       if (!response.ok) {
         const errorBody = await response.text();
         const errorHeaders = Object.fromEntries(response.headers.entries());
-        throw new Error(`Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`);
+        throw new Error(
+          `Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+        );
       }
 
       const data = await response.json();
@@ -120,9 +140,17 @@ export class KimiClient {
         tokensInput * KimiClient.COST_PER_INPUT_TOKEN +
         tokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
 
-      this.logger.log(`LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`);
+      this.logger.log(
+        `LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`,
+      );
 
-      return { response: responseText, tokensInput, tokensOutput, costUsd, latencyMs };
+      return {
+        response: responseText,
+        tokensInput,
+        tokensOutput,
+        costUsd,
+        latencyMs,
+      };
     } catch (error) {
       const latencyMs = Date.now() - startTime;
       this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message}`);

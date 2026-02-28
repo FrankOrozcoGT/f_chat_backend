@@ -38,18 +38,29 @@ export class AiAgentService {
     try {
       // Validar créditos ANTES de ejecutar el workflow
       // Estimación conservadora: STT (30s) + LLM (500 tokens) = ~0.65 créditos
-      const estimatedCredits = payload.messageType === MessageType.voice || payload.messageType === MessageType.audio
-        ? this.limitsService.calculateCreditsFromSeconds(30) + this.limitsService.calculateCreditsFromTokens(500)
-        : this.limitsService.calculateCreditsFromTokens(500);
+      const estimatedCredits =
+        payload.messageType === MessageType.voice ||
+        payload.messageType === MessageType.audio
+          ? this.limitsService.calculateCreditsFromSeconds(30) +
+            this.limitsService.calculateCreditsFromTokens(500)
+          : this.limitsService.calculateCreditsFromTokens(500);
 
-      await this.limitsService.validateCredits(payload.userId, estimatedCredits);
+      await this.limitsService.validateCredits(
+        payload.userId,
+        estimatedCredits,
+      );
 
       // Si pasa la validación, ejecutar workflow
       await this.workflow.execute(payload);
     } catch (error) {
       // Si es error de límite de créditos, orquestar rechazo
-      if (error instanceof ForbiddenException && error.message.includes('Credits limit reached')) {
-        this.logger.warn(`Credits exhausted for user ${payload.userId}, conversation ${payload.conversationId}`);
+      if (
+        error instanceof ForbiddenException &&
+        error.message.includes('Credits limit reached')
+      ) {
+        this.logger.warn(
+          `Credits exhausted for user ${payload.userId}, conversation ${payload.conversationId}`,
+        );
 
         // Obtener datos actuales del usuario para emitir WebSocket
         const user = await this.userRepository.findById(payload.userId);
@@ -63,22 +74,35 @@ export class AiAgentService {
         }
 
         // Cambiar conversación a HITL
-        await this.conversationRepository.updateMode(payload.conversationId, 'HITL');
+        await this.conversationRepository.updateMode(
+          payload.conversationId,
+          'HITL',
+        );
 
         // Cerrar sesión AI activa si existe
-        const activeSession = await this.sessionRepository.findActiveByConversationId(payload.conversationId);
+        const activeSession =
+          await this.sessionRepository.findActiveByConversationId(
+            payload.conversationId,
+          );
         if (activeSession) {
-          await this.sessionRepository.close(activeSession.id, 'credits_exhausted');
+          await this.sessionRepository.close(
+            activeSession.id,
+            'credits_exhausted',
+          );
         }
 
         // Crear sesión HITL
         await this.sessionRepository.createHitl(payload.conversationId);
 
-        this.logger.log(`Conversation ${payload.conversationId} moved to HITL due to credits exhaustion`);
+        this.logger.log(
+          `Conversation ${payload.conversationId} moved to HITL due to credits exhaustion`,
+        );
         return;
       }
 
-      this.logger.error(`AI processing failed for conversation ${payload.conversationId}: ${error.message}`);
+      this.logger.error(
+        `AI processing failed for conversation ${payload.conversationId}: ${error.message}`,
+      );
     }
   }
 }

@@ -13,7 +13,9 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async handleGoogleLogin(googleProfile: GoogleProfile): Promise<{ user: User; token: string }> {
+  async handleGoogleLogin(
+    googleProfile: GoogleProfile,
+  ): Promise<{ user: User; token: string }> {
     const { email, name, picture } = googleProfile;
 
     // Buscar usuario por email
@@ -21,7 +23,8 @@ export class AuthService {
 
     if (!user) {
       // Usuario nuevo: crear con role y plan según ADMIN_EMAILS
-      const adminEmails = this.configService.get<string>('ADMIN_EMAILS')?.split(',') || [];
+      const adminEmails =
+        this.configService.get<string>('ADMIN_EMAILS')?.split(',') || [];
       const isAdmin = adminEmails.includes(email);
 
       user = await this.userRepository.create({

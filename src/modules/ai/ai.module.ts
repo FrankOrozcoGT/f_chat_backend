@@ -25,7 +25,16 @@ import { LimitsModule } from '@common/services/limits.module';
 import { UsersModule } from '@modules/users/users.module';
 
 @Module({
-  imports: [PrismaModule, EvolutionModule, MessagesModule, ConversationsModule, WebSocketModule, HealthModule, LimitsModule, UsersModule],
+  imports: [
+    PrismaModule,
+    EvolutionModule,
+    MessagesModule,
+    ConversationsModule,
+    WebSocketModule,
+    HealthModule,
+    LimitsModule,
+    UsersModule,
+  ],
   providers: [
     AiAgentService,
     AiWorkflow,
