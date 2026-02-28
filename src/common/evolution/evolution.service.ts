@@ -647,6 +647,30 @@ export class EvolutionService {
   }
 
   /**
+   * Obtener participantes de un grupo con mapeo LID → phoneNumber
+   * GET /group/participants/:instance?groupJid=...
+   */
+  async fetchGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<{ id: string; phoneNumber: string | null; admin: string | null }[]> {
+    this.logger.log(`[fetchGroupParticipants] Fetching for ${groupJid} on instance ${instanceName}`);
+    const response = await firstValueFrom(
+      this.httpService.get<{ participants: { id: string; phoneNumber: string; admin: string | null }[] }>(
+        `${this.apiUrl}/group/participants/${instanceName}?groupJid=${groupJid}`,
+        { headers: this.getHeaders(), timeout: 10000 },
+      ),
+    );
+    const participants = response.data?.participants || [];
+    this.logger.log(`[fetchGroupParticipants] Got ${participants.length} participants for ${groupJid}`);
+    return participants.map((p) => ({
+      id: p.id,
+      phoneNumber: p.phoneNumber || null,
+      admin: p.admin || null,
+    }));
+  }
+
+  /**
    * Parsea el contenido de un mensaje de Evolution al formato interno
    */
   parseMessageContent(messageData: EvolutionMessage['message']): ParsedMessageContent {
