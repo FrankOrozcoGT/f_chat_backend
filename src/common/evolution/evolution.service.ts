@@ -33,6 +33,8 @@ interface EvolutionMessage {
     remoteJid: string;
     fromMe: boolean;
     id: string;
+    participant?: string;
+    participantAlt?: string;
   };
   message?: {
     conversation?: string;
@@ -622,8 +624,26 @@ export class EvolutionService {
         `Failed to fetch groups for instance: ${instanceName}`,
         (error as Error).message,
       );
-      return [];
+      throw new BadGatewayException('Failed to fetch groups from WhatsApp');
     }
+  }
+
+  /**
+   * Obtener la URL de la foto de perfil de un contacto o grupo
+   * POST /chat/fetchProfilePictureUrl/:instance
+   */
+  async fetchProfilePictureUrl(instanceName: string, number: string): Promise<string | null> {
+    this.logger.log(`[fetchProfilePictureUrl] Fetching for ${number} on instance ${instanceName}`);
+    const response = await firstValueFrom(
+      this.httpService.post<{ wuid: string; profilePictureUrl: string }>(
+        `${this.apiUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
+        { number },
+        { headers: this.getHeaders(), timeout: 8000 },
+      ),
+    );
+    const url = response.data?.profilePictureUrl || null;
+    this.logger.log(`[fetchProfilePictureUrl] Result for ${number}: ${url ? url.substring(0, 80) + '...' : 'null'}`);
+    return url;
   }
 
   /**
