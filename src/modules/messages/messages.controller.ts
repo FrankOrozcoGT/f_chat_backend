@@ -96,7 +96,52 @@ export class MessagesController {
 
       this.logger.log(`[fallback] rawMessages.length=${rawMessages.length} firstKey=${rawMessages[0]?.key?.id ?? 'none'}`);
 
-      this.bootstrapConversationInBackground(conversation, rawMessages, userId);
+      // Mapeo LID → phoneNumber → Client para grupos
+      const instanceName = conversation.phone.evolutionInstanceId;
+      let lidToClientMap = new Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>();
+      if (isGroup && rawMessages.length > 0) {
+        // 1. Obtener participantes del grupo (LID → phoneNumber)
+        const participants = await this.evolutionService.fetchGroupParticipants(instanceName, remoteJid);
+        const lidToPhone = new Map<string, string>();
+        for (const p of participants) {
+          if (p.phoneNumber) {
+            const lid = p.id.replace('@lid', '');
+            const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            lidToPhone.set(lid, phone);
+          }
+        }
+
+        // 2. Buscar clients en DB por los phoneNumbers
+        const phoneNumbers = [...new Set(lidToPhone.values())];
+        if (phoneNumbers.length > 0) {
+          const clients = await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
+          const clientByPhone = new Map(clients.map((c) => [c.phoneNumber, c]));
+
+          // 3. Fetch profilePicUrl de Evolution para los que no tienen
+          const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
+          for (const phone of phonesWithoutPic) {
+            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${phone}@s.whatsapp.net`);
+            if (picUrl) {
+              await this.clientRepository.updateProfilePicIfExists(phone, picUrl);
+              const existing = clientByPhone.get(phone);
+              if (existing) existing.profilePicUrl = picUrl;
+            }
+          }
+
+          // 4. Construir mapa LID → client info
+          for (const [lid, phone] of lidToPhone) {
+            const client = clientByPhone.get(phone);
+            lidToClientMap.set(lid, {
+              phoneNumber: phone,
+              name: client?.name || null,
+              profilePicUrl: client?.profilePicUrl || null,
+            });
+          }
+        }
+        this.logger.log(`[fallback] lidToClientMap built with ${lidToClientMap.size} entries for ${remoteJid}`);
+      }
+
+      this.bootstrapConversationInBackground(conversation, rawMessages, userId, isGroup ? lidToClientMap : undefined);
 
       return rawMessages
         .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0))
@@ -108,6 +153,22 @@ export class MessagesController {
             const stanzaId = (msgData as any)[msgType]?.contextInfo?.stanzaId;
             if (stanzaId) { quotedMessageId = stanzaId; break; }
           }
+
+          const metadata: Record<string, any> = { keyId: m.key?.id, mediaLoading: hasMedia };
+          if (quotedMessageId) metadata.quotedMessageId = quotedMessageId;
+
+          // Agregar sender info para grupos usando LID → phoneNumber mapping
+          if (isGroup && !m.key?.fromMe && m.pushName) {
+            const clientInfo = lidToClientMap.get(m.pushName);
+            if (clientInfo) {
+              metadata.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+              metadata.senderName = clientInfo.name || clientInfo.phoneNumber;
+              if (clientInfo.profilePicUrl) metadata.senderProfilePicUrl = clientInfo.profilePicUrl;
+            } else {
+              metadata.senderName = m.pushName;
+            }
+          }
+
           return {
             id: m.key?.id,
             conversationId,
@@ -120,7 +181,7 @@ export class MessagesController {
             direction: m.key?.fromMe ? MessageDirection.outgoing : MessageDirection.incoming,
             senderType: m.key?.fromMe ? MessageSenderType.agent : MessageSenderType.client,
             status: MessageStatus.delivered,
-            metadata: { keyId: m.key?.id, mediaLoading: hasMedia, ...(quotedMessageId ? { quotedMessageId } : {}) },
+            metadata,
             createdAt: m.messageTimestamp ? new Date(m.messageTimestamp * 1000) : new Date(),
             updatedAt: new Date(),
           };
@@ -420,6 +481,7 @@ export class MessagesController {
     conversation: any,
     rawMessages: any[],
     userId: string,
+    lidToClientMap?: Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>,
   ) {
     try {
       const existingKeyIds = await this.messageRepository.findKeyIdsByConversationId(conversation.id);
@@ -463,6 +525,18 @@ export class MessagesController {
         const meta: Record<string, any> = {};
         if (m.key?.id) meta.keyId = m.key.id;
         if (quotedMessageId) meta.quotedMessageId = quotedMessageId;
+
+        // Agregar sender info para grupos usando LID → phoneNumber mapping
+        if (lidToClientMap && !m.key?.fromMe && m.pushName) {
+          const clientInfo = lidToClientMap.get(m.pushName);
+          if (clientInfo) {
+            meta.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+            meta.senderName = clientInfo.name || clientInfo.phoneNumber;
+            if (clientInfo.profilePicUrl) meta.senderProfilePicUrl = clientInfo.profilePicUrl;
+          } else {
+            meta.senderName = m.pushName;
+          }
+        }
 
         await this.messageRepository.create({
           conversationId: conversation.id,
