@@ -84,7 +84,7 @@ export class WebhooksController {
         break;
 
       case 'groups.upsert':
-        await this.handleGroupsUpsert(phone.id, webhookData);
+        await this.handleGroupsUpsert(phone.id, phone.instanceName, webhookData);
         break;
 
       default:
@@ -377,10 +377,19 @@ export class WebhooksController {
     userId: string,
   ) {
     try {
-      const rawMessages = await this.evolutionService.findMessages(
-        instanceName,
-        remoteJid,
-      );
+      const isGroupConversation = remoteJid.endsWith('@g.us');
+
+      const [rawMessages, groupPictureUrl] = await Promise.all([
+        this.evolutionService.findMessages(instanceName, remoteJid),
+        isGroupConversation
+          ? this.evolutionService.fetchProfilePictureUrl(instanceName, remoteJid)
+          : Promise.resolve(null),
+      ]);
+
+      if (isGroupConversation && groupPictureUrl) {
+        await this.groupConversationRepository.updateGroupInfo(remoteJid, { groupPictureUrl });
+      }
+
       if (rawMessages.length === 0) return;
 
       // Deduplicar
@@ -449,6 +458,9 @@ export class WebhooksController {
           status: 'delivered',
           metadata: (() => {
             const meta: Record<string, any> = { keyId: m.key?.id };
+            const senderJid = m.key?.participant || m.key?.participantAlt;
+            if (senderJid) meta.senderJid = senderJid;
+            if (m.pushName) meta.senderName = m.pushName;
             const quotedStanzaId = this.webhooksService.extractQuotedStanzaId(
               m.message || {},
             );
@@ -465,7 +477,8 @@ export class WebhooksController {
         `Background: bootstrapped conversation ${conversationId} with ${newMessages.length} messages`,
       );
     } catch (err) {
-      this.logger.error(`Background bootstrap failed: ${err.message}`);
+      this.logger.error(`Background bootstrap failed for ${conversationId} (remoteJid=${remoteJid}): ${err.message}`, err.stack);
+      throw err;
     }
   }
 
@@ -583,8 +596,9 @@ export class WebhooksController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to update message with keyId ${keyId}: ${error.message}`,
+        `Failed to update message with keyId ${keyId}: ${error.message}`, error.stack,
       );
+      throw error;
     }
   }
 
@@ -745,7 +759,7 @@ export class WebhooksController {
    * Maneja evento GROUPS_UPSERT
    * Evolution manda metadata del grupo: nombre, foto, participantes
    */
-  private async handleGroupsUpsert(phoneId: string, webhookData: any) {
+  private async handleGroupsUpsert(phoneId: string, instanceName: string, webhookData: any) {
     const groups: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [webhookData?.data];
     const validGroups = groups.filter((g) => g?.id);
 
@@ -768,10 +782,16 @@ export class WebhooksController {
       const groupPictureUrl = group.pictureUrl || null;
       const participants: { id: string }[] = group.participants || [];
 
-      this.logger.log(`[groups.upsert] groupJid=${groupJid} groupName=${groupName} participants=${participants.length}`);
+      this.logger.log(`[groups.upsert] groupJid=${groupJid} groupName=${groupName} pictureUrl=${groupPictureUrl} participants=${participants.length} keys=${Object.keys(group).join(',')}`);
 
       const conversation = await this.groupConversationRepository.upsert({ phoneId, groupJid, groupName: groupName || undefined });
-      await this.groupConversationRepository.updateGroupInfo(groupJid, { groupName: groupName || undefined, groupPictureUrl });
+
+      const pictureUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, groupJid);
+      this.logger.log(`[groups.upsert] fetchProfilePictureUrl result for ${groupJid}: ${pictureUrl}`);
+      await this.groupConversationRepository.updateGroupInfo(groupJid, {
+        groupName: groupName || undefined,
+        groupPictureUrl: pictureUrl ?? groupPictureUrl,
+      });
 
       for (const p of participants) {
         if (p.id.endsWith('@lid')) {
