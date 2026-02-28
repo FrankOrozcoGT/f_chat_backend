@@ -17,6 +17,8 @@ import { RedisModule } from '@common/redis/redis.module';
 import { AiModule } from '@modules/ai/ai.module';
 import { HitlModule } from '@modules/hitl/hitl.module';
 import { AdminModule } from '@modules/admin/admin.module';
+import { UserSettingsModule } from '@modules/user-settings/user-settings.module';
+import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AdminModule } from '@modules/admin/admin.module';
     AiModule,
     HitlModule,
     AdminModule,
+    UserSettingsModule,
+    ConversationAnalysisModule,
     WebhooksModule,
   ],
 })
