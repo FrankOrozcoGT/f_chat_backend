@@ -17,6 +17,6 @@ export class InternalUserSettingsController {
   @Get(':userId')
   async getByUserId(@Param('userId') userId: string) {
     const settings = await this.userSettingsRepository.findByUserId(userId);
-    return settings ?? { analysisMode: 'manual', messageLimit: 30 };
+    return settings ?? { analysisMode: 'manual', messageLimit: 100 };
   }
 }
