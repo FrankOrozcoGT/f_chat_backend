@@ -35,6 +35,19 @@ export class InputRouterNode {
       messageType === MessageType.voice ||
       messageType === MessageType.audio
     ) {
+      // Reusar transcripción existente si ya fue procesada
+      const existingMessage = await this.internalApi.getMessage(messageId);
+      if (existingMessage?.transcription) {
+        this.logger.log(
+          `InputRouter: audio → reusing existing transcription: "${existingMessage.transcription.substring(0, 80)}"`,
+        );
+        return {
+          transcription: existingMessage.transcription,
+          apiCalls,
+          totalCost: 0,
+        };
+      }
+
       if (!mediaRelativePath) {
         throw new Error('Audio message without mediaRelativePath');
       }
@@ -71,6 +84,9 @@ export class InputRouterNode {
           costUsd: sttResult.costUsd,
           latencyMs: sttResult.latencyMs,
         });
+
+        // Guardar transcripción en DB para reutilización futura
+        await this.internalApi.updateTranscription(messageId, sttResult.text);
 
         // Incrementar créditos usados basado en duración estimada
         const actualCredits = this.limitsService.calculateCreditsFromSeconds(

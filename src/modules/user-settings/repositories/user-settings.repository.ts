@@ -21,7 +21,7 @@ export class UserSettingsRepository {
       create: {
         userId,
         analysisMode: data.analysisMode ?? 'manual',
-        messageLimit: data.messageLimit ?? 30,
+        messageLimit: data.messageLimit ?? 100,
       },
       update: data,
     });

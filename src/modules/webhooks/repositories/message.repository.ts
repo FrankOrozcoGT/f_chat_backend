@@ -288,11 +288,13 @@ export class MessageRepository {
    * Obtiene los últimos N mensajes no analizados de una conversación
    */
   async findLastNUnanalyzed(conversationId: string, limit: number) {
-    return this.prisma.message.findMany({
+    // Traer los N más recientes no analizados (desc) y luego reordenar asc para la IA
+    const newest = await this.prisma.message.findMany({
       where: { conversationId, analyzedAt: null },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
+    return newest.reverse();
   }
 
   /**
@@ -311,6 +313,24 @@ export class MessageRepository {
   async countUnanalyzed(conversationId: string): Promise<number> {
     return this.prisma.message.count({
       where: { conversationId, analyzedAt: null },
+    });
+  }
+
+  /**
+   * Obtiene los mensajes no analizados que NO están en el batch enviado a la IA.
+   * Son los mensajes más antiguos que quedaron fuera del límite.
+   */
+  async findRemainingUnanalyzed(
+    conversationId: string,
+    excludeIds: string[],
+  ) {
+    return this.prisma.message.findMany({
+      where: {
+        conversationId,
+        analyzedAt: null,
+        id: { notIn: excludeIds },
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 

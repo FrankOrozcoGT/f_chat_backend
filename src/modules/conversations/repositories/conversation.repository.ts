@@ -17,6 +17,7 @@ export class ConversationRepository {
     const search = options?.search?.trim();
 
     const where = {
+      isActive: true,
       phone: {
         userId,
         ...(phoneId && { id: phoneId }),
@@ -238,6 +239,23 @@ export class ConversationRepository {
         lastMessageAt: data.lastMessageAt,
         lastMessagePreview: data.lastMessagePreview,
       },
+    });
+  }
+
+  /**
+   * Busca sub-conversaciones analizadas (isActive: false) del mismo phoneId + clientId
+   */
+  async findAnalyzedByPhoneAndClient(phoneId: string, clientId: string) {
+    return this.prisma.conversation.findMany({
+      where: {
+        phoneId,
+        isActive: false,
+        participants: { some: { clientId } },
+      },
+      include: {
+        _count: { select: { messages: true } },
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 

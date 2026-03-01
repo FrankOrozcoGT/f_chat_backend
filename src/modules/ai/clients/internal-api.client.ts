@@ -119,6 +119,183 @@ export class InternalApiClient {
     );
   }
 
+  // --- Conversations (extended) ---
+
+  async getConversationFull(conversationId: string): Promise<{
+    id: string;
+    phoneId: string;
+    isActive: boolean;
+    summary: string | null;
+    phone: { id: string; userId: string };
+    client: { id: string; phoneNumber: string; name: string | null } | null;
+    participants: { clientId: string }[];
+  }> {
+    return this.request('GET', `/conversations/${conversationId}/full`);
+  }
+
+  async updateConversationSummary(
+    conversationId: string,
+    summary: string,
+  ): Promise<void> {
+    await this.request('PATCH', `/conversations/${conversationId}/summary`, {
+      summary,
+    });
+  }
+
+  async createConversationWithParticipant(data: {
+    phoneId: string;
+    clientId: string;
+    summary?: string;
+    isActive: boolean;
+  }): Promise<{ id: string }> {
+    return this.request('POST', '/conversations/create-with-participant', data);
+  }
+
+  // --- Messages (extended) ---
+
+  async findLastNUnanalyzed(
+    conversationId: string,
+    limit: number,
+  ): Promise<
+    Array<{
+      id: string;
+      conversationId: string;
+      type: string;
+      content: string;
+      mediaUrl: string | null;
+      direction: string;
+      senderType: string;
+      transcription: string | null;
+      createdAt: string;
+    }>
+  > {
+    return this.request(
+      'GET',
+      `/messages/unanalyzed/${conversationId}?limit=${limit}`,
+    );
+  }
+
+  async markAsAnalyzed(messageIds: string[]): Promise<void> {
+    await this.request('POST', '/messages/mark-analyzed', { messageIds });
+  }
+
+  async moveMessagesToConversation(
+    messageIds: string[],
+    newConversationId: string,
+  ): Promise<void> {
+    await this.request('POST', '/messages/move-to-conversation', {
+      messageIds,
+      newConversationId,
+    });
+  }
+
+  async getMessage(messageId: string): Promise<{
+    id: string;
+    type: string;
+    content: string;
+    mediaUrl: string | null;
+    transcription: string | null;
+  } | null> {
+    return this.request('GET', `/messages/${messageId}`);
+  }
+
+  // --- Clients ---
+
+  async updateClientName(clientId: string, name: string): Promise<void> {
+    await this.request('PATCH', `/messages/clients/${clientId}/name`, { name });
+  }
+
+  // --- User Settings ---
+
+  async getUserSettings(userId: string): Promise<{
+    analysisMode: string;
+    messageLimit: number;
+  }> {
+    return this.request('GET', `/user-settings/${userId}`);
+  }
+
+  // --- Catalog ---
+
+  async upsertProduct(data: {
+    userId: string;
+    name: string;
+    basePrice: number;
+    description?: string;
+  }): Promise<{ id: string; name: string; basePrice: number }> {
+    return this.request('POST', '/catalog/products/upsert', data);
+  }
+
+  async findProduct(
+    userId: string,
+    name: string,
+  ): Promise<{ id: string; name: string; basePrice: number } | null> {
+    return this.request('POST', '/catalog/products/find', { userId, name });
+  }
+
+  async upsertDiscount(data: {
+    productId: string;
+    clientId?: string | null;
+    discountPrice: number;
+  }): Promise<{ id: string }> {
+    return this.request('POST', '/catalog/discounts/upsert', data);
+  }
+
+  async createPromotion(data: {
+    userId: string;
+    name?: string;
+    description?: string;
+    specialPrice: number;
+    productIds: string[];
+  }): Promise<{ id: string }> {
+    return this.request('POST', '/catalog/promotions/create', data);
+  }
+
+  async upsertPromotionDiscount(data: {
+    promotionId: string;
+    clientId?: string | null;
+    discountPrice: number;
+  }): Promise<{ id: string }> {
+    return this.request('POST', '/catalog/promotion-discounts/upsert', data);
+  }
+
+  // --- Analysis processing ---
+
+  async processAnalysisSplits(data: {
+    conversationId: string;
+    phoneId: string;
+    clientId: string;
+    batchMessageIds: string[];
+    splits: Array<{ summary: string; messageIds: string[] }>;
+    orphanMessageIds: string[];
+  }): Promise<{
+    createdConversations: Array<{
+      id: string;
+      summary: string;
+      isActive: boolean;
+      messageCount: number;
+    }>;
+  }> {
+    return this.request('POST', '/messages/process-analysis-splits', data);
+  }
+
+  async processAnalysisCatalog(data: {
+    userId: string;
+    clientId: string | null;
+    products: Array<{
+      name: string;
+      price: number;
+      description?: string;
+    }>;
+    promotions: Array<{
+      name: string;
+      description?: string;
+      specialPrice: number;
+      productNames: string[];
+    }>;
+  }): Promise<void> {
+    await this.request('POST', '/catalog/process-analysis-catalog', data);
+  }
+
   // --- Health ---
 
   async markApiDown(apiName: string, message: string): Promise<void> {
