@@ -109,15 +109,11 @@ export class ConversationsController {
       userId,
     );
 
-    // 3. Construir response base (Service - lógica pura)
-    const response = this.conversationsService.buildDetailResponse(
-      conversation,
-      conversation.client,
-    );
-
-    // 4. Enriquecer con datos de negocio del Client
+    // 3. Datos del cliente
     const clientId = conversation.client?.id;
-    const [products, clientDiscounts, clientPromotionDiscounts] =
+
+    // 4. Cargar en paralelo: productos, descuentos, promociones, sub-conversaciones analizadas
+    const [products, clientDiscounts, clientPromotionDiscounts, analyzedConversations] =
       await Promise.all([
         this.productRepository.findByUserId(userId),
         clientId
@@ -125,6 +121,12 @@ export class ConversationsController {
           : Promise.resolve([]),
         clientId
           ? this.promotionDiscountRepository.findByClientId(clientId)
+          : Promise.resolve([]),
+        clientId
+          ? this.conversationRepository.findAnalyzedByPhoneAndClient(
+              conversation.phoneId,
+              clientId,
+            )
           : Promise.resolve([]),
       ]);
 
@@ -134,11 +136,31 @@ export class ConversationsController {
     this.logger.log(`Conversation detail retrieved successfully for id: ${id}`);
 
     return {
-      ...response,
+      conversation: {
+        id: conversation.id,
+        phoneId: conversation.phoneId,
+        isActive: conversation.isActive,
+        mode: conversation.mode,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessagePreview: conversation.lastMessagePreview,
+      },
+      client: conversation.client
+        ? {
+            id: conversation.client.id,
+            name: conversation.client.name,
+            phoneNumber: conversation.client.phoneNumber,
+          }
+        : null,
       products,
       clientDiscounts,
       promotions,
       clientPromotionDiscounts,
+      analyzedConversations: analyzedConversations.map((c) => ({
+        id: c.id,
+        summary: c.summary,
+        messageCount: c._count.messages,
+        createdAt: c.createdAt,
+      })),
     };
   }
 }

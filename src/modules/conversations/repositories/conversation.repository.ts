@@ -242,6 +242,23 @@ export class ConversationRepository {
     });
   }
 
+  /**
+   * Busca sub-conversaciones analizadas (isActive: false) del mismo phoneId + clientId
+   */
+  async findAnalyzedByPhoneAndClient(phoneId: string, clientId: string) {
+    return this.prisma.conversation.findMany({
+      where: {
+        phoneId,
+        isActive: false,
+        participants: { some: { clientId } },
+      },
+      include: {
+        _count: { select: { messages: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   async updateSummary(conversationId: string, summary: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
