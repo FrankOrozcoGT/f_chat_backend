@@ -175,24 +175,29 @@ export class ConversationRepository {
     if (newEntries.length === 0) return { count: 0 };
 
     let count = 0;
-    await this.prisma.$transaction(async (tx) => {
-      for (const entry of newEntries) {
-        const conv = await tx.conversation.create({
-          data: {
-            phoneId: entry.phoneId,
-            type: 'individual',
-            isActive: true,
-          },
-        });
-        await tx.conversationParticipant.create({
-          data: {
-            conversationId: conv.id,
-            clientId: entry.clientId,
-          },
-        });
-        count++;
-      }
-    });
+    const BATCH_SIZE = 100;
+
+    for (let i = 0; i < newEntries.length; i += BATCH_SIZE) {
+      const batch = newEntries.slice(i, i + BATCH_SIZE);
+      await this.prisma.$transaction(async (tx) => {
+        for (const entry of batch) {
+          const conv = await tx.conversation.create({
+            data: {
+              phoneId: entry.phoneId,
+              type: 'individual',
+              isActive: true,
+            },
+          });
+          await tx.conversationParticipant.create({
+            data: {
+              conversationId: conv.id,
+              clientId: entry.clientId,
+            },
+          });
+          count++;
+        }
+      });
+    }
 
     return { count };
   }
