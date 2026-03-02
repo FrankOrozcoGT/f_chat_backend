@@ -74,17 +74,10 @@ export class MessagesController {
 
     // 5. Fallback: si no hay mensajes, buscar en Evolution y retornar inmediatamente
     const isGroup = conversation.type === 'group';
-    const remoteJid = isGroup
-      ? conversation.groupJid
-      : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
-    this.logger.log(`[messages] dbCount=${messages.length} isGroup=${isGroup} remoteJid=${remoteJid ?? 'NULL'}`);
-
-    if (messages.length === 0 && !remoteJid) {
-      const detail = isGroup
-        ? `group conversation ${conversationId} has no groupJid`
-        : `individual conversation ${conversationId} has no client/participant`;
-      throw new BadRequestException(`Cannot resolve remoteJid for fallback: ${detail}`);
-    }
+    const remoteJid = messages.length === 0
+      ? this.messagesService.resolveRemoteJid(conversation, conversationId)
+      : null;
+    this.logger.log(`[messages] dbCount=${messages.length} isGroup=${isGroup} remoteJid=${remoteJid ?? 'N/A'}`);
 
     if (messages.length === 0 && remoteJid) {
       this.logger.log(`No messages in DB for conversation ${conversationId}, falling back to Evolution for remoteJid: ${remoteJid}`);
@@ -229,17 +222,16 @@ export class MessagesController {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
     }
 
-    if (!conversation.client) {
-      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
-    }
+    // 3. Resolver destinatario según tipo de conversación
+    const remoteJid = this.messagesService.resolveRemoteJid(conversation, dto.conversationId);
 
-    // 3. Si hay mediaUrl, construir URL completa para Evolution
+    // 4. Si hay mediaUrl, construir URL completa para Evolution
     const relativePath = dto.mediaUrl || null;
     const mediaUrlForEvolution = relativePath
       ? this.fileStorageService.buildDockerAccessibleUrl(relativePath)
       : null;
 
-    // 4. Si viene quotedMessageId, buscar el mensaje citado por su id de DB
+    // 5. Si viene quotedMessageId, buscar el mensaje citado por su id de DB
     let quotedKey: { id: string; remoteJid: string; fromMe: boolean } | undefined;
     if (dto.quotedMessageId) {
       const quotedMessage = await this.messageRepository.findById(dto.quotedMessageId);
@@ -252,18 +244,18 @@ export class MessagesController {
       }
       quotedKey = {
         id: keyId,
-        remoteJid: `${conversation.client.phoneNumber}@s.whatsapp.net`,
+        remoteJid,
         fromMe: quotedMessage.direction === 'outgoing',
       };
     }
 
-    // 5. Enviar vía Evolution API + guardar en BD
+    // 6. Enviar vía Evolution API + guardar en BD
     try {
       let evolutionKeyId: string;
       if (dto.tipo === MessageType.text) {
         const response = await this.evolutionService.sendTextMessage(
           conversation.phone.evolutionInstanceId,
-          conversation.client.phoneNumber,
+          remoteJid,
           dto.contenido,
           quotedKey,
         );
@@ -272,7 +264,7 @@ export class MessagesController {
         const mediatype = this.mapTypeToMediaType(dto.tipo);
         const response = await this.evolutionService.sendMediaMessage(
           conversation.phone.evolutionInstanceId,
-          conversation.client.phoneNumber,
+          remoteJid,
           mediaUrlForEvolution,
           mediatype,
           dto.contenido || undefined,
@@ -394,11 +386,10 @@ export class MessagesController {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
     }
 
-    if (!conversation.client) {
-      throw new BadRequestException('Cannot send message: group conversations are not supported for outgoing messages.');
-    }
+    // 5. Resolver destinatario según tipo de conversación
+    const remoteJid = this.messagesService.resolveRemoteJid(conversation, dto.conversationId);
 
-    // 5. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
+    // 6. Generar messageId único ANTES de guardar el archivo (para nombre estandarizado)
     const { randomUUID } = await import('crypto');
     const messageId = randomUUID();
 
@@ -438,7 +429,7 @@ export class MessagesController {
       const mediatype = this.mapTypeToMediaType(dto.tipo);
       const response = await this.evolutionService.sendMediaMessage(
         conversation.phone.evolutionInstanceId,
-        conversation.client.phoneNumber,
+        remoteJid,
         mediaUrl,
         mediatype,
         dto.contenido || undefined,

@@ -132,4 +132,20 @@ export class MessagesService {
       lastMessagePreview: message.content.substring(0, 100),
     };
   }
+
+  resolveRemoteJid(conversation: { type: string; groupJid?: string | null; client?: { phoneNumber: string } | null }, conversationId: string): string {
+    const isGroup = conversation.type === 'group';
+    const remoteJid = isGroup
+      ? conversation.groupJid
+      : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
+
+    if (!remoteJid) {
+      const detail = isGroup
+        ? `group conversation ${conversationId} has no groupJid`
+        : `individual conversation ${conversationId} has no client/participant`;
+      throw new BadRequestException(`Cannot resolve recipient: ${detail}`);
+    }
+
+    return remoteJid;
+  }
 }
