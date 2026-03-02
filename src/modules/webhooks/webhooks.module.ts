@@ -11,6 +11,9 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
 import { GroupConversationRepository } from './repositories/group-conversation.repository';
+import { PhoneQueueService } from './services/phone-queue.service';
+import { WebhookProcessorService } from './services/webhook-processor.service';
+import { PhoneQueueProcessor } from './processors/phone-queue.processor';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { GroupConversationRepository } from './repositories/group-conversation.r
     ClientRepository,
     MessageRepository,
     GroupConversationRepository,
+    PhoneQueueService,
+    WebhookProcessorService,
+    PhoneQueueProcessor,
   ],
 })
 export class WebhooksModule {}

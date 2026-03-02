@@ -20,6 +20,7 @@ import { AdminModule } from '@modules/admin/admin.module';
 import { UserSettingsModule } from '@modules/user-settings/user-settings.module';
 import { CatalogModule } from '@modules/catalog/catalog.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
+import { QueueModule } from '@common/queue/queue.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ConversationAnalysisModule } from '@modules/conversation-analysis/conve
       envFilePath: '.env',
     }),
     EventEmitterModule.forRoot(),
+    QueueModule,
     PrismaModule,
     FileStorageModule,
     EvolutionModule,
