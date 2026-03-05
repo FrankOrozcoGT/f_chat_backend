@@ -3,9 +3,8 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { MessageType } from '@prisma/client';
 import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
-import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { InternalApiClient } from './clients/internal-api.client';
-import { SessionRepository } from './repositories/session.repository';
+import { SessionLifecycleService } from './services/session-lifecycle.service';
 
 export interface IncomingMessageEvent {
   messageId: string;
@@ -26,9 +25,8 @@ export class AiAgentService {
   constructor(
     private readonly workflow: AiWorkflow,
     private readonly limitsService: LimitsService,
-    private readonly websocketGateway: AppWebSocketGateway,
     private readonly internalApi: InternalApiClient,
-    private readonly sessionRepository: SessionRepository,
+    private readonly sessionLifecycle: SessionLifecycleService,
   ) {}
 
   @OnEvent('ai.incoming.message')
@@ -60,41 +58,17 @@ export class AiAgentService {
           `Credits exhausted for user ${payload.userId}, conversation ${payload.conversationId}`,
         );
 
-        // Obtener datos actuales del usuario para emitir WebSocket
         const user = await this.internalApi.getUser(payload.userId);
-        if (user) {
-          this.websocketGateway.emitCreditsExhausted(
-            payload.userId,
-            payload.conversationId,
-            user.creditsUsed,
-            user.creditsLimit,
-          );
-        }
 
-        // Cambiar conversación a HITL
-        await this.internalApi.updateConversationMode(
-          payload.conversationId,
-          'HITL',
-        );
+        await this.sessionLifecycle.switchToHitl({
+          conversationId: payload.conversationId,
+          reason: 'credits_exhausted',
+          userId: payload.userId,
+          extras: user
+            ? { creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit }
+            : undefined,
+        });
 
-        // Cerrar sesión AI activa si existe
-        const activeSession =
-          await this.sessionRepository.findActiveByConversationId(
-            payload.conversationId,
-          );
-        if (activeSession) {
-          await this.sessionRepository.close(
-            activeSession.id,
-            'credits_exhausted',
-          );
-        }
-
-        // Crear sesión HITL
-        await this.sessionRepository.createHitl(payload.conversationId);
-
-        this.logger.log(
-          `Conversation ${payload.conversationId} moved to HITL due to credits exhaustion`,
-        );
         return;
       }
 
