@@ -16,6 +16,7 @@ import { SessionRepository } from './repositories/session.repository';
 import { ClientMemoryRepository } from './repositories/client-memory.repository';
 import { FlowCacheService } from './services/flow-cache.service';
 import { NodeMessageService } from './services/node-message.service';
+import { SessionLifecycleService } from './services/session-lifecycle.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
@@ -46,11 +47,13 @@ import { LimitsModule } from '@common/services/limits.module';
     ClientMemoryRepository,
     FlowCacheService,
     NodeMessageService,
+    SessionLifecycleService,
   ],
   exports: [
     InternalApiClient,
     KimiClient,
     QwenSttClient,
+    SessionLifecycleService,
   ],
 })
 export class AiModule {}
