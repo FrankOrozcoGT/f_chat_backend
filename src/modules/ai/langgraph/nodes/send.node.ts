@@ -4,8 +4,7 @@ import {
   EvolutionMediaType,
 } from '@common/evolution/evolution.service';
 import { AiRepository } from '../../repositories/ai.repository';
-import { SessionRepository } from '../../repositories/session.repository';
-import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
+import { SessionLifecycleService } from '../../services/session-lifecycle.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { MessageType } from '@prisma/client';
 import { WorkflowStateType } from '../state.interface';
@@ -18,8 +17,7 @@ export class SendNode {
   constructor(
     private readonly evolutionService: EvolutionService,
     private readonly aiRepository: AiRepository,
-    private readonly sessionRepository: SessionRepository,
-    private readonly websocketGateway: AppWebSocketGateway,
+    private readonly sessionLifecycle: SessionLifecycleService,
     private readonly internalApi: InternalApiClient,
   ) {}
 
@@ -44,29 +42,13 @@ export class SendNode {
 
     // Si hubo error en un node anterior → activar HITL (transparente para el cliente)
     if (error) {
-      await this.internalApi.markApiDown(error.apiName, error.message);
-      await this.internalApi.updateConversationMode(conversationId, 'HITL');
-
-      const activeSession =
-        await this.sessionRepository.findActiveByConversationId(conversationId);
-      if (activeSession) {
-        await this.sessionRepository.close(activeSession.id, 'api_error');
-      }
-
-      await this.sessionRepository.createHitl(conversationId);
-
-      this.websocketGateway.emitApiDown(error.apiName, error.message, userId);
-      this.websocketGateway.emit(
-        'conversation:hitl',
-        {
-          conversationId,
-          clientPhone,
-          reason: 'api_error',
-          apiName: error.apiName,
-          timestamp: new Date().toISOString(),
-        },
+      await this.sessionLifecycle.switchToHitl({
+        conversationId,
+        reason: 'api_error',
         userId,
-      );
+        clientPhone,
+        extras: { apiName: error.apiName, errorMessage: error.message },
+      });
 
       this.logger.warn(
         `SendNode: API error (${error.apiName}) → HITL activated for ${conversationId}`,
@@ -152,50 +134,22 @@ export class SendNode {
         `Credits exceeded after processing for user ${userId}, conversation ${conversationId}`,
       );
 
-      this.websocketGateway.emitCreditsExhausted(
-        userId,
+      await this.sessionLifecycle.switchToHitl({
         conversationId,
-        user.creditsUsed,
-        user.creditsLimit,
-      );
-      await this.internalApi.updateConversationMode(conversationId, 'HITL');
-
-      const activeSession =
-        await this.sessionRepository.findActiveByConversationId(conversationId);
-      if (activeSession) {
-        await this.sessionRepository.close(
-          activeSession.id,
-          'credits_exhausted',
-        );
-      }
-
-      await this.sessionRepository.createHitl(conversationId);
-      this.logger.log(
-        `SendNode: conversation ${conversationId} moved to HITL due to credits exhaustion`,
-      );
+        reason: 'credits_exhausted',
+        userId,
+        extras: { creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit },
+      });
     }
 
     // 5. Switch a HITL si el intent lo requiere
     if (intent === 'switch_hitl') {
-      await this.internalApi.updateConversationMode(conversationId, 'HITL');
-
-      const activeSession =
-        await this.sessionRepository.findActiveByConversationId(conversationId);
-      if (activeSession) {
-        await this.sessionRepository.close(activeSession.id, 'client_request');
-      }
-
-      await this.sessionRepository.createHitl(conversationId);
-
-      this.websocketGateway.emit(
-        'conversation:hitl',
-        {
-          conversationId,
-          clientPhone,
-          timestamp: new Date().toISOString(),
-        },
+      await this.sessionLifecycle.switchToHitl({
+        conversationId,
+        reason: 'client_request',
         userId,
-      );
+        clientPhone,
+      });
 
       this.logger.log(
         `SendNode: conversation ${conversationId} switched to HITL mode`,

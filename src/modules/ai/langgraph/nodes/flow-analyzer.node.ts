@@ -5,6 +5,7 @@ import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { FlowCacheService } from '../../services/flow-cache.service';
 import { NodeMessageService } from '../../services/node-message.service';
 import { SessionRepository } from '../../repositories/session.repository';
+import { SessionLifecycleService } from '../../services/session-lifecycle.service';
 import { ClientMemoryRepository } from '../../repositories/client-memory.repository';
 import {
   WorkflowStateType,
@@ -34,6 +35,7 @@ export class FlowAnalyzerNode {
     private readonly flowCacheService: FlowCacheService,
     private readonly nodeMessageService: NodeMessageService,
     private readonly sessionRepository: SessionRepository,
+    private readonly sessionLifecycle: SessionLifecycleService,
     private readonly clientMemoryRepository: ClientMemoryRepository,
   ) {}
 
@@ -203,9 +205,7 @@ export class FlowAnalyzerNode {
     const hasEnd = operations.some((o) => o.op === 'end');
     if (hasEnd) {
       await this.flowCacheService.save(conversationId, updatedFlowData);
-      await this.flowCacheService.flushToDb(conversationId, sessionId);
-      await this.sessionRepository.close(sessionId, 'end_conversation');
-      await this.flowCacheService.clear(conversationId);
+      await this.sessionLifecycle.closeConversation({ conversationId, sessionId });
     } else {
       await this.flowCacheService.save(conversationId, updatedFlowData);
     }
