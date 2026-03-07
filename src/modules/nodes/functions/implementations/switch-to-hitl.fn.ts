@@ -14,30 +14,17 @@ export class SwitchToHitlFn {
   @NodeFunction({
     code: 'switchToHitl',
     name: 'Transferir a humano',
-    description: 'Transfiere la conversación a un agente humano.',
+    description: 'Transfiere la conversación a un agente humano cuando el cliente lo solicita.',
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason =
-      ctx.llmResult?.terminationArgs?.tipo === 'error'
-        ? 'api_error'
-        : 'client_request';
-
-    const message = ctx.llmResult?.terminationArgs?.datos
-      ? (ctx.llmResult.terminationArgs.datos as any).message
-      : undefined;
-
     await this.sessionLifecycle.switchToHitl({
       conversationId: ctx.conversationId,
-      reason,
+      reason: 'client_request',
       userId: ctx.userId,
-      extras: {
-        apiName: `node:${ctx.node.name}`,
-        errorMessage: message,
-      },
     });
 
     this.logger.log(
-      `Switched to HITL for conversation ${ctx.conversationId}, reason: ${reason}`,
+      `Switched to HITL for conversation ${ctx.conversationId}, reason: client_request`,
     );
     return 'hitl';
   }

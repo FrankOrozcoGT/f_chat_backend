@@ -13,6 +13,8 @@ import { FindFlowForIntentFn } from './functions/implementations/find-flow-for-i
 import { CloseSessionFn } from './functions/implementations/close-session.fn';
 import { SwitchToHitlFn } from './functions/implementations/switch-to-hitl.fn';
 import { ResponderFn } from './functions/implementations/responder.fn';
+import { ReportHackingFn } from './functions/implementations/report-hacking.fn';
+import { SecurityEventRepository } from './repositories/security-event.repository';
 import { NodesController } from './nodes.controller';
 
 @Module({
@@ -30,6 +32,8 @@ import { NodesController } from './nodes.controller';
     CloseSessionFn,
     SwitchToHitlFn,
     ResponderFn,
+    ReportHackingFn,
+    SecurityEventRepository,
   ],
   exports: [DispatcherService, NodeRepository, NodeSessionRepository, IntentRepository],
 })
