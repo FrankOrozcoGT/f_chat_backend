@@ -56,6 +56,10 @@ export class InternalApiClient {
     return this.request('GET', `/conversations/${conversationId}`);
   }
 
+  async closeConversation(conversationId: string): Promise<void> {
+    await this.request('POST', '/messages/close-conversation', { conversationId });
+  }
+
   async updateConversationMode(
     conversationId: string,
     mode: string,
@@ -181,11 +185,11 @@ export class InternalApiClient {
 
   async moveMessagesToConversation(
     messageIds: string[],
-    newConversationId: string,
+    newConversationId?: string,
   ): Promise<void> {
     await this.request('POST', '/messages/move-to-conversation', {
       messageIds,
-      newConversationId,
+      ...(newConversationId && { newConversationId }),
     });
   }
 
