@@ -11,18 +11,28 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { NodeRepository } from './repositories/node.repository';
+import { NodeSessionRepository } from './repositories/node-session.repository';
 import { Prisma } from '@prisma/client';
 
 @Controller('api/nodes')
 @UseGuards(JwtAuthGuard)
 export class NodesController {
-  constructor(private readonly nodeRepo: NodeRepository) {}
+  constructor(
+    private readonly nodeRepo: NodeRepository,
+    private readonly nodeSessionRepo: NodeSessionRepository,
+  ) {}
 
-  @Get('flow')
-  async getMyFlow(@Req() req) {
-    const flow = await this.nodeRepo.findFlowByUserId(req.user.id);
-    if (!flow) throw new NotFoundException('No flow found for user');
-    return flow;
+  @Get('flows')
+  async getMyFlows(@Req() req) {
+    return this.nodeRepo.findAllFlowsByUserId(req.user.id);
+  }
+
+  @Get('flows/active-sessions')
+  async getActiveSessions(@Req() req) {
+    const flows = await this.nodeRepo.findAllFlowsByUserId(req.user.id);
+    const flowIds = flows.map((f) => f.id);
+    if (flowIds.length === 0) return {};
+    return this.nodeSessionRepo.countActiveByNode(flowIds);
   }
 
   @Get(':id')

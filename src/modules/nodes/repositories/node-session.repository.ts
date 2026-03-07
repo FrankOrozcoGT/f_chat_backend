@@ -44,4 +44,21 @@ export class NodeSessionRepository {
       data: { status: 'closed' },
     });
   }
+
+  async countActiveByNode(flowIds: string[]) {
+    const results = await this.prisma.nodeSession.groupBy({
+      by: ['currentNodeId'],
+      where: {
+        flowId: { in: flowIds },
+        status: 'active',
+        currentNodeId: { not: null },
+      },
+      _count: { id: true },
+    });
+    const map: Record<string, number> = {};
+    for (const r of results) {
+      if (r.currentNodeId) map[r.currentNodeId] = r._count.id;
+    }
+    return map;
+  }
 }

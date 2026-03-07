@@ -30,6 +30,16 @@ export class NodeRepository {
     });
   }
 
+  async findAllFlowsByUserId(userId: string) {
+    return this.prisma.flow.findMany({
+      where: { userId },
+      include: {
+        routerNode: true,
+        nodes: { include: { node: true } },
+      },
+    });
+  }
+
   async createNode(data: Prisma.NodeCreateInput) {
     return this.prisma.node.create({ data });
   }
