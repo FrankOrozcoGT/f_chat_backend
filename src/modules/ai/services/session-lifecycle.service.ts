@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SessionRepository } from '../repositories/session.repository';
 import { InternalApiClient } from '../clients/internal-api.client';
-import { FlowCacheService } from './flow-cache.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 
 export interface SwitchToHitlParams {
@@ -35,7 +34,6 @@ export class SessionLifecycleService {
   constructor(
     private readonly sessionRepository: SessionRepository,
     private readonly internalApi: InternalApiClient,
-    private readonly flowCacheService: FlowCacheService,
     private readonly websocketGateway: AppWebSocketGateway,
   ) {}
 
@@ -121,9 +119,7 @@ export class SessionLifecycleService {
   async closeConversation(params: CloseConversationParams): Promise<void> {
     const { conversationId, sessionId } = params;
 
-    await this.flowCacheService.flushToDb(conversationId, sessionId);
     await this.sessionRepository.close(sessionId, 'end_conversation');
-    await this.flowCacheService.clear(conversationId);
 
     this.logger.log(`closeConversation: ${conversationId}, session=${sessionId}`);
   }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { FlowData } from '../langgraph/state.interface';
 
 @Injectable()
 export class SessionRepository {
@@ -23,13 +22,6 @@ export class SessionRepository {
     const existing = await this.findActiveByConversationId(conversationId);
     if (existing) return existing;
     return this.create(conversationId);
-  }
-
-  async updateFlowData(sessionId: string, flowData: FlowData) {
-    return this.prisma.session.update({
-      where: { id: sessionId },
-      data: { flowData: flowData as any },
-    });
   }
 
   async createHitl(conversationId: string, takenBy?: string) {
