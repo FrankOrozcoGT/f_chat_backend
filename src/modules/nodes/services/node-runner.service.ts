@@ -69,26 +69,10 @@ export class NodeRunnerService {
       },
     ];
 
-    if (toolDefinitions.length > 0) {
-      return this.runWithTools(messages, toolDefinitions, toolHandlers, terminationNames, ctx);
-    }
-
-    return this.runSimple(messages);
-  }
-
-  private async runWithTools(
-    messages: { role: string; content: string }[],
-    tools: ToolDefinition[],
-    toolHandlers: Map<string, { meta: any; instance: any; method: string }>,
-    terminationNames: Set<string>,
-    ctx: NodeContext,
-  ): Promise<NodeRunResult> {
     const result = await this.kimiClient.chatWithTools({
       messages,
-      tools,
+      tools: toolDefinitions,
       onToolCall: async (name, args) => {
-        this.logger.log(`onToolCall: "${name}" | terminationNames: [${[...terminationNames].join(', ')}] | isTermination: ${terminationNames.has(name)}`);
-
         // Si es postCode → terminar el loop
         if (terminationNames.has(name)) {
           throw new ToolTermination(name, args);
@@ -134,27 +118,4 @@ export class NodeRunnerService {
     };
   }
 
-  private async runSimple(
-    messages: { role: string; content: string }[],
-  ): Promise<NodeRunResult> {
-    const result = await this.kimiClient.rawChat(messages);
-
-    const intent = result.response.toLowerCase().includes('switch_hitl')
-      ? 'switch_hitl'
-      : 'normal';
-
-    const response =
-      intent === 'switch_hitl'
-        ? result.response.replace(/switch_hitl/gi, '').trim()
-        : result.response;
-
-    return {
-      response,
-      intent,
-      tokensInput: result.tokensInput,
-      tokensOutput: result.tokensOutput,
-      costUsd: result.costUsd,
-      latencyMs: result.latencyMs,
-    };
-  }
 }
