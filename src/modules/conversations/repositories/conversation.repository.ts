@@ -264,6 +264,17 @@ export class ConversationRepository {
     });
   }
 
+  async findLastClosedByPhoneAndClient(phoneId: string, clientId: string) {
+    return this.prisma.conversation.findFirst({
+      where: {
+        phoneId,
+        isActive: false,
+        participants: { some: { clientId } },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+    });
+  }
+
   async updateSummary(conversationId: string, summary: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -274,6 +285,40 @@ export class ConversationRepository {
   /**
    * Crea una conversación con su participant en una transacción
    */
+  /**
+   * Trae conversación + phone + client + messages en una sola query.
+   * Uso exclusivo del endpoint GET /api/messages.
+   */
+  async findWithMessagesById(id: string) {
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        phone: true,
+        participants: { include: { client: true } },
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!conv) return null;
+    return {
+      ...conv,
+      client: conv.participants[0]?.client ?? null,
+    };
+  }
+
+  /**
+   * Count de sub-conversaciones cerradas (mismo phoneId + clientId).
+   * Se usa solo cuando messages.length === 0 para decidir si hacer fallback a Evolution.
+   */
+  async countClosedSubConversations(phoneId: string, clientId: string): Promise<number> {
+    return this.prisma.conversation.count({
+      where: {
+        phoneId,
+        isActive: false,
+        participants: { some: { clientId } },
+      },
+    });
+  }
+
   async createWithParticipant(data: {
     phoneId: string;
     clientId: string;

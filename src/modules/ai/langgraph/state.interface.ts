@@ -2,29 +2,6 @@ import { Annotation } from '@langchain/langgraph';
 import { ApiName, MessageType } from '@prisma/client';
 import { CreateApiCallData } from '../repositories/ai.repository';
 
-// Flow data interfaces (used in Redis + Session.flowData JSON)
-
-export interface FlowNode {
-  nodeId: string;
-  parentId: string | null;
-  status: 'active' | 'collapsed' | 'reopened';
-  understanding: string;
-  messageIds: string[];
-}
-
-export interface FlowData {
-  currentNodeId: string | null;
-  nodes: FlowNode[];
-}
-
-export type FlowOpType = 'create' | 'close' | 'reopen' | 'focus' | 'end';
-
-export interface FlowOperation {
-  op: FlowOpType;
-  label?: string; // for 'create'
-  nodeId?: string; // for 'close', 'reopen', 'focus'
-}
-
 export const WorkflowState = Annotation.Root({
   // Input (from IncomingMessageEvent)
   messageId: Annotation<string>,
@@ -42,14 +19,6 @@ export const WorkflowState = Annotation.Root({
 
   // After Input Router (images)
   imageUrl: Annotation<string | null>,
-
-  // After Flow Analyzer
-  sessionId: Annotation<string | null>,
-  flowOperations: Annotation<FlowOperation[]>,
-  flowData: Annotation<FlowData | null>,
-
-  // After Context Builder
-  contextForLlm: Annotation<string | null>,
 
   // After LLM
   responseText: Annotation<string>,

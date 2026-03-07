@@ -12,7 +12,37 @@ type ChatMessage = {
   content:
     | string
     | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  tool_call_id?: string;
+  tool_calls?: any[];
 };
+
+export type ToolDefinition = {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
+/** Thrown by onToolCall to signal the loop should stop. */
+export class ToolTermination {
+  constructor(
+    public readonly toolName: string,
+    public readonly args: Record<string, unknown>,
+  ) {}
+}
+
+export interface ToolChatResult {
+  terminationTool: string | null;
+  terminationArgs: Record<string, unknown> | null;
+  textResponse: string | null;
+  tokensInput: number;
+  tokensOutput: number;
+  costUsd: number;
+  latencyMs: number;
+  iterations: number;
+}
 
 @Injectable()
 export class KimiClient {
@@ -158,5 +188,143 @@ export class KimiClient {
       this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message}`);
       throw error;
     }
+  }
+
+  async chatWithTools(params: {
+    messages: ChatMessage[];
+    tools: ToolDefinition[];
+    onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>;
+    maxTokens?: number;
+    maxIterations?: number;
+  }): Promise<ToolChatResult> {
+    const {
+      messages,
+      tools,
+      onToolCall,
+      maxTokens = 500,
+      maxIterations = 10,
+    } = params;
+
+    const conversationMessages: ChatMessage[] = [...messages];
+    let totalTokensInput = 0;
+    let totalTokensOutput = 0;
+    const startTime = Date.now();
+
+    for (let i = 0; i < maxIterations; i++) {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'kimi-k2.5',
+          messages: conversationMessages,
+          tools,
+          tool_choice: 'required',
+          max_tokens: maxTokens,
+          thinking: { type: 'disabled' },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Kimi API error ${response.status}: ${errorBody}`);
+      }
+
+      const data = await response.json();
+      totalTokensInput += data.usage?.prompt_tokens || 0;
+      totalTokensOutput += data.usage?.completion_tokens || 0;
+
+      const choice = data.choices?.[0];
+      const assistantMessage = choice?.message;
+      if (!assistantMessage) {
+        throw new Error('No assistant message in Kimi response');
+      }
+
+      conversationMessages.push(assistantMessage);
+
+      const toolCalls = assistantMessage.tool_calls;
+
+      // No tool calls → plain text response
+      if (!toolCalls || toolCalls.length === 0) {
+        const latencyMs = Date.now() - startTime;
+        const costUsd =
+          totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
+          totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+
+        this.logger.log(
+          `chatWithTools: text response at iteration ${i}. ${totalTokensInput}+${totalTokensOutput} tokens`,
+        );
+
+        return {
+          terminationTool: null,
+          terminationArgs: null,
+          textResponse: assistantMessage.content || '',
+          tokensInput: totalTokensInput,
+          tokensOutput: totalTokensOutput,
+          costUsd,
+          latencyMs,
+          iterations: i + 1,
+        };
+      }
+
+      for (const toolCall of toolCalls) {
+        const fnName = toolCall.function?.name;
+        const fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
+
+        try {
+          const toolResult = await onToolCall(fnName, fnArgs);
+          conversationMessages.push({
+            role: 'tool',
+            content: toolResult,
+            tool_call_id: toolCall.id,
+          });
+        } catch (e) {
+          if (e instanceof ToolTermination) {
+            const latencyMs = Date.now() - startTime;
+            const costUsd =
+              totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
+              totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+
+            this.logger.log(
+              `chatWithTools: terminated via "${e.toolName}" at iteration ${i}. ${totalTokensInput}+${totalTokensOutput} tokens`,
+            );
+
+            return {
+              terminationTool: e.toolName,
+              terminationArgs: e.args,
+              textResponse: null,
+              tokensInput: totalTokensInput,
+              tokensOutput: totalTokensOutput,
+              costUsd,
+              latencyMs,
+              iterations: i + 1,
+            };
+          }
+          throw e;
+        }
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+    const costUsd =
+      totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
+      totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+
+    this.logger.warn(
+      `chatWithTools: max iterations (${maxIterations}) reached. ${totalTokensInput}+${totalTokensOutput} tokens`,
+    );
+
+    return {
+      terminationTool: null,
+      terminationArgs: null,
+      textResponse: null,
+      tokensInput: totalTokensInput,
+      tokensOutput: totalTokensOutput,
+      costUsd,
+      latencyMs,
+      iterations: maxIterations,
+    };
   }
 }

@@ -31,8 +31,8 @@ export class OutputRouterNode {
       error: previousError,
     } = state;
 
-    // Si un node anterior falló, skip
-    if (previousError) return {};
+    // Si un node anterior falló o no hay texto que procesar, skip
+    if (previousError || !responseText) return {};
 
     if (preferredFormat === 'text') {
       this.logger.log(`OutputRouter: text → pass-through`);

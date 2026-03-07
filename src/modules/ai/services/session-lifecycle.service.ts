@@ -1,12 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SessionRepository } from '../repositories/session.repository';
 import { InternalApiClient } from '../clients/internal-api.client';
-import { FlowCacheService } from './flow-cache.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 
 export interface SwitchToHitlParams {
   conversationId: string;
-  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover';
+  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover' | 'hacking';
   userId: string;
   clientPhone?: string;
   extras?: {
@@ -16,11 +15,6 @@ export interface SwitchToHitlParams {
     creditsUsed?: number;
     creditsLimit?: number;
   };
-}
-
-export interface CloseConversationParams {
-  conversationId: string;
-  sessionId: string;
 }
 
 export interface ReturnToAiParams {
@@ -35,7 +29,6 @@ export class SessionLifecycleService {
   constructor(
     private readonly sessionRepository: SessionRepository,
     private readonly internalApi: InternalApiClient,
-    private readonly flowCacheService: FlowCacheService,
     private readonly websocketGateway: AppWebSocketGateway,
   ) {}
 
@@ -113,19 +106,23 @@ export class SessionLifecycleService {
           userId,
         );
         break;
+
+      case 'hacking':
+        this.websocketGateway.emit(
+          'conversation:hitl',
+          {
+            conversationId,
+            clientPhone,
+            reason: 'hacking',
+            errorMessage: extras?.errorMessage,
+            timestamp: new Date().toISOString(),
+          },
+          userId,
+        );
+        break;
     }
 
     this.logger.log(`switchToHitl: ${conversationId} → reason=${reason}`);
-  }
-
-  async closeConversation(params: CloseConversationParams): Promise<void> {
-    const { conversationId, sessionId } = params;
-
-    await this.flowCacheService.flushToDb(conversationId, sessionId);
-    await this.sessionRepository.close(sessionId, 'end_conversation');
-    await this.flowCacheService.clear(conversationId);
-
-    this.logger.log(`closeConversation: ${conversationId}, session=${sessionId}`);
   }
 
   async returnToAi(params: ReturnToAiParams): Promise<void> {

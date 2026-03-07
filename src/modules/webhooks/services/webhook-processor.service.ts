@@ -137,19 +137,26 @@ export class WebhookProcessorService {
       const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
       conversation = await this.conversationRepository.upsert(conversationData);
 
-      // Bootstrap historial si es conversación nueva
+      // Bootstrap historial si es conversación nueva (y no hubo cierre previo)
       const existingCount = await this.messageRepository.countByConversationId(conversation.id);
       if (existingCount === 0) {
-        const clientRemoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
-        this.logger.log(
-          `New conversation ${conversation.id}, bootstrapping history from Evolution for ${clientRemoteJid}`,
-        );
-        this.bootstrapMessagesInBackground(
-          conversation.id,
-          instanceName,
-          clientRemoteJid,
-          phone.userId,
-        );
+        const closedCount = await this.conversationRepository.countClosedSubConversations(phoneId, client.id);
+        if (closedCount > 0) {
+          this.logger.log(
+            `[bootstrap] Skipping — ${closedCount} closed sub-conversations exist for conversation ${conversation.id}`,
+          );
+        } else {
+          const clientRemoteJid = `${clientData.phoneNumber}@s.whatsapp.net`;
+          this.logger.log(
+            `New conversation ${conversation.id}, bootstrapping history from Evolution for ${clientRemoteJid}`,
+          );
+          this.bootstrapMessagesInBackground(
+            conversation.id,
+            instanceName,
+            clientRemoteJid,
+            phone.userId,
+          );
+        }
       }
     }
 

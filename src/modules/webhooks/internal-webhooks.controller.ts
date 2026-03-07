@@ -83,11 +83,36 @@ export class InternalWebhooksController {
 
   @Post('move-to-conversation')
   async updateConversationId(
-    @Body() body: { messageIds: string[]; newConversationId: string },
+    @Body() body: { messageIds: string[]; newConversationId?: string },
   ) {
+    let targetConversationId = body.newConversationId;
+
+    if (!targetConversationId) {
+      // Auto-resolve: find the message's current conversation, then find the last closed conversation of the same client
+      const message = await this.messageRepository.findById(body.messageIds[0]);
+      if (!message) {
+        throw new Error(`Message ${body.messageIds[0]} not found`);
+      }
+
+      const conversation = await this.conversationRepository.findByIdWithRelations(message.conversationId);
+      if (!conversation?.client) {
+        throw new Error(`Cannot resolve client for conversation ${message.conversationId}`);
+      }
+
+      const lastClosed = await this.conversationRepository.findLastClosedByPhoneAndClient(
+        conversation.phoneId,
+        conversation.client.id,
+      );
+      if (!lastClosed) {
+        throw new Error(`No previous closed conversation found for client ${conversation.client.id}`);
+      }
+
+      targetConversationId = lastClosed.id;
+    }
+
     return this.messageRepository.updateConversationId(
       body.messageIds,
-      body.newConversationId,
+      targetConversationId,
     );
   }
 
@@ -116,7 +141,7 @@ export class InternalWebhooksController {
       messageCount: number;
     }> = [];
 
-    // 1. Mover msgs antiguos no enviados a la IA → conv histórica isActive: false
+    // 1. Mover msgs antiguos no enviados a la IA → conv histórica
     const remaining = await this.messageRepository.findRemainingUnanalyzed(
       conversationId,
       batchMessageIds,
@@ -125,86 +150,86 @@ export class InternalWebhooksController {
     const remainingIds = remaining.map((m) => m.id);
 
     if (remainingIds.length > 0) {
-      const historicalConv =
-        await this.conversationRepository.createWithParticipant({
-          phoneId,
-          clientId,
-          summary: 'Mensajes históricos anteriores al análisis',
-          isActive: false,
-        });
-
-      await this.messageRepository.updateConversationId(
-        remainingIds,
-        historicalConv.id,
+      const result = await this.archiveMessages(
+        phoneId, clientId, remainingIds,
+        'Mensajes históricos anteriores al análisis',
       );
-      await this.messageRepository.markAsAnalyzed(remainingIds);
-
       createdConversations.push({
-        id: historicalConv.id,
+        id: result.subConversationId,
         summary: 'Mensajes históricos anteriores al análisis',
         isActive: false,
-        messageCount: remainingIds.length,
+        messageCount: result.messageCount,
       });
     }
 
-    // 2. Si hay huérfanos del batch (msgs antes del primer split), crear conv
+    // 2. Si hay huérfanos del batch (msgs antes del primer split)
     if (orphanMessageIds.length > 0) {
-      const orphanConv =
-        await this.conversationRepository.createWithParticipant({
-          phoneId,
-          clientId,
-          summary: 'Mensajes anteriores sin clasificar',
-          isActive: false,
-        });
-
-      await this.messageRepository.updateConversationId(
-        orphanMessageIds,
-        orphanConv.id,
+      const result = await this.archiveMessages(
+        phoneId, clientId, orphanMessageIds,
+        'Mensajes anteriores sin clasificar',
       );
-
       createdConversations.push({
-        id: orphanConv.id,
+        id: result.subConversationId,
         summary: 'Mensajes anteriores sin clasificar',
         isActive: false,
-        messageCount: orphanMessageIds.length,
+        messageCount: result.messageCount,
       });
     }
 
     // 3. Crear sub-conversaciones de la IA
     for (const split of splits) {
-      const newConv =
-        await this.conversationRepository.createWithParticipant({
-          phoneId,
-          clientId,
+      if (split.messageIds.length > 0) {
+        const result = await this.archiveMessages(
+          phoneId, clientId, split.messageIds, split.summary,
+        );
+        createdConversations.push({
+          id: result.subConversationId,
           summary: split.summary,
           isActive: false,
+          messageCount: result.messageCount,
         });
-
-      if (split.messageIds.length > 0) {
-        await this.messageRepository.updateConversationId(
-          split.messageIds,
-          newConv.id,
-        );
+      } else {
+        // Split sin mensajes: solo crear la sub-conversación
+        const subConv = await this.conversationRepository.createWithParticipant({
+          phoneId, clientId, summary: split.summary, isActive: false,
+        });
+        createdConversations.push({
+          id: subConv.id,
+          summary: split.summary,
+          isActive: false,
+          messageCount: 0,
+        });
       }
-
-      createdConversations.push({
-        id: newConv.id,
-        summary: split.summary,
-        isActive: false,
-        messageCount: split.messageIds.length,
-      });
-    }
-
-    // 4. Marcar como analizados: huérfanos + clasificados por la IA
-    const processedIds = [
-      ...orphanMessageIds,
-      ...splits.flatMap((s) => s.messageIds),
-    ];
-    if (processedIds.length > 0) {
-      await this.messageRepository.markAsAnalyzed(processedIds);
     }
 
     return { createdConversations };
+  }
+
+  @Post('close-conversation')
+  async closeConversation(@Body() body: { conversationId: string }) {
+    const { conversationId } = body;
+
+    const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+    if (!conversation.client) {
+      throw new Error(`Cannot resolve client for conversation ${conversationId}`);
+    }
+
+    const messages = await this.messageRepository.findByConversationId(conversationId);
+    if (messages.length === 0) {
+      return { closed: true, movedMessages: 0 };
+    }
+
+    const messageIds = messages.map((m) => m.id);
+    const result = await this.archiveMessages(
+      conversation.phoneId,
+      conversation.client.id,
+      messageIds,
+    );
+
+    return { closed: true, movedMessages: result.messageCount, subConversationId: result.subConversationId };
   }
 
   @Get(':id')
@@ -218,5 +243,27 @@ export class InternalWebhooksController {
     @Body('name') name: string,
   ) {
     return this.clientRepository.updateName(id, name);
+  }
+
+  /**
+   * Crea sub-conversación (isActive: false), mueve mensajes ahí, y los marca como analizados.
+   */
+  private async archiveMessages(
+    phoneId: string,
+    clientId: string,
+    messageIds: string[],
+    summary?: string,
+  ): Promise<{ subConversationId: string; messageCount: number }> {
+    const subConv = await this.conversationRepository.createWithParticipant({
+      phoneId,
+      clientId,
+      summary,
+      isActive: false,
+    });
+
+    await this.messageRepository.updateConversationId(messageIds, subConv.id);
+    await this.messageRepository.markAsAnalyzed(messageIds);
+
+    return { subConversationId: subConv.id, messageCount: messageIds.length };
   }
 }
