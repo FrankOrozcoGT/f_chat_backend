@@ -47,11 +47,11 @@ export class ReportHackingFn {
 
     await this.sessionLifecycle.switchToHitl({
       conversationId: ctx.conversationId,
-      reason: 'api_error',
+      reason: 'hacking',
       userId: ctx.userId,
+      clientPhone: ctx.clientPhone,
       extras: {
-        apiName: `node:${ctx.node.name}`,
-        errorMessage: `Hacking attempt: ${description}`,
+        errorMessage: description,
       },
     });
 

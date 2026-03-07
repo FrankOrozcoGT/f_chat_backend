@@ -5,7 +5,7 @@ import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 
 export interface SwitchToHitlParams {
   conversationId: string;
-  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover';
+  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover' | 'hacking';
   userId: string;
   clientPhone?: string;
   extras?: {
@@ -106,6 +106,20 @@ export class SessionLifecycleService {
             conversationId,
             userId,
             userName: extras?.userName,
+            timestamp: new Date().toISOString(),
+          },
+          userId,
+        );
+        break;
+
+      case 'hacking':
+        this.websocketGateway.emit(
+          'conversation:hitl',
+          {
+            conversationId,
+            clientPhone,
+            reason: 'hacking',
+            errorMessage: extras?.errorMessage,
             timestamp: new Date().toISOString(),
           },
           userId,
