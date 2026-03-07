@@ -106,6 +106,7 @@ model Conversation {
   phone              Phone                @relation(fields: [phoneId], references: [id], onDelete: Cascade)
   messages           Message[]
   sessions           Session[]
+  nodeSessions       NodeSession[]
   participants       ConversationParticipant[]
 
   @@index([phoneId])
@@ -149,6 +150,82 @@ model Message {
 
   @@index([conversationId])
   @@index([createdAt])
+}
+
+// Nodes & Flows
+
+model Flow {
+  id           String        @id @default(uuid())
+  name         String
+  routerNodeId String
+  userId       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  routerNode   Node          @relation("FlowRouter", fields: [routerNodeId], references: [id])
+  nodes        FlowNode[]
+  nodeSessions NodeSession[]
+  intents      Intent[]
+
+  @@index([userId])
+}
+
+model Node {
+  id                   String        @id @default(uuid())
+  name                 String
+  systemPrompt         String
+  tools                Json?
+  preCode              String?
+  preCodeInputSchema   Json?
+  postCode             String?
+  postCodeInputSchema  Json?
+  onError              NodeOnError   @default(hitl)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  routerForFlows       Flow[]        @relation("FlowRouter")
+  flowNodes            FlowNode[]
+  currentNodeSessions  NodeSession[] @relation("CurrentNode")
+}
+
+model FlowNode {
+  id     String @id @default(uuid())
+  flowId String
+  nodeId String
+  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, nodeId])
+  @@index([flowId])
+  @@index([nodeId])
+}
+
+model NodeSession {
+  id             String            @id @default(uuid())
+  conversationId String
+  flowId         String
+  currentNodeId  String?
+  detectedIntent String?
+  status         NodeSessionStatus @default(active)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  flow           Flow              @relation(fields: [flowId], references: [id])
+  currentNode    Node?             @relation("CurrentNode", fields: [currentNodeId], references: [id])
+
+  @@index([conversationId])
+  @@index([flowId])
+}
+
+model Intent {
+  id        String   @id @default(uuid())
+  name      String
+  userId    String
+  flowId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  flow      Flow?    @relation(fields: [flowId], references: [id])
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 // AI & HITL Models
@@ -264,6 +341,17 @@ enum ConversationType {
 enum SessionType {
   AI
   HITL
+}
+
+enum NodeOnError {
+  hitl
+  log
+  retry
+}
+
+enum NodeSessionStatus {
+  active
+  closed
 }
 
 enum ApiType {
