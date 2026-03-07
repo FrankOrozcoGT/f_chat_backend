@@ -17,11 +17,6 @@ export interface SwitchToHitlParams {
   };
 }
 
-export interface CloseConversationParams {
-  conversationId: string;
-  sessionId: string;
-}
-
 export interface ReturnToAiParams {
   conversationId: string;
   userId: string;
@@ -128,14 +123,6 @@ export class SessionLifecycleService {
     }
 
     this.logger.log(`switchToHitl: ${conversationId} → reason=${reason}`);
-  }
-
-  async closeConversation(params: CloseConversationParams): Promise<void> {
-    const { conversationId, sessionId } = params;
-
-    await this.sessionRepository.close(sessionId, 'end_conversation');
-
-    this.logger.log(`closeConversation: ${conversationId}, session=${sessionId}`);
   }
 
   async returnToAi(params: ReturnToAiParams): Promise<void> {

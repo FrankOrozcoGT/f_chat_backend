@@ -7,6 +7,7 @@ import { NodeFunctionRegistry } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 
 export interface DispatchInput {
+  messageId: string;
   conversationId: string;
   userId: string;
   transcription: string;
@@ -38,7 +39,7 @@ export class DispatcherService {
   ) {}
 
   async dispatch(input: DispatchInput): Promise<DispatchResult> {
-    const { conversationId, userId, transcription, imageUrl, history, instanceName, clientPhone } = input;
+    const { messageId, conversationId, userId, transcription, imageUrl, history, instanceName, clientPhone } = input;
 
     // 1. Buscar flow del usuario
     const flow = await this.nodeRepo.findFlowByUserId(userId);
@@ -68,6 +69,7 @@ export class DispatcherService {
 
     // 4. Construir contexto para las funciones
     const ctx = new NodeContext();
+    ctx.messageId = messageId;
     ctx.userId = userId;
     ctx.conversationId = conversationId;
     ctx.transcription = transcription;
@@ -161,8 +163,8 @@ export class DispatcherService {
           reason: 'api_error',
           userId,
           extras: {
-            apiName: `node:${activeNode.name}`,
-            errorMessage: error.message,
+            apiName: 'node',
+            errorMessage: `[${activeNode.name}] ${error.message}`,
           },
         });
       }

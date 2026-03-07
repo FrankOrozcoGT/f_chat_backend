@@ -405,6 +405,7 @@ enum ApiName {
   qwen_stt
   kimi_llm
   qwen_tts
+  node
 }
 
 enum HealthStatus {

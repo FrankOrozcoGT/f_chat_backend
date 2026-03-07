@@ -66,6 +66,7 @@ export class LlmNode {
       const dispatchResult = await this.langSmithService.traceLLM(
         () =>
           this.dispatcher.dispatch({
+            messageId,
             conversationId,
             userId,
             transcription,

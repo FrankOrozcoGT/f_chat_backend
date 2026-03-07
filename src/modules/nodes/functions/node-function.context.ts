@@ -3,6 +3,7 @@ import { ToolChatResult } from '../../ai/clients/kimi.client';
 
 export class NodeContext {
   // Input data
+  messageId: string;
   userId: string;
   conversationId: string;
   transcription: string;
