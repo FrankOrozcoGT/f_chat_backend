@@ -354,6 +354,27 @@ enum NodeSessionStatus {
   closed
 }
 
+enum SecurityEventType {
+  prompt_injection
+  suspicious_activity
+  unauthorized_access
+}
+
+model SecurityEvent {
+  id             String            @id @default(uuid())
+  type           SecurityEventType
+  userId         String
+  conversationId String?
+  clientPhone    String?
+  description    String
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
 enum ApiType {
   qwen_stt
   kimi_llm
