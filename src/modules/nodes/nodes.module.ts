@@ -14,7 +14,9 @@ import { CloseSessionFn } from './functions/implementations/close-session.fn';
 import { SwitchToHitlFn } from './functions/implementations/switch-to-hitl.fn';
 import { ResponderFn } from './functions/implementations/responder.fn';
 import { ReportHackingFn } from './functions/implementations/report-hacking.fn';
+import { MoveToLastConversationFn } from './functions/implementations/move-to-last-conversation.fn';
 import { SecurityEventRepository } from './repositories/security-event.repository';
+import { TemplateRepository } from './repositories/template.repository';
 import { NodesController } from './nodes.controller';
 
 @Module({
@@ -33,7 +35,9 @@ import { NodesController } from './nodes.controller';
     SwitchToHitlFn,
     ResponderFn,
     ReportHackingFn,
+    MoveToLastConversationFn,
     SecurityEventRepository,
+    TemplateRepository,
   ],
   exports: [DispatcherService, NodeRepository, NodeSessionRepository, IntentRepository],
 })

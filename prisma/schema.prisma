@@ -375,6 +375,18 @@ model SecurityEvent {
   @@index([createdAt])
 }
 
+model Template {
+  id        String   @id @default(uuid())
+  code      String
+  content   String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([code, userId])
+  @@index([userId])
+}
+
 enum ApiType {
   qwen_stt
   kimi_llm
