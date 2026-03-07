@@ -98,11 +98,8 @@ export class DispatcherService {
       : null;
 
     // 7. Merge postCode con defaults y resolver como tools de terminación
-    this.logger.log(`postCode raw from DB: ${JSON.stringify(activeNode.postCode)} (type: ${typeof activeNode.postCode})`);
     const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode);
-    this.logger.log(`postCodes after merge: ${JSON.stringify(postCodes)}`);
     const resolvedPostCode = this.fnRegistry.resolvePostCode(postCodes);
-    this.logger.log(`terminationNames: [${[...resolvedPostCode.terminationNames].join(', ')}]`);
 
     // 8. Verificar que no haya duplicados entre tools y postCode
     const toolDefs = resolvedTools?.definitions || [];
