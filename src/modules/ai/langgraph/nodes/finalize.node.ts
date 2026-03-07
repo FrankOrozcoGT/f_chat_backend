@@ -21,7 +21,6 @@ export class FinalizeNode {
       clientPhone,
       apiCalls,
       totalCost,
-      intent,
       error,
     } = state;
 
@@ -64,20 +63,6 @@ export class FinalizeNode {
         userId,
         extras: { creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit },
       });
-    }
-
-    // Switch a HITL si el intent lo requiere
-    if (intent === 'switch_hitl') {
-      await this.sessionLifecycle.switchToHitl({
-        conversationId,
-        reason: 'client_request',
-        userId,
-        clientPhone,
-      });
-
-      this.logger.log(
-        `FinalizeNode: conversation ${conversationId} switched to HITL mode`,
-      );
     }
 
     this.logger.log(

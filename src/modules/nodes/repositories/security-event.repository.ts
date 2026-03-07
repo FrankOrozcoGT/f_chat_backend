@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SecurityEventType } from '@prisma/client';
+import { Prisma, SecurityEventType } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class SecurityEventRepository {
     conversationId?: string;
     clientPhone?: string;
     description: string;
-    metadata?: Record<string, unknown>;
+    metadata?: Prisma.InputJsonValue;
   }) {
     return this.prisma.securityEvent.create({ data });
   }
