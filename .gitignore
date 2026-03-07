@@ -49,3 +49,6 @@ lerna-debug.log*
 # Media files
 /storage/
 !/storage/.gitkeep
+
+# Node SQL configs (personal, no tracked)
+/node-sql/

@@ -21,6 +21,7 @@ import { UserSettingsModule } from '@modules/user-settings/user-settings.module'
 import { CatalogModule } from '@modules/catalog/catalog.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 import { QueueModule } from '@common/queue/queue.module';
+import { NodesModule } from '@modules/nodes/nodes.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { QueueModule } from '@common/queue/queue.module';
     PhonesModule,
     ConversationsModule,
     MessagesModule,
+    NodesModule,
     AiModule,
     HitlModule,
     AdminModule,

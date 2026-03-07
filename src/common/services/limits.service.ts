@@ -81,6 +81,20 @@ export class LimitsService {
     return tokens / tokensPerCredit;
   }
 
+  calculateCreditsFromLlm(tokensInput: number, tokensOutput: number): number {
+    const tokensPerCredit = this.configService.get<number>(
+      'TOKENS_PER_CREDIT',
+      1000,
+    );
+    const inputWeight = this.configService.get<number>(
+      'CREDITS_INPUT_WEIGHT',
+      0.33,
+    );
+    const weightedTokens =
+      tokensInput * inputWeight + tokensOutput;
+    return weightedTokens / tokensPerCredit;
+  }
+
   calculateCreditsFromSeconds(seconds: number): number {
     const tokensPerSecond = this.configService.get<number>(
       'TOKENS_PER_AUDIO_SECOND',
