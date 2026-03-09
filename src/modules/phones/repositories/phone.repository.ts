@@ -60,6 +60,13 @@ export class PhoneRepository {
     });
   }
 
+  async findFirstByUserId(userId: string): Promise<Phone | null> {
+    return this.prisma.phone.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   async countActiveByUserId(userId: string): Promise<number> {
     return this.prisma.phone.count({
       where: {
