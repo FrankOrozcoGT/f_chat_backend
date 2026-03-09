@@ -22,6 +22,7 @@ import { CatalogModule } from '@modules/catalog/catalog.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 import { QueueModule } from '@common/queue/queue.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
+import { ContactsModule } from '@modules/contacts/contacts.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { NodesModule } from '@modules/nodes/nodes.module';
     UserSettingsModule,
     CatalogModule,
     ConversationAnalysisModule,
+    ContactsModule,
     WebhooksModule,
   ],
 })
