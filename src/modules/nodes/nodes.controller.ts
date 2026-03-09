@@ -8,10 +8,14 @@ import {
   Req,
   UseGuards,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
+import { TestSessionService } from './services/test-session.service';
+import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { TestStartDto } from './dto/test-start.dto';
 import { Prisma } from '@prisma/client';
 
 @Controller('api/nodes')
@@ -20,6 +24,8 @@ export class NodesController {
   constructor(
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
+    private readonly testSessionService: TestSessionService,
+    private readonly phoneRepo: PhoneRepository,
   ) {}
 
   @Get('flows')
@@ -61,5 +67,21 @@ export class NodesController {
     @Param('nodeId') nodeId: string,
   ) {
     return this.nodeRepo.addNodeToFlow(flowId, nodeId);
+  }
+
+  @Post('test/start')
+  async startTest(@Req() req, @Body() dto: TestStartDto) {
+    const phone = await this.phoneRepo.findFirstByUserId(req.user.id);
+    if (!phone) {
+      throw new BadRequestException('No phone found for user. Connect a phone first.');
+    }
+    const testId = await this.testSessionService.start(
+      dto.conversationId,
+      dto.flowId,
+      dto.clientPhone,
+      phone.instanceName,
+      req.user.id,
+    );
+    return { testId };
   }
 }
