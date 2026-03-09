@@ -17,10 +17,12 @@ import { ReportHackingFn } from './functions/implementations/report-hacking.fn';
 import { MoveToLastConversationFn } from './functions/implementations/move-to-last-conversation.fn';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
+import { TestSessionService } from './services/test-session.service';
 import { NodesController } from './nodes.controller';
+import { PhonesModule } from '@modules/phones/phones.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule)],
+  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule],
   controllers: [NodesController],
   providers: [
     NodeRepository,
@@ -38,6 +40,7 @@ import { NodesController } from './nodes.controller';
     MoveToLastConversationFn,
     SecurityEventRepository,
     TemplateRepository,
+    TestSessionService,
   ],
   exports: [DispatcherService, NodeRepository, NodeSessionRepository, IntentRepository],
 })
