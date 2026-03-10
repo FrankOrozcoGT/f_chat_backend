@@ -1,19 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
-import { KimiClient } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { LlmResponse } from '../../clients/interfaces/llm-response.interface';
+import { DispatcherService } from '../../../nodes/services/dispatcher.service';
 
 @Injectable()
 export class LlmNode {
   private readonly logger = new Logger(LlmNode.name);
 
   constructor(
-    private readonly kimiClient: KimiClient,
+    private readonly dispatcher: DispatcherService,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
@@ -22,71 +21,38 @@ export class LlmNode {
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
     const {
       transcription,
-      contextForLlm,
       conversationId,
       messageId,
       messageType,
       imageUrl,
+      userId,
+      instanceName,
+      clientPhone,
       apiCalls: existingApiCalls,
       totalCost: existingCost,
       error: previousError,
     } = state;
 
-    // Si un node anterior falló, skip
     if (previousError) return {};
 
-    // Flujo complejo: usa contextForLlm del ContextBuilderNode
-    // Flujo simple: carga historial de la conversación desde DB
-    let history: { role: string; content: string }[] = [];
+    // Cargar historial de conversación
+    const messages = await this.internalApi.getMessageHistory(
+      conversationId,
+      31,
+    );
+    const previousMessages = messages.slice(0, -1);
+    const history = previousMessages
+      .filter((m) => m.content)
+      .map((m) => ({
+        role: m.direction === 'incoming' ? 'user' : 'assistant',
+        content: m.content,
+      }));
 
-    if (contextForLlm) {
-      // Flujo complejo: context builder ya armó el contexto
-      history = [{ role: 'user', content: contextForLlm }];
-    } else {
-      // Flujo simple: cargar últimos 30 mensajes de la conversación
-      const messages = await this.internalApi.getMessageHistory(
-        conversationId,
-        31,
-      );
-
-      // Excluir el último (mensaje actual)
-      const previousMessages = messages.slice(0, -1);
-
-      history = previousMessages
-        .filter((m) => m.content)
-        .map((m) => ({
-          role: m.direction === 'incoming' ? 'user' : 'assistant',
-          content: m.content,
-        }));
-
-      this.logger.log(
-        `LlmNode: loaded ${history.length} messages from conversation history`,
-      );
-    }
-
-    // Obtener userId para tracking de créditos
-    const conversation =
-      await this.internalApi.getConversation(conversationId);
-    if (!conversation) {
-      return {
-        error: {
-          step: 'llm',
-          apiName: 'kimi_llm',
-          message: 'Conversation not found',
-        },
-      };
-    }
-    const userId = conversation.phone.userId;
-
-    // NO validar créditos - permitir que el flujo se complete aunque quede en negativo
-    // La deuda se arrastrará al siguiente periodo de facturación
     this.logger.log(
-      `LlmNode: processing for user ${userId} (no credit validation)`,
+      `LlmNode: loaded ${history.length} messages from conversation history`,
     );
 
     try {
-      let llmResult: LlmResponse;
-
       const traceMessages = [
         ...history,
         {
@@ -97,57 +63,60 @@ export class LlmNode {
         },
       ];
 
-      if (imageUrl) {
-        llmResult = await this.langSmithService.traceLLM(
-          () =>
-            this.kimiClient.chatWithVision(transcription, imageUrl, history),
-          traceMessages,
-        );
-      } else {
-        llmResult = await this.langSmithService.traceLLM(
-          () => this.kimiClient.chat(transcription, history),
-          traceMessages,
-        );
-      }
+      const dispatchResult = await this.langSmithService.traceLLM(
+        () =>
+          this.dispatcher.dispatch({
+            messageId,
+            conversationId,
+            userId,
+            transcription,
+            imageUrl,
+            history,
+            instanceName,
+            clientPhone,
+          }),
+        traceMessages,
+      );
 
       const apiCall: CreateApiCallData = {
         messageId,
         apiType: 'kimi_llm',
         operation: 'chat',
-        tokensInput: llmResult.tokensInput,
-        tokensOutput: llmResult.tokensOutput,
-        costUsd: llmResult.costUsd,
-        latencyMs: llmResult.latencyMs,
+        tokensInput: dispatchResult.tokensInput,
+        tokensOutput: dispatchResult.tokensOutput,
+        costUsd: dispatchResult.costUsd,
+        latencyMs: dispatchResult.latencyMs,
       };
 
-      // Incrementar créditos usados basado en tokens reales
-      const totalTokens = llmResult.tokensInput + llmResult.tokensOutput;
+      // Incrementar créditos (input ponderado a 1/3)
       const actualCredits =
-        this.limitsService.calculateCreditsFromTokens(totalTokens);
+        this.limitsService.calculateCreditsFromLlm(
+          dispatchResult.tokensInput,
+          dispatchResult.tokensOutput,
+        );
       await this.internalApi.incrementCreditsUsed(userId, actualCredits);
       this.logger.log(
-        `LlmNode: incremented ${actualCredits.toFixed(3)} credits (${totalTokens} tokens)`,
+        `LlmNode: incremented ${actualCredits.toFixed(3)} credits (${dispatchResult.tokensInput}in+${dispatchResult.tokensOutput}out)`,
       );
 
-      // Decide preferred format: respond with audio if input was audio, text otherwise
       const preferredFormat: 'audio' | 'text' =
         messageType === MessageType.voice || messageType === MessageType.audio
           ? 'audio'
           : 'text';
 
       this.logger.log(
-        `LlmNode: intent=${llmResult.intent}, format=${preferredFormat}, response="${llmResult.response.substring(0, 80)}"`,
+        `LlmNode: intent=${dispatchResult.intent}, format=${preferredFormat}, response="${dispatchResult.response.substring(0, 80)}"`,
       );
 
       return {
-        responseText: llmResult.response,
-        intent: llmResult.intent,
+        responseText: dispatchResult.response,
+        intent: dispatchResult.intent,
         preferredFormat,
         apiCalls: [...existingApiCalls, apiCall],
-        totalCost: existingCost + llmResult.costUsd,
+        totalCost: existingCost + dispatchResult.costUsd,
       };
     } catch (error) {
-      this.logger.error(`LlmNode: Kimi LLM failed: ${error.message}`);
+      this.logger.error(`LlmNode: dispatch failed: ${error.message}`);
       return {
         error: { step: 'llm', apiName: 'kimi_llm', message: error.message },
       };

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flujo de Venta - Asistente WhatsApp</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.8;
+            padding: 2rem 3rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #7c8aff;
+            border-bottom: 2px solid #2a2a3a;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        h2 {
+            font-size: 1.4rem;
+            color: #64d8a0;
+            margin: 2.5rem 0 1rem;
+        }
+        .section {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .diagram-container {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+        .mermaid { display: flex; justify-content: center; }
+        .diagram-container {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .diagram-container:hover {
+            background: #22223a;
+        }
+        .diagram-expand-hint {
+            text-align: center;
+            color: #555;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            cursor: pointer;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #12121a;
+            border: 1px solid #2a2a3a;
+            border-radius: 16px;
+            width: 95vw;
+            height: 90vh;
+            overflow: hidden;
+            cursor: grab;
+            position: relative;
+        }
+        .modal-content:active { cursor: grabbing; }
+        .modal-diagram-wrapper {
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding: 3rem;
+            transition: transform 0.1s ease-out;
+        }
+        .modal-controls {
+            position: absolute;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 10;
+        }
+        .modal-controls button {
+            background: #2a2a3a;
+            border: none;
+            color: #e0e0e0;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-controls button:hover { background: #3a3a5a; }
+        .modal-close {
+            position: fixed;
+            top: 1.5rem;
+            right: 2rem;
+            color: #e0e0e0;
+            font-size: 2rem;
+            cursor: pointer;
+            z-index: 1001;
+            background: #2a2a3a;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: #3a3a5a; }
+        .step {
+            background: #12121a;
+            border-left: 4px solid #7c8aff;
+            border-radius: 0 12px 12px 0;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1rem;
+        }
+        .step.optional {
+            border-left-color: #ffcc66;
+        }
+        .step h3 {
+            color: #7c8aff;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        .step.optional h3 {
+            color: #ffcc66;
+        }
+        .step ul {
+            list-style: none;
+            padding: 0;
+        }
+        .step li {
+            padding: 0.3rem 0;
+            padding-left: 1.2rem;
+            position: relative;
+        }
+        .step li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #64d8a0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        .badge.always { background: #1a3a2a; color: #64d8a0; }
+        .badge.optional { background: #3a2a1a; color: #ffcc66; }
+        .badge.hitl { background: #3a1a1a; color: #ff6c6c; }
+        .note {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+            color: #aaa;
+        }
+        .note strong { color: #ffcc66; }
+        .divider {
+            border: none;
+            border-top: 1px solid #2a2a3a;
+            margin: 2rem 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Flujo de Venta - Asistente WhatsApp</h1>
+<p>Asi funciona el asistente de IA cuando un cliente quiere comprar un producto por WhatsApp.</p>
+
+<!-- VISTA GENERAL -->
+<div class="section">
+<h2>Vista General</h2>
+<div class="diagram-container" onclick="openModal()">
+<pre class="mermaid">
+graph LR
+    A["Saludo\ny deteccion"] --> B["Identificacion\nde producto\ny precio"]
+    B -->|"negocia"| C["Negociacion"]
+    B -->|"acepta"| D["Cobro y\nverificacion"]
+    C -->|"acepta"| D
+    D --> E["Despacho"]
+    E --> F["Despedida"]
+
+    G["Facturacion"]
+    G -.-|"puede activarse\nen cualquier momento"| D
+
+    style A fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style B fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style C fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style D fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style E fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style F fill:#1a2a4a,stroke:#7c8aff,color:#e0e0e0
+    style G fill:#2a2a1a,stroke:#ffcc66,color:#e0e0e0
+</pre>
+<div class="diagram-expand-hint">Click para ver en grande</div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="diagramModal" onclick="closeModal(event)">
+    <button class="modal-close" onclick="closeModal(event)">&times;</button>
+    <div class="modal-content" id="modalContent" onclick="event.stopPropagation()">
+        <div class="modal-diagram-wrapper" id="modalDiagram"></div>
+        <div class="modal-controls">
+            <button onclick="zoomIn()" title="Acercar">+</button>
+            <button onclick="zoomOut()" title="Alejar">-</button>
+            <button onclick="zoomReset()" title="Resetear">R</button>
+        </div>
+    </div>
+</div>
+<div class="note">
+    <strong>Nota:</strong> En cualquier momento que el asistente no pueda resolver algo,
+    se transfiere al usuario de la plataforma y se le notifica por WhatsApp para que atienda al cliente.
+</div>
+</div>
+
+<!-- PASO 1 -->
+<div class="step">
+    <h3>1. Saludo y deteccion</h3>
+    <ul>
+        <li>El cliente escribe al WhatsApp</li>
+        <li>El asistente saluda y detecta que necesita el cliente</li>
+        <li>Si el cliente quiere comprar algo, sigue el flujo de venta</li>
+        <li>Si quiere otra cosa (credito, servicio, etc.) se transfiere a HITL <span class="badge hitl">HITL</span></li>
+    </ul>
+</div>
+
+<!-- PASO 2 -->
+<div class="step">
+    <h3>2. Identificacion del producto y precio</h3>
+    <ul>
+        <li>El asistente busca en los equipos y productos que le hemos manejado al cliente</li>
+        <li>Si el cliente tiene 3 o mas productos similares, se le ofrece el juego completo</li>
+        <li>Se le ofrece los productos que ya conocemos del cliente</li>
+        <li>Si el producto no existe en nuestro sistema, se notifica al usuario de la plataforma para que nos de el precio y poder continuar</li>
+        <li>Se le da el precio al cliente (con IVA incluido)</li>
+        <li>Se le pregunta si pasa por el producto o se le envia</li>
+        <li>Si es fuera de Quetzaltenango se le cobra envio (transporte urbano o Guatex)</li>
+        <li>Se le da el total final al cliente</li>
+    </ul>
+    <div class="note">
+        Si el cliente <strong>acepta</strong> el precio, sigue al cobro.
+        Si <strong>negocia</strong>, el asistente intenta manejarlo si ya conoce al cliente, si no se transfiere a HITL.
+        Si <strong>rechaza</strong>, se registra y se notifica al usuario de la plataforma.
+    </div>
+</div>
+
+<!-- PASO 3 -->
+<div class="step">
+    <h3>3. Negociacion (si aplica)</h3>
+    <ul>
+        <li>Si es un cliente nuevo que nunca ha negociado, se transfiere a HITL directamente <span class="badge hitl">HITL</span></li>
+        <li>Si es un cliente conocido, el asistente usa el historial de negociaciones anteriores para saber como maneja el cliente y seguir el juego</li>
+        <li>Si se llega a un acuerdo, sigue el flujo</li>
+        <li>Si no se llega a acuerdo, se registra como venta perdida y se notifica al usuario de la plataforma para intentar recuperarla</li>
+    </ul>
+</div>
+
+<!-- PASO 4 -->
+<div class="step optional">
+    <h3>4. Facturacion <span class="badge optional">opcional</span></h3>
+    <p style="margin-bottom:0.5rem; color:#aaa;">El cliente puede pedir factura en cualquier momento del proceso.</p>
+    <ul>
+        <li>Se le pide el NIT al cliente (si no lo tenemos)</li>
+        <li>Se le pide al usuario de la plataforma que mande una foto del producto</li>
+        <li>La foto se manda al grupo tecnico para despacho</li>
+        <li>Se envia la solicitud de factura a ventas/contadora con: NIT, que se esta vendiendo (lo mas especifico posible), precio y total</li>
+        <li>Cuando la contadora devuelve la factura, se la mandamos al cliente</li>
+    </ul>
+    <div class="note">
+        <strong>Las solicitudes de factura se mandan una por una.</strong>
+        Se envia una, se espera la respuesta, y luego se envia la siguiente. Asi no se satura a la contadora.
+    </div>
+</div>
+
+<!-- PASO 5 -->
+<div class="step">
+    <h3>5. Cobro y verificacion de pago</h3>
+    <ul>
+        <li>Se le pide al cliente que haga el deposito o transferencia</li>
+        <li>Si el cliente quiere pagar con visa link, se transfiere a HITL porque tiene otro costo <span class="badge hitl">HITL</span></li>
+        <li>Si el cliente no envia el comprobante, se le mandan recordatorios:</li>
+    </ul>
+    <div class="note">
+        <strong>Recordatorios (si no se recibe comprobante):</strong><br>
+        Se envian si ya pasaron 2 horas del ultimo contacto.<br>
+        1er recordatorio: 3pm &nbsp; | &nbsp; 2do: 5pm &nbsp; | &nbsp; 3ro: 9am del dia siguiente<br>
+        Si despues de los 3 recordatorios no hay respuesta, se notifica al usuario de la plataforma y se registra como venta perdida.
+    </div>
+    <ul>
+        <li>El cliente envia el comprobante</li>
+        <li>Se le envia el comprobante al usuario de la plataforma por WhatsApp para que lo revise</li>
+        <li>Usted puede aceptar o mandar correcciones (si corrige, se modifica y se le vuelve a enviar para confirmacion)</li>
+        <li>Se envia al grupo de verificacion</li>
+        <li>Se espera que la supervisora confirme con la palabra "confirmado" junto con el recibo</li>
+    </ul>
+</div>
+
+<!-- PASO 6 -->
+<div class="step">
+    <h3>6. Despacho</h3>
+    <ul>
+        <li>Si no se paso por facturacion antes (donde ya se mando la foto al grupo tecnico), se hace ahora</li>
+        <li>Se le pide al usuario de la plataforma la foto del producto, se manda al grupo tecnico para despachar</li>
+    </ul>
+</div>
+
+<!-- PASO 7 -->
+<div class="step">
+    <h3>7. Despedida</h3>
+    <ul>
+        <li>Se le envia un mensaje de despedida al cliente</li>
+        <li>Si el cliente sigue escribiendo cosas como "gracias" o "ok", se ignora</li>
+        <li>Si el cliente escribe algo nuevo, se inicia una nueva conversacion</li>
+    </ul>
+</div>
+
+<hr class="divider">
+
+<!-- NOTIFICACIONES -->
+<div class="section">
+    <h2>Notificaciones</h2>
+    <p>Usted no necesita estar pendiente todo el tiempo. El asistente le notifica por WhatsApp cada vez que necesita su atencion:</p>
+    <ul style="list-style:none; padding:0;">
+        <li style="padding:0.5rem 0;">&#x2022; Cuando un cliente necesita HITL</li>
+        <li style="padding:0.5rem 0;">&#x2022; Cuando un cliente nuevo inicia una conversacion</li>
+        <li style="padding:0.5rem 0;">&#x2022; Cuando necesitamos un precio de un producto</li>
+        <li style="padding:0.5rem 0;">&#x2022; Cuando necesitamos verificar un pago</li>
+        <li style="padding:0.5rem 0;">&#x2022; Cuando se pierde una venta</li>
+    </ul>
+</div>
+
+<script>
+    const state = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0 };
+
+    function openModal() {
+        var svg = document.querySelector('.diagram-container svg');
+        if (svg) {
+            var clone = svg.cloneNode(true);
+            clone.removeAttribute('style');
+            clone.style.maxWidth = 'none';
+            clone.style.width = 'auto';
+            clone.style.height = 'auto';
+            var wrapper = document.getElementById('modalDiagram');
+            wrapper.innerHTML = '';
+            wrapper.appendChild(clone);
+        }
+        document.getElementById('diagramModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+        zoomReset();
+    }
+    function closeModal(e) {
+        if (e.target === document.getElementById('diagramModal') || e.target.closest('.modal-close')) {
+            document.getElementById('diagramModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+    function applyTransform() {
+        document.getElementById('modalDiagram').style.transform =
+            'translate(' + state.x + 'px,' + state.y + 'px) scale(' + state.scale + ')';
+    }
+    function zoomIn() { state.scale = Math.min(state.scale + 0.25, 5); applyTransform(); }
+    function zoomOut() { state.scale = Math.max(state.scale - 0.25, 0.25); applyTransform(); }
+    function zoomReset() { state.scale = 1; state.x = 0; state.y = 0; applyTransform(); }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.getElementById('diagramModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var content = document.getElementById('modalContent');
+
+        content.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            if (e.deltaY < 0) zoomIn(); else zoomOut();
+        }, { passive: false });
+
+        content.addEventListener('mousedown', function(e) {
+            if (e.target.closest('.modal-controls')) return;
+            state.dragging = true;
+            state.sx = e.clientX - state.x;
+            state.sy = e.clientY - state.y;
+        });
+        window.addEventListener('mousemove', function(e) {
+            if (!state.dragging) return;
+            state.x = e.clientX - state.sx;
+            state.y = e.clientY - state.sy;
+            applyTransform();
+        });
+        window.addEventListener('mouseup', function() { state.dragging = false; });
+    });
+
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        themeVariables: {
+            primaryColor: '#2a2a4a',
+            primaryTextColor: '#e0e0e0',
+            primaryBorderColor: '#7c8aff',
+            lineColor: '#7c8aff',
+            secondaryColor: '#1a3a2a',
+            tertiaryColor: '#1e1e30'
+        },
+        flowchart: { useMaxWidth: true, htmlLabels: true }
+    });
+</script>
+
+</body>
+</html>

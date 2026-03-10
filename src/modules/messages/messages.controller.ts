@@ -57,8 +57,8 @@ export class MessagesController {
       throw new BadRequestException('conversationId query parameter is required');
     }
 
-    // 2. Obtener conversación con relaciones (phone + client en 1 query)
-    const conversation = await this.conversationRepository.findByIdWithRelations(conversationId);
+    // 2. Obtener conversación + phone + client + messages en 1 query
+    const conversation = await this.conversationRepository.findWithMessagesById(conversationId);
 
     if (!conversation) {
       throw new NotFoundException(
@@ -69,14 +69,28 @@ export class MessagesController {
     // 3. Validar permisos
     this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
 
-    // 4. Obtener mensajes de DB
-    let messages = await this.messageRepository.findByConversationId(conversationId);
+    // 4. Messages ya vienen en la query
+    let messages = conversation.messages;
 
-    // 5. Fallback: si no hay mensajes, buscar en Evolution y retornar inmediatamente
+    // 5. Fallback: si no hay mensajes, verificar si hubo cierre antes de ir a Evolution
     const isGroup = conversation.type === 'group';
-    const remoteJid = messages.length === 0
-      ? this.messagesService.resolveRemoteJid(conversation, conversationId)
-      : null;
+    let remoteJid: string | null = null;
+    if (messages.length === 0) {
+      const clientId = conversation.client?.id;
+      if (clientId) {
+        const closedCount = await this.conversationRepository.countClosedSubConversations(
+          conversation.phoneId,
+          clientId,
+        );
+        if (closedCount > 0) {
+          this.logger.log(`[messages] dbCount=0 but ${closedCount} closed sub-conversations exist — skipping Evolution fallback`);
+        } else {
+          remoteJid = this.messagesService.resolveRemoteJid(conversation, conversationId);
+        }
+      } else {
+        remoteJid = this.messagesService.resolveRemoteJid(conversation, conversationId);
+      }
+    }
     this.logger.log(`[messages] dbCount=${messages.length} isGroup=${isGroup} remoteJid=${remoteJid ?? 'N/A'}`);
 
     if (messages.length === 0 && remoteJid) {

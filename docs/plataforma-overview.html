@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Automatizacion WhatsApp con IA</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.7;
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 5rem 2rem 3rem;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+            border-bottom: 1px solid #1a3a2a;
+        }
+        .hero h1 {
+            font-size: 2.8rem;
+            color: #4ade80;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .hero p {
+            font-size: 1.2rem;
+            color: #a0a0b0;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Sections */
+        section {
+            padding: 4rem 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        section:last-child { border-bottom: none; }
+
+        h2 {
+            font-size: 1.8rem;
+            color: #4ade80;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        h3 {
+            font-size: 1.2rem;
+            color: #6ee7a0;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Problem/Solution */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        .col-card {
+            background: #111118;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 2rem;
+        }
+        .col-card.problem { border-color: #5a2020; }
+        .col-card.solution { border-color: #1a3a2a; }
+        .col-card h3.problem-title { color: #f87171; }
+        .col-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .col-card li {
+            padding: 0.4rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+        .col-card.problem li::before { content: "x "; color: #f87171; position: absolute; left: 0; }
+        .col-card.solution li::before { content: "-> "; color: #4ade80; position: absolute; left: 0; }
+
+        /* Feature cards */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .feature {
+            background: #111118;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 1.8rem;
+        }
+        .feature p {
+            color: #a0a0b0;
+            font-size: 0.95rem;
+        }
+
+        /* Flow diagram */
+        .diagram-section {
+            background: #111118;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        .flow-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+        }
+        .flow-step {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 8px;
+            padding: 0.8rem 1.2rem;
+            font-size: 0.9rem;
+            color: #e0e0e0;
+        }
+        .flow-step.router { border-color: #4ade80; color: #4ade80; }
+        .flow-step.node { border-color: #60a5fa; color: #60a5fa; }
+        .flow-step.hitl { border-color: #fbbf24; color: #fbbf24; }
+        .flow-arrow { color: #555; font-size: 1.2rem; }
+
+        /* Scale section */
+        .scale-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .scale-item {
+            text-align: center;
+            background: #111118;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 2rem 1.5rem;
+        }
+        .scale-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #4ade80;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        .scale-label {
+            color: #a0a0b0;
+            font-size: 0.95rem;
+        }
+
+        /* Example flows */
+        .example-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .example-item {
+            background: #111118;
+            border: 1px solid #1a1a2e;
+            border-radius: 10px;
+            padding: 1.2rem 1.5rem;
+        }
+        .example-item span {
+            color: #4ade80;
+            font-weight: 600;
+        }
+        .example-item p {
+            color: #a0a0b0;
+            font-size: 0.9rem;
+            margin-top: 0.3rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #555;
+            font-size: 0.85rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2rem; }
+            .two-col, .features, .scale-grid, .example-list {
+                grid-template-columns: 1fr;
+            }
+            .flow-visual { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>Automatizacion Inteligente para WhatsApp</h1>
+    <p>Plataforma que permite a empresas automatizar flujos completos de negocio a traves de WhatsApp, con agentes de IA que conversan, negocian, cobran y escalan cuando es necesario.</p>
+</div>
+
+<div class="container">
+
+<!-- Problema / Solucion -->
+<section>
+    <h2>El problema y la solucion</h2>
+    <div class="two-col">
+        <div class="col-card problem">
+            <h3 class="problem-title">Hoy</h3>
+            <ul>
+                <li>El dueno responde cada mensaje manualmente</li>
+                <li>Pierde ventas por no responder a tiempo</li>
+                <li>No tiene registro de negociaciones ni patrones de clientes</li>
+                <li>Cobros sin seguimiento: se olvidan comprobantes, facturas</li>
+                <li>No puede escalar: mas clientes = mas tiempo pegado al telefono</li>
+            </ul>
+        </div>
+        <div class="col-card solution">
+            <h3>Con la plataforma</h3>
+            <ul>
+                <li>Un agente IA atiende 24/7 por WhatsApp</li>
+                <li>Respuesta inmediata: saludo, cotizacion, negociacion</li>
+                <li>Memoria por cliente: sabe como negocia, que compra, a que precio</li>
+                <li>Cobro automatizado con recordatorios y verificacion</li>
+                <li>El dueno solo interviene cuando realmente se necesita</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- Como funciona -->
+<section>
+    <h2>Como funciona</h2>
+    <div class="diagram-section">
+        <p style="color:#a0a0b0; margin-bottom:1rem;">Cada mensaje del cliente pasa por un sistema de nodos inteligentes</p>
+        <div class="flow-visual">
+            <div class="flow-step">Cliente escribe</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step router">Router</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step node">Nodo especializado</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step router">Router</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step node">Siguiente nodo</div>
+        </div>
+        <div class="flow-visual" style="margin-top:0.5rem;">
+            <div class="flow-step node">Cualquier nodo</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step hitl">No puede resolver? → Transfiere a humano</div>
+        </div>
+        <p style="color:#666; font-size:0.85rem; margin-top:1.5rem;">
+            El sistema recuerda en que punto de la conversacion esta cada cliente.
+            Si el cliente se va y vuelve horas despues, continua exactamente donde se quedo.
+        </p>
+    </div>
+</section>
+
+<!-- Capacidades -->
+<section>
+    <h2>Capacidades clave</h2>
+    <div class="features">
+        <div class="feature">
+            <h3>Nodos configurables</h3>
+            <p>Un solo tipo de nodo que se configura para cualquier tarea: cotizar, negociar, cobrar, facturar. Sin necesidad de programar cada flujo desde cero.</p>
+        </div>
+        <div class="feature">
+            <h3>Memoria de clientes</h3>
+            <p>El sistema aprende de cada cliente: como negocia, que productos compra, a que precios. Usa este historial para manejar futuras conversaciones de forma inteligente.</p>
+        </div>
+        <div class="feature">
+            <h3>Colas inteligentes</h3>
+            <p>Solicitudes que requieren respuesta de otro canal (facturacion, verificacion) se encolan automaticamente. El sistema espera la respuesta y la devuelve al cliente.</p>
+        </div>
+        <div class="feature">
+            <h3>Escalamiento a humano (HITL)</h3>
+            <p>Cuando el agente no puede resolver, transfiere al humano con toda la informacion de contexto. El dueno recibe notificacion y decide.</p>
+        </div>
+        <div class="feature">
+            <h3>Multiples canales WhatsApp</h3>
+            <p>Un negocio puede conectar varios numeros de WhatsApp. Cada uno con sus propios flujos, colas y configuraciones independientes.</p>
+        </div>
+        <div class="feature">
+            <h3>Recordatorios automaticos</h3>
+            <p>Timers configurables para seguimiento de cobros, confirmaciones pendientes. El sistema hace follow-up sin intervencion humana.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Ejemplo: Flujo de ventas -->
+<section>
+    <h2>Ejemplo: Flujo de ventas completo</h2>
+    <p style="text-align:center; color:#a0a0b0; margin-bottom:1.5rem;">Un flujo real que ya esta disenado para operar</p>
+    <div class="example-list">
+        <div class="example-item">
+            <span>Router</span>
+            <p>Saluda al cliente, detecta que quiere comprar, lo dirige al nodo correcto</p>
+        </div>
+        <div class="example-item">
+            <span>Identificacion + Precio</span>
+            <p>Busca productos del cliente, da precio con IVA, calcula envio si aplica</p>
+        </div>
+        <div class="example-item">
+            <span>Negociacion</span>
+            <p>Con clientes conocidos, usa historial de negociacion para manejar regateo automaticamente</p>
+        </div>
+        <div class="example-item">
+            <span>Facturacion / Despacho</span>
+            <p>Solicita NIT, encola factura, envia foto al grupo tecnico para despacho</p>
+        </div>
+        <div class="example-item">
+            <span>Cobro + Verificacion</span>
+            <p>Solicita pago, envia recordatorios, verifica comprobante con supervisora</p>
+        </div>
+        <div class="example-item">
+            <span>Escalamiento</span>
+            <p>Si algo se sale del flujo o no se puede resolver, transfiere al humano con contexto completo</p>
+        </div>
+    </div>
+</section>
+
+<!-- Escalabilidad -->
+<section>
+    <h2>Escalabilidad</h2>
+    <div class="scale-grid">
+        <div class="scale-item">
+            <span class="scale-number">1</span>
+            <span class="scale-label">Tipo de nodo generico para todo</span>
+        </div>
+        <div class="scale-item">
+            <span class="scale-number">N</span>
+            <span class="scale-label">Flujos nuevos sin codigo nuevo</span>
+        </div>
+        <div class="scale-item">
+            <span class="scale-number">24/7</span>
+            <span class="scale-label">Atencion continua sin personal extra</span>
+        </div>
+    </div>
+    <div class="diagram-section" style="margin-top:2rem;">
+        <p style="color:#a0a0b0;">Un flujo hoy (ventas), manana los que se necesiten:</p>
+        <div class="example-list" style="text-align:left; margin-top:1rem;">
+            <div class="example-item">
+                <span>Soporte tecnico</span>
+                <p>Diagnostico, escalamiento, seguimiento de tickets</p>
+            </div>
+            <div class="example-item">
+                <span>Cobranza</span>
+                <p>Recordatorios de pago, negociacion de plazos, verificacion</p>
+            </div>
+            <div class="example-item">
+                <span>Atencion al cliente</span>
+                <p>Consultas, reclamos, seguimiento de pedidos</p>
+            </div>
+            <div class="example-item">
+                <span>Reservaciones</span>
+                <p>Disponibilidad, confirmacion, recordatorios</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+</div>
+
+<div class="footer">
+    Documento interno — Confidencial
+</div>
+
+</body>
+</html>
