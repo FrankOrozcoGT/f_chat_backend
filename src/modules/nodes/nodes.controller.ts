@@ -14,8 +14,10 @@ import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { TestSessionService } from './services/test-session.service';
+import { DispatcherService } from './services/dispatcher.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { TestStartDto } from './dto/test-start.dto';
+import { TestSendDto } from './dto/test-send.dto';
 import { Prisma } from '@prisma/client';
 
 @Controller('api/nodes')
@@ -25,6 +27,7 @@ export class NodesController {
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly testSessionService: TestSessionService,
+    private readonly dispatcherService: DispatcherService,
     private readonly phoneRepo: PhoneRepository,
   ) {}
 
@@ -83,5 +86,36 @@ export class NodesController {
       req.user.id,
     );
     return { testId };
+  }
+
+  @Post('test/send')
+  async sendTest(@Body() dto: TestSendDto) {
+    const session = await this.testSessionService.getSession(dto.testId);
+
+    const result = await this.dispatcherService.dispatchTest(session, dto.message);
+
+    // Construir history actualizado con el mensaje del usuario + respuesta
+    const updatedHistory = [
+      ...session.history,
+      { role: 'user', content: dto.message },
+    ];
+    if (result.response) {
+      updatedHistory.push({ role: 'assistant', content: result.response });
+    }
+
+    // Guardar step en Redis
+    await this.testSessionService.pushStep(dto.testId, {
+      message: dto.message,
+      response: result.response,
+      nodeId: session.currentNodeId,
+      historySnapshot: updatedHistory,
+    });
+
+    return {
+      response: result.response,
+      intent: result.intent,
+      currentNodeId: session.currentNodeId,
+      sideEffects: result.sideEffects ?? [],
+    };
   }
 }
