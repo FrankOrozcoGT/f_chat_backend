@@ -43,6 +43,12 @@ export class ResponderFn {
       throw new Error('responder: "mensaje" es requerido pero no fue proporcionado');
     }
 
+    if (ctx.isTest) {
+      ctx.sideEffects.push({ action: 'sendMessage', args: { mensaje } });
+      this.logger.log(`Responder [TEST]: "${mensaje.substring(0, 80)}"`);
+      return 'Mensaje enviado al cliente.';
+    }
+
     // 1. Enviar vía Evolution
     const response = await this.evolutionService.sendTextMessage(
       ctx.instanceName,

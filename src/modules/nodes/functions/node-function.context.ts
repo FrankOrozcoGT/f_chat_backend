@@ -1,6 +1,11 @@
 import { Node, Flow, NodeSession } from '@prisma/client';
 import { ToolChatResult } from '../../ai/clients/kimi.client';
 
+export interface TestSideEffect {
+  action: string;
+  args?: Record<string, unknown>;
+}
+
 export class NodeContext {
   // Input data
   messageId: string;
@@ -21,4 +26,8 @@ export class NodeContext {
 
   // Tool call args (only available when executing as a tool)
   toolCallArgs?: Record<string, unknown>;
+
+  // Test mode
+  isTest = false;
+  sideEffects: TestSideEffect[] = [];
 }

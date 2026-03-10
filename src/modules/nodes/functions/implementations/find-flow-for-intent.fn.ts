@@ -40,12 +40,21 @@ export class FindFlowForIntentFn {
       );
     }
 
+    // Reads are always OK (even in test)
     const intent = await this.intentRepo.findByUserIdAndName(
       userId,
       intentName,
     );
 
     if (!intent) {
+      if (ctx.isTest) {
+        ctx.sideEffects.push(
+          { action: 'upsertIntent', args: { intentName } },
+          { action: 'switchToHitl', args: { reason: 'unknown_intent', intentName } },
+        );
+        this.logger.warn(`FindFlowForIntent [TEST]: unknown intent "${intentName}" → HITL`);
+        return 'hitl_unknown_intent';
+      }
       await this.intentRepo.upsert(userId, intentName);
       this.logger.warn(
         `Unknown intent "${intentName}" — registered and switching to HITL`,
@@ -60,6 +69,11 @@ export class FindFlowForIntentFn {
     }
 
     if (!intent.flowId || !intent.flow) {
+      if (ctx.isTest) {
+        ctx.sideEffects.push({ action: 'switchToHitl', args: { reason: 'no_flow', intentName } });
+        this.logger.warn(`FindFlowForIntent [TEST]: intent "${intentName}" has no flow → HITL`);
+        return 'hitl_no_flow';
+      }
       this.logger.warn(
         `Intent "${intentName}" has no flow assigned — switching to HITL`,
       );
@@ -77,6 +91,15 @@ export class FindFlowForIntentFn {
       throw new Error(
         `Flow "${intent.flow.name}" (${intent.flow.id}) has no router node`,
       );
+    }
+
+    if (ctx.isTest) {
+      ctx.sideEffects.push({
+        action: 'transitionToFlow',
+        args: { flowId: targetFlow.id, flowName: targetFlow.name, nodeId: targetFlow.routerNode.id, intentName },
+      });
+      this.logger.log(`FindFlowForIntent [TEST]: → flow "${targetFlow.name}"`);
+      return 'transitioned';
     }
 
     await this.nodeSessionRepo.updateCurrentNode(

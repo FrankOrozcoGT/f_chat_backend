@@ -25,10 +25,19 @@ export class CloseSessionFn {
     description: 'Cierra la conversacion cuando el cliente se despide y HAY historial previo en la conversacion. Envia un mensaje de despedida y cierra la sesion.',
   })
   async execute(ctx: NodeContext): Promise<string> {
-    // 1. Get farewell template
     const farewell = await this.templateRepo.findByCode('farewell', ctx.userId);
 
-    // 2. Send farewell message via Evolution
+    if (ctx.isTest) {
+      ctx.sideEffects.push(
+        { action: 'sendFarewell', args: { mensaje: farewell } },
+        { action: 'closeNodeSession', args: { nodeSessionId: ctx.nodeSession.id } },
+        { action: 'closeConversation', args: { conversationId: ctx.conversationId } },
+      );
+      this.logger.log(`CloseSession [TEST]: farewell="${farewell.substring(0, 80)}"`);
+      return 'closed';
+    }
+
+    // 1. Send farewell message via Evolution
     const response = await this.evolutionService.sendTextMessage(
       ctx.instanceName,
       ctx.clientPhone,
@@ -40,7 +49,7 @@ export class CloseSessionFn {
       `CloseSession: sent farewell to ${ctx.clientPhone}, keyId: ${evolutionKeyId}`,
     );
 
-    // 3. Save message to DB
+    // 2. Save message to DB
     const messageData = buildOutgoingMessageData(
       ctx.conversationId,
       MessageType.text,
@@ -64,10 +73,10 @@ export class CloseSessionFn {
       },
     );
 
-    // 4. Close node session
+    // 3. Close node session
     await this.nodeSessionRepo.close(ctx.nodeSession.id);
 
-    // 5. Close conversation (move messages to sub-conversation, mark analyzed)
+    // 4. Close conversation (move messages to sub-conversation, mark analyzed)
     await this.internalApi.closeConversation(ctx.conversationId);
 
     this.logger.log(

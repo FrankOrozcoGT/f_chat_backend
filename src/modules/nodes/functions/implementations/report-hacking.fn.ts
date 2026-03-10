@@ -29,6 +29,15 @@ export class ReportHackingFn {
     const description =
       (ctx.toolCallArgs?.description as string) || 'Intento de hacking detectado';
 
+    if (ctx.isTest) {
+      ctx.sideEffects.push(
+        { action: 'reportHacking', args: { description } },
+        { action: 'switchToHitl', args: { reason: 'hacking' } },
+      );
+      this.logger.warn(`ReportHacking [TEST]: "${description}"`);
+      return 'hacking_reported';
+    }
+
     await this.securityEventRepo.create({
       type: 'prompt_injection',
       userId: ctx.userId,

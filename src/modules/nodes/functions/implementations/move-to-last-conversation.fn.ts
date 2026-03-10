@@ -20,6 +20,15 @@ export class MoveToLastConversationFn {
       'Usa esta funcion SOLO cuando NO hay historial previo en la conversacion y el mensaje del cliente es cortesia post-despedida (ej: "gracias", "ok") sin intencion nueva. Esto significa que la conversacion anterior ya fue cerrada y este mensaje llego despues. Mueve el mensaje al historial de la conversacion anterior.',
   })
   async execute(ctx: NodeContext): Promise<string> {
+    if (ctx.isTest) {
+      ctx.sideEffects.push(
+        { action: 'moveToLastConversation', args: { messageId: ctx.messageId } },
+        { action: 'closeNodeSession', args: { nodeSessionId: ctx.nodeSession.id } },
+      );
+      this.logger.log(`MoveToLastConversation [TEST]: skipped`);
+      return 'moved_to_last_conversation';
+    }
+
     await this.internalApi.moveMessagesToConversation([ctx.messageId]);
 
     this.logger.log(

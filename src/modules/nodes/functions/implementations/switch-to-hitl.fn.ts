@@ -17,6 +17,12 @@ export class SwitchToHitlFn {
     description: 'Transfiere la conversación a un agente humano cuando el cliente lo solicita.',
   })
   async execute(ctx: NodeContext): Promise<string> {
+    if (ctx.isTest) {
+      ctx.sideEffects.push({ action: 'switchToHitl', args: { reason: 'client_request' } });
+      this.logger.log(`SwitchToHitl [TEST]: skipped`);
+      return 'hitl';
+    }
+
     await this.sessionLifecycle.switchToHitl({
       conversationId: ctx.conversationId,
       reason: 'client_request',
