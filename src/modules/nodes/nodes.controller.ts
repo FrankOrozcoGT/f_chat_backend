@@ -18,6 +18,7 @@ import { DispatcherService } from './services/dispatcher.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
+import { TestStepBackDto } from './dto/test-step-back.dto';
 import { Prisma } from '@prisma/client';
 
 @Controller('api/nodes')
@@ -117,5 +118,14 @@ export class NodesController {
       currentNodeId: session.currentNodeId,
       sideEffects: result.sideEffects ?? [],
     };
+  }
+
+  @Post('test/step-back')
+  async stepBackTest(@Body() dto: TestStepBackDto) {
+    const result = await this.testSessionService.popStep(dto.testId);
+    if (result.currentNodeId === null && result.lastMessage === null) {
+      throw new BadRequestException('No steps to go back to');
+    }
+    return result;
   }
 }
