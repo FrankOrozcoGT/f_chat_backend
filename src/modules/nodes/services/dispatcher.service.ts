@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Node } from '@prisma/client';
 import { NodeRepository } from '../repositories/node.repository';
 import { NodeSessionRepository } from '../repositories/node-session.repository';
 import { NodeRunnerService } from './node-runner.service';
 import { SessionLifecycleService } from '../../ai/services/session-lifecycle.service';
 import { NodeFunctionRegistry } from '../functions/node-function.registry';
-import { NodeContext } from '../functions/node-function.context';
+import { NodeContext, TestSideEffect } from '../functions/node-function.context';
+import { TestSession } from './test-session.service';
 
 export interface DispatchInput {
   messageId: string;
@@ -24,6 +26,7 @@ export interface DispatchResult {
   tokensOutput: number;
   costUsd: number;
   latencyMs: number;
+  sideEffects?: TestSideEffect[];
 }
 
 @Injectable()
@@ -80,7 +83,75 @@ export class DispatcherService {
     ctx.nodeSession = nodeSession;
     ctx.flow = flow;
 
-    // 5. Ejecutar preCode pipeline
+    const result = await this.runNode(ctx, activeNode, transcription, imageUrl, history);
+
+    // Si error en producción y onError=hitl, transferir
+    // (manejado dentro de runNode con try/catch externo si se necesita)
+
+    return result;
+  }
+
+  async dispatchTest(
+    testSession: TestSession,
+    transcription: string,
+  ): Promise<DispatchResult> {
+    // 1. Buscar flow por ID (del test session)
+    const flow = await this.nodeRepo.findFlowWithNodes(testSession.flowId);
+    if (!flow) {
+      throw new Error(`Flow ${testSession.flowId} not found for test`);
+    }
+
+    // 2. Determinar nodo activo: currentNodeId del test o routerNode del flow
+    let activeNode: Node | null = null;
+    if (testSession.currentNodeId) {
+      activeNode = await this.nodeRepo.findById(testSession.currentNodeId);
+    }
+    activeNode = activeNode ?? flow.routerNode;
+    if (!activeNode) {
+      throw new Error(`Flow ${flow.id} has no router node`);
+    }
+
+    this.logger.log(
+      `Dispatching TEST to node "${activeNode.name}" (${activeNode.id})`,
+    );
+
+    // 3. Construir contexto en modo test
+    const ctx = new NodeContext();
+    ctx.messageId = `test-${testSession.testId}`;
+    ctx.userId = testSession.userId;
+    ctx.conversationId = testSession.conversationId;
+    ctx.transcription = transcription;
+    ctx.history = testSession.history;
+    ctx.instanceName = testSession.instanceName;
+    ctx.clientPhone = testSession.clientPhone;
+    ctx.node = activeNode;
+    ctx.flow = flow;
+    ctx.isTest = true;
+    // Fake nodeSession para que las funciones no tiren NPE
+    ctx.nodeSession = {
+      id: `test-${testSession.testId}`,
+      conversationId: testSession.conversationId,
+      flowId: flow.id,
+      currentNodeId: activeNode.id,
+      status: 'active',
+      detectedIntent: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any;
+
+    const result = await this.runNode(ctx, activeNode, transcription, null, testSession.history);
+    result.sideEffects = ctx.sideEffects;
+    return result;
+  }
+
+  private async runNode(
+    ctx: NodeContext,
+    activeNode: Node,
+    transcription: string,
+    imageUrl: string | null,
+    history: { role: string; content: string }[],
+  ): Promise<DispatchResult> {
+    // 1. Ejecutar preCode pipeline
     let systemPromptExtra = '';
     const preCodePipeline = this.parsePreCode(activeNode.preCode);
     if (preCodePipeline.length > 0) {
@@ -93,17 +164,17 @@ export class DispatcherService {
       );
     }
 
-    // 6. Resolver tools del nodo desde el registry
+    // 2. Resolver tools del nodo desde el registry
     const toolCodes = this.parseToolCodes(activeNode.tools);
     const resolvedTools = toolCodes.length > 0
       ? this.fnRegistry.resolveTools(toolCodes)
       : null;
 
-    // 7. Merge postCode con defaults y resolver como tools de terminación
+    // 3. Merge postCode con defaults y resolver como tools de terminación
     const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode);
     const resolvedPostCode = this.fnRegistry.resolvePostCode(postCodes);
 
-    // 8. Verificar que no haya duplicados entre tools y postCode
+    // 4. Verificar que no haya duplicados entre tools y postCode
     const toolDefs = resolvedTools?.definitions || [];
     const toolHandlers = resolvedTools?.handlers || new Map();
     for (const postDef of resolvedPostCode.definitions) {
@@ -116,10 +187,10 @@ export class DispatcherService {
       }
     }
 
-    // 9. Merge definitions para Kimi (tools + postCode), pero handlers solo cíclicos
+    // 5. Merge definitions para Kimi (tools + postCode), pero handlers solo cíclicos
     const allDefinitions = [...toolDefs, ...resolvedPostCode.definitions];
 
-    // 10. Ejecutar el nodo
+    // 6. Ejecutar el nodo
     try {
       const result = await this.nodeRunner.run({
         node: activeNode,
@@ -138,7 +209,7 @@ export class DispatcherService {
         `Node "${activeNode.name}" completed: intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens`,
       );
 
-      // 11. Si terminó por postCode, ejecutar la función
+      // 7. Si terminó por postCode, ejecutar la función
       if (result.toolResult?.terminationTool) {
         const toolName = result.toolResult.terminationTool;
         const handler = resolvedPostCode.handlers.get(toolName);
@@ -157,11 +228,11 @@ export class DispatcherService {
         `Node "${activeNode.name}" failed: ${error.message}`,
       );
 
-      if (activeNode.onError === 'hitl') {
+      if (!ctx.isTest && activeNode.onError === 'hitl') {
         await this.sessionLifecycle.switchToHitl({
-          conversationId,
+          conversationId: ctx.conversationId,
           reason: 'api_error',
-          userId,
+          userId: ctx.userId,
           extras: {
             apiName: 'node',
             errorMessage: `[${activeNode.name}] ${error.message}`,
