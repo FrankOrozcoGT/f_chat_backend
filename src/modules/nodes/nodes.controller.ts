@@ -19,6 +19,7 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
 import { TestStepBackDto } from './dto/test-step-back.dto';
+import { TestStopDto } from './dto/test-stop.dto';
 import { Prisma } from '@prisma/client';
 
 @Controller('api/nodes')
@@ -127,5 +128,15 @@ export class NodesController {
       throw new BadRequestException('No steps to go back to');
     }
     return result;
+  }
+
+  @Post('test/stop')
+  async stopTest(@Body() dto: TestStopDto) {
+    const session = await this.testSessionService.getSession(dto.testId);
+    if (!session) {
+      throw new NotFoundException('Test session not found');
+    }
+    await this.testSessionService.deleteSession(dto.testId);
+    return {};
   }
 }
