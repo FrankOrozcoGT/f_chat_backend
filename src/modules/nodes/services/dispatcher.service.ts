@@ -7,6 +7,7 @@ import { SessionLifecycleService } from '../../ai/services/session-lifecycle.ser
 import { NodeFunctionRegistry } from '../functions/node-function.registry';
 import { NodeContext, TestSideEffect } from '../functions/node-function.context';
 import { TestSession } from './test-session.service';
+import { buildVirtualRouterNode } from '../router-config';
 
 export interface DispatchInput {
   messageId: string;
@@ -95,27 +96,32 @@ export class DispatcherService {
     testSession: TestSession,
     transcription: string,
   ): Promise<DispatchResult> {
-    // 1. Buscar flow por ID (del test session)
-    const flow = await this.nodeRepo.findFlowWithNodes(testSession.flowId);
-    if (!flow) {
-      throw new Error(`Flow ${testSession.flowId} not found for test`);
-    }
-
-    // 2. Determinar nodo activo: currentNodeId del test o routerNode del flow
+    // 1. Determinar nodo activo: currentNodeId del test o router hardcodeado
     let activeNode: Node | null = null;
+    let flow: any = null;
+
     if (testSession.currentNodeId) {
       activeNode = await this.nodeRepo.findById(testSession.currentNodeId);
+      if (!activeNode) {
+        throw new Error(`Node ${testSession.currentNodeId} not found for test`);
+      }
     }
-    activeNode = activeNode ?? flow.routerNode;
+
+    // Si no hay currentNodeId, usar router hardcodeado
     if (!activeNode) {
-      throw new Error(`Flow ${flow.id} has no router node`);
+      activeNode = buildVirtualRouterNode();
+    }
+
+    // Cargar flow si existe (para contexto, no obligatorio)
+    if (testSession.flowId) {
+      flow = await this.nodeRepo.findFlowWithNodes(testSession.flowId);
     }
 
     this.logger.log(
       `Dispatching TEST to node "${activeNode.name}" (${activeNode.id})`,
     );
 
-    // 3. Construir contexto en modo test
+    // 2. Construir contexto en modo test
     const ctx = new NodeContext();
     ctx.messageId = `test-${testSession.testId}`;
     ctx.userId = testSession.userId;
@@ -131,7 +137,7 @@ export class DispatcherService {
     ctx.nodeSession = {
       id: `test-${testSession.testId}`,
       conversationId: testSession.conversationId,
-      flowId: flow.id,
+      flowId: testSession.flowId,
       currentNodeId: activeNode.id,
       status: 'active',
       detectedIntent: null,

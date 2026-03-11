@@ -42,6 +42,6 @@ import { PhonesModule } from '@modules/phones/phones.module';
     TemplateRepository,
     TestSessionService,
   ],
-  exports: [DispatcherService, NodeRepository, NodeSessionRepository, IntentRepository],
+  exports: [DispatcherService, NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry],
 })
 export class NodesModule {}

@@ -2,7 +2,8 @@ import { Module, forwardRef } from '@nestjs/common';
 import { AiAgentService } from './ai-agent.service';
 import { AiWorkflow } from './langgraph/workflow';
 import { InputRouterNode } from './langgraph/nodes/input-router.node';
-import { LlmNode } from './langgraph/nodes/llm.node';
+import { IntentRouterNode } from './langgraph/nodes/intent-router.node';
+import { CustomNode } from './langgraph/nodes/custom-node.node';
 import { OutputRouterNode } from './langgraph/nodes/output-router.node';
 import { FinalizeNode } from './langgraph/nodes/finalize.node';
 import { QwenSttClient } from './clients/qwen-stt.client';
@@ -30,7 +31,8 @@ import { NodesModule } from '../nodes/nodes.module';
     AiAgentService,
     AiWorkflow,
     InputRouterNode,
-    LlmNode,
+    IntentRouterNode,
+    CustomNode,
     OutputRouterNode,
     FinalizeNode,
     QwenSttClient,

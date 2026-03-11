@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class TestStartDto {
   @IsString()
@@ -6,8 +6,8 @@ export class TestStartDto {
   conversationId: string;
 
   @IsString()
-  @IsNotEmpty()
-  flowId: string;
+  @IsOptional()
+  flowId?: string;
 
   @IsString()
   @IsNotEmpty()
