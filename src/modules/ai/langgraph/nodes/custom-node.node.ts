@@ -6,13 +6,17 @@ import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { DispatcherService } from '../../../nodes/services/dispatcher.service';
+import { NodeRepository } from '../../../nodes/repositories/node.repository';
+import { NodeSessionRepository } from '../../../nodes/repositories/node-session.repository';
 
 @Injectable()
-export class LlmNode {
-  private readonly logger = new Logger(LlmNode.name);
+export class CustomNode {
+  private readonly logger = new Logger(CustomNode.name);
 
   constructor(
     private readonly dispatcher: DispatcherService,
+    private readonly nodeRepo: NodeRepository,
+    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
@@ -28,6 +32,7 @@ export class LlmNode {
       userId,
       instanceName,
       clientPhone,
+      currentNodeId,
       apiCalls: existingApiCalls,
       totalCost: existingCost,
       error: previousError,
@@ -35,11 +40,15 @@ export class LlmNode {
 
     if (previousError) return {};
 
-    // Cargar historial de conversación
-    const messages = await this.internalApi.getMessageHistory(
-      conversationId,
-      31,
-    );
+    if (!currentNodeId) {
+      throw new Error(
+        `CustomNode: currentNodeId is null for conversation ${conversationId}. ` +
+        `This node should only be reached when a flow has been activated.`,
+      );
+    }
+
+    // Load history
+    const messages = await this.internalApi.getMessageHistory(conversationId, 31);
     const previousMessages = messages.slice(0, -1);
     const history = previousMessages
       .filter((m) => m.content)
@@ -49,7 +58,7 @@ export class LlmNode {
       }));
 
     this.logger.log(
-      `LlmNode: loaded ${history.length} messages from conversation history`,
+      `CustomNode: dispatching to node ${currentNodeId} for conversation ${conversationId}`,
     );
 
     try {
@@ -88,15 +97,13 @@ export class LlmNode {
         latencyMs: dispatchResult.latencyMs,
       };
 
-      // Incrementar créditos (input ponderado a 1/3)
-      const actualCredits =
-        this.limitsService.calculateCreditsFromLlm(
-          dispatchResult.tokensInput,
-          dispatchResult.tokensOutput,
-        );
+      const actualCredits = this.limitsService.calculateCreditsFromLlm(
+        dispatchResult.tokensInput,
+        dispatchResult.tokensOutput,
+      );
       await this.internalApi.incrementCreditsUsed(userId, actualCredits);
       this.logger.log(
-        `LlmNode: incremented ${actualCredits.toFixed(3)} credits (${dispatchResult.tokensInput}in+${dispatchResult.tokensOutput}out)`,
+        `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${dispatchResult.tokensInput}in+${dispatchResult.tokensOutput}out)`,
       );
 
       const preferredFormat: 'audio' | 'text' =
@@ -105,7 +112,7 @@ export class LlmNode {
           : 'text';
 
       this.logger.log(
-        `LlmNode: intent=${dispatchResult.intent}, format=${preferredFormat}, response="${dispatchResult.response.substring(0, 80)}"`,
+        `CustomNode: intent=${dispatchResult.intent}, format=${preferredFormat}, response="${dispatchResult.response.substring(0, 80)}"`,
       );
 
       return {
@@ -116,9 +123,9 @@ export class LlmNode {
         totalCost: existingCost + dispatchResult.costUsd,
       };
     } catch (error) {
-      this.logger.error(`LlmNode: dispatch failed: ${error.message}`);
+      this.logger.error(`CustomNode: dispatch failed: ${error.message}`);
       return {
-        error: { step: 'llm', apiName: 'kimi_llm', message: error.message },
+        error: { step: 'custom_node', apiName: 'kimi_llm', message: error.message },
       };
     }
   }

@@ -20,7 +20,13 @@ export const WorkflowState = Annotation.Root({
   // After Input Router (images)
   imageUrl: Annotation<string | null>,
 
-  // After LLM
+  // Node routing (set by intent_router or route_decision)
+  currentNodeId: Annotation<string | null>,
+  flowId: Annotation<string | null>,
+  nodeSessionId: Annotation<string | null>,
+  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | null>,
+
+  // After LLM / custom_node
   responseText: Annotation<string>,
   intent: Annotation<string>,
   preferredFormat: Annotation<'audio' | 'text'>,

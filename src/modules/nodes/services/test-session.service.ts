@@ -12,7 +12,7 @@ export interface TestStep {
 export interface TestSession {
   testId: string;
   conversationId: string;
-  flowId: string;
+  flowId: string | null;
   clientPhone: string;
   instanceName: string;
   userId: string;
@@ -30,7 +30,7 @@ export class TestSessionService {
 
   async start(
     conversationId: string,
-    flowId: string,
+    flowId: string | null,
     clientPhone: string,
     instanceName: string,
     userId: string,

@@ -3,7 +3,8 @@ import { StateGraph, END, START } from '@langchain/langgraph';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { WorkflowState, WorkflowStateType } from './state.interface';
 import { InputRouterNode } from './nodes/input-router.node';
-import { LlmNode } from './nodes/llm.node';
+import { IntentRouterNode } from './nodes/intent-router.node';
+import { CustomNode } from './nodes/custom-node.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
@@ -15,7 +16,8 @@ export class AiWorkflow {
 
   constructor(
     private readonly inputRouterNode: InputRouterNode,
-    private readonly llmNode: LlmNode,
+    private readonly intentRouterNode: IntentRouterNode,
+    private readonly customNode: CustomNode,
     private readonly outputRouterNode: OutputRouterNode,
     private readonly finalizeNode: FinalizeNode,
     private readonly langSmithService: LangSmithService,
@@ -28,16 +30,37 @@ export class AiWorkflow {
       .addNode('input_router', (state: WorkflowStateType) =>
         this.inputRouterNode.execute(state),
       )
-      .addNode('llm', (state: WorkflowStateType) => this.llmNode.execute(state))
+      .addNode('intent_router', (state: WorkflowStateType) =>
+        this.intentRouterNode.execute(state),
+      )
+      .addNode('custom_node', (state: WorkflowStateType) =>
+        this.customNode.execute(state),
+      )
       .addNode('output_router', (state: WorkflowStateType) =>
         this.outputRouterNode.execute(state),
       )
       .addNode('finalize', (state: WorkflowStateType) =>
         this.finalizeNode.execute(state),
       )
+
+      // START → input_router → intent_router (decides: router or custom_node)
       .addEdge(START, 'input_router')
-      .addEdge('input_router', 'llm')
-      .addEdge('llm', 'output_router')
+      .addEdge('input_router', 'intent_router')
+
+      // intent_router → custom_node (has currentNodeId) OR output_router (router handled it) OR finalize (error)
+      .addConditionalEdges('intent_router', (state: WorkflowStateType) => {
+        if (state.error) return 'finalize';
+        // If currentNodeId is set and routerAction is null → session had active node, go to custom_node
+        // If routerAction is findFlowForIntent → flow activated, go to custom_node
+        if (state.currentNodeId && (state.routerAction === null || state.routerAction === 'findFlowForIntent')) {
+          return 'custom_node';
+        }
+        // Router handled it (responder, closeSession, etc.) → output_router
+        return 'output_router';
+      })
+
+      // custom_node → output_router → finalize → END
+      .addEdge('custom_node', 'output_router')
       .addEdge('output_router', 'finalize')
       .addEdge('finalize', END);
 
@@ -58,6 +81,10 @@ export class AiWorkflow {
       apiCalls: [],
       totalCost: 0,
       error: null,
+      currentNodeId: null,
+      flowId: null,
+      nodeSessionId: null,
+      routerAction: null,
     };
 
     await this.langSmithService.tracePipeline(

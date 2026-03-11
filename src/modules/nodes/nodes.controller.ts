@@ -82,7 +82,7 @@ export class NodesController {
     }
     const testId = await this.testSessionService.start(
       dto.conversationId,
-      dto.flowId,
+      dto.flowId ?? null,
       dto.clientPhone,
       phone.instanceName,
       req.user.id,
