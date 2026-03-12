@@ -5,6 +5,8 @@ import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from './clients/internal-api.client';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
+import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { EvolutionService } from '@common/evolution/evolution.service';
 
 export interface IncomingMessageEvent {
   messageId: string;
@@ -27,11 +29,28 @@ export class AiAgentService {
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
     private readonly sessionLifecycle: SessionLifecycleService,
+    private readonly nodeSessionRepo: NodeSessionRepository,
+    private readonly evolutionService: EvolutionService,
   ) {}
 
   @OnEvent('ai.incoming.message')
   async handleIncomingMessage(payload: IncomingMessageEvent): Promise<void> {
     try {
+      // Si la nodeSession está en waiting_queue, responder amablemente y no ejecutar workflow
+      const nodeSession = await this.nodeSessionRepo.findActiveOrWaitingByConversationId(payload.conversationId);
+      if (nodeSession?.status === 'waiting_queue') {
+        if (payload.clientPhone && payload.instanceName) {
+          const remoteJid = `${payload.clientPhone}@s.whatsapp.net`;
+          await this.evolutionService.sendTextMessage(
+            payload.instanceName,
+            remoteJid,
+            'Estoy verificando tu solicitud, en cuanto tenga respuesta te aviso 😊',
+          );
+        }
+        this.logger.log(`[waiting_queue] Client message while waiting, sent friendly response for conversation ${payload.conversationId}`);
+        return;
+      }
+
       // Validar créditos ANTES de ejecutar el workflow
       // Estimación conservadora: STT (30s) + LLM (500 tokens) = ~0.65 créditos
       const estimatedCredits =

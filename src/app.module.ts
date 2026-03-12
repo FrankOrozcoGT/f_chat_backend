@@ -23,6 +23,7 @@ import { ConversationAnalysisModule } from '@modules/conversation-analysis/conve
 import { QueueModule } from '@common/queue/queue.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
 import { ContactsModule } from '@modules/contacts/contacts.module';
+import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ContactsModule } from '@modules/contacts/contacts.module';
     CatalogModule,
     ConversationAnalysisModule,
     ContactsModule,
+    QueueSystemModule,
     WebhooksModule,
   ],
 })
