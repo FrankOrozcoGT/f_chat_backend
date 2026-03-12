@@ -7,6 +7,7 @@ import { WebSocketModule } from '@common/websocket/websocket.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
+import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
@@ -22,6 +23,7 @@ import { PhoneQueueProcessor } from './processors/phone-queue.processor';
     ConversationsModule,
     EvolutionModule,
     FileStorageModule,
+    QueueSystemModule,
   ],
   controllers: [WebhooksController, InternalWebhooksController],
   providers: [
