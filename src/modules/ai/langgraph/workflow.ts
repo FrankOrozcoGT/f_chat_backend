@@ -9,6 +9,15 @@ import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
 
+export interface WorkflowResult {
+  responseText: string;
+  intent: string;
+  currentNodeId: string | null;
+  sideEffects: any[];
+  totalCost: number;
+  error: any;
+}
+
 @Injectable()
 export class AiWorkflow {
   private readonly logger = new Logger(AiWorkflow.name);
@@ -67,7 +76,7 @@ export class AiWorkflow {
     return builder.compile();
   }
 
-  async execute(payload: IncomingMessageEvent): Promise<void> {
+  async execute(payload: IncomingMessageEvent, isTest = false): Promise<WorkflowResult> {
     const initialState: Partial<WorkflowStateType> = {
       messageId: payload.messageId,
       conversationId: payload.conversationId,
@@ -79,7 +88,9 @@ export class AiWorkflow {
       mediaRelativePath: payload.mediaRelativePath,
       mediaMetadata: payload.mediaMetadata,
       apiCalls: [],
+      sideEffects: [],
       totalCost: 0,
+      isTest,
       error: null,
       currentNodeId: null,
       flowId: null,
@@ -87,19 +98,28 @@ export class AiWorkflow {
       routerAction: null,
     };
 
-    await this.langSmithService.tracePipeline(
+    const result = await this.langSmithService.tracePipeline(
       async () => {
-        const result = await this.graph.invoke(initialState);
+        const res = await this.graph.invoke(initialState);
         this.logger.log(
-          `Workflow completed for ${payload.conversationId} | cost=$${result.totalCost?.toFixed(6)}`,
+          `Workflow completed for ${payload.conversationId} | cost=$${res.totalCost?.toFixed(6)}${isTest ? ' [TEST]' : ''}`,
         );
-        return result;
+        return res;
       },
       {
         conversationId: payload.conversationId,
         clientPhone: payload.clientPhone,
-        mode: 'AI',
+        mode: isTest ? 'TEST' : 'AI',
       },
     );
+
+    return {
+      responseText: result.responseText ?? '',
+      intent: result.intent ?? '',
+      currentNodeId: result.currentNodeId ?? null,
+      sideEffects: result.sideEffects ?? [],
+      totalCost: result.totalCost ?? 0,
+      error: result.error ?? null,
+    };
   }
 }

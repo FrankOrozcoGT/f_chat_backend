@@ -48,6 +48,7 @@ import { NodesModule } from '../nodes/nodes.module';
     KimiClient,
     QwenSttClient,
     SessionLifecycleService,
+    AiWorkflow,
   ],
 })
 export class AiModule {}

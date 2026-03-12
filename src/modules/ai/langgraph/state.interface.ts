@@ -1,6 +1,7 @@
 import { Annotation } from '@langchain/langgraph';
 import { ApiName, MessageType } from '@prisma/client';
 import { CreateApiCallData } from '../repositories/ai.repository';
+import { TestSideEffect } from '../../nodes/functions/node-function.context';
 
 export const WorkflowState = Annotation.Root({
   // Input (from IncomingMessageEvent)
@@ -41,6 +42,10 @@ export const WorkflowState = Annotation.Root({
   // Accumulated across nodes
   apiCalls: Annotation<CreateApiCallData[]>,
   totalCost: Annotation<number>,
+
+  // Test mode
+  isTest: Annotation<boolean>,
+  sideEffects: Annotation<TestSideEffect[]>,
 
   // Error tracking
   error: Annotation<{ step: string; apiName: ApiName; message: string } | null>,
