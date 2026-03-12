@@ -93,23 +93,32 @@ export class FindFlowForIntentFn {
       );
     }
 
+    // Crear nodeSession si no existe (primera vez que se detecta un intent)
+    let sessionId: string;
+    if (nodeSession) {
+      sessionId = nodeSession.id;
+    } else {
+      const newSession = await this.nodeSessionRepo.findOrCreate(conversationId, targetFlow.id);
+      sessionId = newSession.id;
+      ctx.nodeSession = newSession;
+    }
+
+    // updateCurrentNode es flujo interno — se ejecuta siempre (test y producción)
+    await this.nodeSessionRepo.updateCurrentNode(
+      sessionId,
+      targetFlow.routerNode.id,
+      intentName,
+    );
+
     if (ctx.isTest) {
       ctx.sideEffects.push({
         action: 'transitionToFlow',
         args: { flowId: targetFlow.id, flowName: targetFlow.name, nodeId: targetFlow.routerNode.id, intentName },
       });
-      this.logger.log(`FindFlowForIntent [TEST]: → flow "${targetFlow.name}"`);
-      return 'transitioned';
     }
 
-    await this.nodeSessionRepo.updateCurrentNode(
-      nodeSession.id,
-      targetFlow.routerNode.id,
-      intentName,
-    );
-
     this.logger.log(
-      `Transitioned to flow "${targetFlow.name}" node "${targetFlow.routerNode.name}"`,
+      `Transitioned to flow "${targetFlow.name}" node "${targetFlow.routerNode.name}"${ctx.isTest ? ' [TEST]' : ''}`,
     );
     return 'transitioned';
   }

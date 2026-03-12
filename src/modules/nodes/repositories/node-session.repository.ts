@@ -1,13 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { NodeSessionStatus } from '@prisma/client';
 
 @Injectable()
 export class NodeSessionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findById(id: string) {
+    return this.prisma.nodeSession.findUnique({
+      where: { id },
+      include: { currentNode: true, flow: true },
+    });
+  }
+
   async findActiveByConversationId(conversationId: string) {
     return this.prisma.nodeSession.findFirst({
       where: { conversationId, status: 'active' },
+      include: { currentNode: true, flow: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findActiveOrWaitingByConversationId(conversationId: string) {
+    return this.prisma.nodeSession.findFirst({
+      where: { conversationId, status: { in: ['active', 'waiting_queue'] } },
       include: { currentNode: true, flow: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -34,6 +50,14 @@ export class NodeSessionRepository {
     return this.prisma.nodeSession.update({
       where: { id },
       data: { currentNodeId, detectedIntent },
+      include: { currentNode: true, flow: true },
+    });
+  }
+
+  async updateStatus(id: string, status: NodeSessionStatus) {
+    return this.prisma.nodeSession.update({
+      where: { id },
+      data: { status },
       include: { currentNode: true, flow: true },
     });
   }
