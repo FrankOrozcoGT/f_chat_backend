@@ -29,14 +29,14 @@ export class NodeSessionRepository {
     });
   }
 
-  async create(conversationId: string, flowId: string) {
+  async create(conversationId: string, flowId?: string) {
     return this.prisma.nodeSession.create({
-      data: { conversationId, flowId },
+      data: { conversationId, flowId: flowId ?? null },
       include: { currentNode: true, flow: true },
     });
   }
 
-  async findOrCreate(conversationId: string, flowId: string) {
+  async findOrCreate(conversationId: string, flowId?: string) {
     const existing = await this.findActiveByConversationId(conversationId);
     if (existing) return existing;
     return this.create(conversationId, flowId);
