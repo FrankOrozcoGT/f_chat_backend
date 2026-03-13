@@ -17,7 +17,7 @@ import { MoveToLastConversationFn } from './functions/implementations/move-to-la
 import { LoadClientProductsFn } from './functions/implementations/load-client-products.fn';
 import { SearchProductFn } from './functions/implementations/search-product.fn';
 import { CheckPromotionsFn } from './functions/implementations/check-promotions.fn';
-import { CalculateShippingFn } from './functions/implementations/calculate-shipping.fn';
+import { CalculateSaleFn } from './functions/implementations/calculate-sale.fn';
 import { ConfirmSaleFn } from './functions/implementations/confirm-sale.fn';
 import { MoveToNegotiationFn } from './functions/implementations/move-to-negotiation.fn';
 import { SalesRejectionFn } from './functions/implementations/sales-rejection.fn';
@@ -50,7 +50,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     LoadClientProductsFn,
     SearchProductFn,
     CheckPromotionsFn,
-    CalculateShippingFn,
+    CalculateSaleFn,
     ConfirmSaleFn,
     MoveToNegotiationFn,
     SalesRejectionFn,

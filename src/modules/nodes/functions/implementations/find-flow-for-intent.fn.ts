@@ -3,7 +3,6 @@ import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { IntentRepository } from '../../repositories/intent.repository';
 import { NodeRepository } from '../../repositories/node.repository';
-import { NodeSessionRepository } from '../../repositories/node-session.repository';
 import { SessionLifecycleService } from '../../../ai/services/session-lifecycle.service';
 
 @Injectable()
@@ -13,7 +12,6 @@ export class FindFlowForIntentFn {
   constructor(
     private readonly intentRepo: IntentRepository,
     private readonly nodeRepo: NodeRepository,
-    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly sessionLifecycle: SessionLifecycleService,
   ) {}
 
@@ -93,22 +91,23 @@ export class FindFlowForIntentFn {
       );
     }
 
-    // Crear nodeSession si no existe (primera vez que se detecta un intent)
+    // Create or reuse session via sessionStore (works for both prod DB and test Redis)
     let sessionId: string;
     if (nodeSession) {
       sessionId = nodeSession.id;
     } else {
-      const newSession = await this.nodeSessionRepo.findOrCreate(conversationId, targetFlow.id);
+      const newSession = await ctx.sessionStore.findOrCreate(conversationId, targetFlow.id);
       sessionId = newSession.id;
       ctx.nodeSession = newSession;
     }
 
-    // updateCurrentNode es flujo interno — se ejecuta siempre (test y producción)
-    await this.nodeSessionRepo.updateCurrentNode(
+    const updated = await ctx.sessionStore.updateCurrentNode(
       sessionId,
       targetFlow.routerNode.id,
       intentName,
     );
+    ctx.nodeSession = updated;
+    ctx.flow = targetFlow;
 
     if (ctx.isTest) {
       ctx.sideEffects.push({

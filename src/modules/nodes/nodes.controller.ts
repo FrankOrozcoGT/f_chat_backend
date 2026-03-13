@@ -17,6 +17,8 @@ import { NodeSessionRepository } from './repositories/node-session.repository';
 import { TestSessionService } from './services/test-session.service';
 import { AiWorkflow } from '../ai/langgraph/workflow';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { RedisNodeSessionStore } from './stores/redis-node-session.store';
+import { RedisService } from '@common/redis/redis.service';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
 import { TestStepBackDto } from './dto/test-step-back.dto';
@@ -32,6 +34,7 @@ export class NodesController {
     private readonly testSessionService: TestSessionService,
     private readonly workflow: AiWorkflow,
     private readonly phoneRepo: PhoneRepository,
+    private readonly redisService: RedisService,
   ) {}
 
   @Get('flows')
@@ -95,6 +98,8 @@ export class NodesController {
   async sendTest(@Body() dto: TestSendDto) {
     const session = await this.testSessionService.getSession(dto.testId);
 
+    const sessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
+
     // Ejecutar el mismo workflow de LangGraph en modo test
     const result = await this.workflow.execute(
       {
@@ -108,6 +113,7 @@ export class NodesController {
         mediaRelativePath: null,
         mediaMetadata: null,
       },
+      sessionStore,
       true, // isTest
     );
 
@@ -128,6 +134,7 @@ export class NodesController {
       message: dto.message,
       response,
       nodeId: result.currentNodeId,
+      flowId: (result as any).flowId ?? session.flowId,
       historySnapshot: updatedHistory,
     });
 
@@ -136,6 +143,8 @@ export class NodesController {
       intent: result.intent,
       currentNodeId: result.currentNodeId,
       sideEffects: result.sideEffects,
+      preCodeContext: result.preCodeContext ?? null,
+      nodeTransitions: result.nodeTransitions ?? [],
     };
   }
 
