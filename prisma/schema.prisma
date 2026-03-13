@@ -205,14 +205,14 @@ model FlowNode {
 model NodeSession {
   id             String            @id @default(uuid())
   conversationId String
-  flowId         String
+  flowId         String?
   currentNodeId  String?
   detectedIntent String?
   status         NodeSessionStatus @default(active)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  flow           Flow              @relation(fields: [flowId], references: [id])
+  flow           Flow?             @relation(fields: [flowId], references: [id])
   currentNode    Node?             @relation("CurrentNode", fields: [currentNodeId], references: [id])
 
   @@index([conversationId])
