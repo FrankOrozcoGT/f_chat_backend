@@ -13,6 +13,7 @@ interface RedisSessionState {
   flowId: string | null;
   currentNodeId: string | null;
   detectedIntent: string | null;
+  flowSummary: string | null;
   status: NodeSessionStatus;
 }
 
@@ -53,6 +54,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       flowId: state.flowId,
       currentNodeId: state.currentNodeId,
       detectedIntent: state.detectedIntent,
+      flowSummary: state.flowSummary,
       status: state.status,
       currentNode: currentNode ?? null,
       flow: flow ?? null,
@@ -82,6 +84,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       flowId: flowId ?? null,
       currentNodeId: null,
       detectedIntent: null,
+      flowSummary: null,
       status: 'active',
     };
     await this.save(state);
@@ -97,6 +100,16 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     if (detectedIntent !== undefined) state.detectedIntent = detectedIntent;
     await this.save(state);
     return this.hydrate(state);
+  }
+
+  async pauseFlow(id: string, summary: string): Promise<void> {
+    const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
+    if (state) {
+      state.currentNodeId = null;
+      state.detectedIntent = null;
+      state.flowSummary = summary;
+      await this.save(state);
+    }
   }
 
   async close(id: string): Promise<void> {

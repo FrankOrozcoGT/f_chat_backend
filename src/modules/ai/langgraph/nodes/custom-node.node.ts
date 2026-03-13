@@ -93,6 +93,15 @@ export class CustomNode {
       ctx.flow = await this.nodeRepo.findFlowWithNodes(flowId);
     }
 
+    // Inject flowSummary if resuming a paused flow
+    if (ctx.nodeSession?.flowSummary) {
+      activeNode.systemPrompt =
+        activeNode.systemPrompt +
+        '\n\n--- PROGRESO PREVIO DEL FLUJO ---\n' +
+        ctx.nodeSession.flowSummary +
+        '\n--- FIN PROGRESO ---';
+    }
+
     try {
       const traceMessages = [
         ...history,
@@ -146,7 +155,7 @@ export class CustomNode {
         nodeTransitions.push({ from: currentNodeId, to: currentNodeId, reason: `responder: ${result.intent}` });
       }
 
-      return {
+      const returnState: Partial<WorkflowStateType> = {
         responseText: result.response,
         intent: result.intent,
         preferredFormat,
@@ -156,6 +165,14 @@ export class CustomNode {
         preCodeContext: result.preCodeContext ?? null,
         nodeTransitions,
       };
+
+      // If exitFlow was called, signal workflow to return to intent_router
+      if (terminationTool === 'exitFlow') {
+        returnState.routerAction = 'exitFlow';
+        returnState.currentNodeId = null;
+      }
+
+      return returnState;
     } catch (error) {
       this.logger.error(`CustomNode: failed: ${error.message}`);
       return {

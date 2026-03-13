@@ -208,6 +208,7 @@ model NodeSession {
   flowId         String?
   currentNodeId  String?
   detectedIntent String?
+  flowSummary    String?
   status         NodeSessionStatus @default(active)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

@@ -22,6 +22,10 @@ export class DbNodeSessionStore implements NodeSessionStore {
     return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent) as Promise<SessionData>;
   }
 
+  async pauseFlow(id: string, summary: string): Promise<void> {
+    await this.repo.pauseFlow(id, summary);
+  }
+
   async close(id: string): Promise<void> {
     await this.repo.close(id);
   }

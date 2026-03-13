@@ -26,7 +26,7 @@ export const WorkflowState = Annotation.Root({
   currentNodeId: Annotation<string | null>,
   flowId: Annotation<string | null>,
   nodeSessionId: Annotation<string | null>,
-  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | null>,
+  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | null>,
 
   // After LLM / custom_node
   responseText: Annotation<string>,

@@ -6,6 +6,7 @@ export interface SessionData {
   flowId: string | null;
   currentNodeId: string | null;
   detectedIntent: string | null;
+  flowSummary: string | null;
   status: NodeSessionStatus;
   currentNode: Node | null;
   flow: Flow | null;
@@ -16,6 +17,7 @@ export interface NodeSessionStore {
   findById(id: string): Promise<SessionData | null>;
   findOrCreate(conversationId: string, flowId?: string): Promise<SessionData>;
   updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string): Promise<SessionData>;
+  pauseFlow(id: string, summary: string): Promise<void>;
   close(id: string): Promise<void>;
 }
 

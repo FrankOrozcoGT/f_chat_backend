@@ -71,8 +71,12 @@ export class AiWorkflow {
         return 'output_router';
       })
 
-      // custom_node → output_router → finalize → END
-      .addEdge('custom_node', 'output_router')
+      // custom_node → intent_router (exitFlow) OR output_router
+      .addConditionalEdges('custom_node', (state: WorkflowStateType) => {
+        if (state.error) return 'finalize';
+        if (state.routerAction === 'exitFlow') return 'intent_router';
+        return 'output_router';
+      })
       .addEdge('output_router', 'finalize')
       .addEdge('finalize', END);
 

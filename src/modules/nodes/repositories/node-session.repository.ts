@@ -62,6 +62,13 @@ export class NodeSessionRepository {
     });
   }
 
+  async pauseFlow(id: string, flowSummary: string) {
+    return this.prisma.nodeSession.update({
+      where: { id },
+      data: { currentNodeId: null, detectedIntent: null, flowSummary },
+    });
+  }
+
   async close(id: string) {
     return this.prisma.nodeSession.update({
       where: { id },

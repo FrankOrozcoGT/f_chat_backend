@@ -23,6 +23,7 @@ import { MoveToNegotiationFn } from './functions/implementations/move-to-negotia
 import { SalesRejectionFn } from './functions/implementations/sales-rejection.fn';
 import { RegisterMissingProductFn } from './functions/implementations/register-missing-product.fn';
 import { SaveClientLocationFn } from './functions/implementations/save-client-location.fn';
+import { ExitFlowFn } from './functions/implementations/exit-flow.fn';
 import { SaveProductPriceFn } from './functions/implementations/save-product-price.fn';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
@@ -55,6 +56,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     MoveToNegotiationFn,
     SalesRejectionFn,
     RegisterMissingProductFn,
+    ExitFlowFn,
     SaveClientLocationFn,
     SaveProductPriceFn,
     SecurityEventRepository,
