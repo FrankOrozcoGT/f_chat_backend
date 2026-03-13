@@ -1,8 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InternalApiClient } from '../../../ai/clients/internal-api.client';
-import { EvolutionService } from '@common/evolution/evolution.service';
-import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
-import { MessageType } from '@prisma/client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 
@@ -10,22 +7,19 @@ import { NodeContext } from '../node-function.context';
 export class ConfirmSaleFn {
   private readonly logger = new Logger(ConfirmSaleFn.name);
 
-  constructor(
-    private readonly internalApi: InternalApiClient,
-    private readonly evolutionService: EvolutionService,
-  ) {}
+  constructor(private readonly internalApi: InternalApiClient) {}
 
   @NodeFunction({
     code: 'confirmSale',
     name: 'Confirmar venta',
     description:
-      'El cliente acepta la compra. Calcula total con envío y envía resumen al cliente. Precios ya incluyen IVA.',
+      'El cliente confirmó el total. Registra la venta y pasa al siguiente paso. NO envía mensaje al cliente.',
     toolDefinition: {
       type: 'function',
       function: {
         name: 'confirmSale',
         description:
-          'El cliente aceptó comprar. Calcula total (subtotal + envío) y envía resumen. Precios ya incluyen IVA.',
+          'El cliente confirmó el total final. Registra la venta. NO envía mensaje al cliente. Solo usar después de que el cliente confirmó el total mostrado por calculateSale.',
         parameters: {
           type: 'object',
           properties: {
@@ -44,14 +38,14 @@ export class ConfirmSaleFn {
             },
             shippingCost: {
               type: 'number',
-              description: 'Costo de envío (0 si Quetzaltenango ciudad).',
+              description: 'Costo de envío calculado por calculateSale.',
             },
-            summary: {
-              type: 'string',
-              description: 'Resumen de la venta para enviar al cliente.',
+            total: {
+              type: 'number',
+              description: 'Total final confirmado por el cliente.',
             },
           },
-          required: ['items', 'shippingCost', 'summary'],
+          required: ['items', 'shippingCost', 'total'],
         },
       },
     },
@@ -63,60 +57,27 @@ export class ConfirmSaleFn {
       quantity: number;
     }>;
     const shippingCost = ctx.toolCallArgs?.shippingCost as number;
-    const summary = ctx.toolCallArgs?.summary as string;
+    const total = ctx.toolCallArgs?.total as number;
 
-    if (!items || !summary) {
-      throw new Error('confirmSale: "items" y "summary" son requeridos');
+    if (!items) {
+      throw new Error('confirmSale: "items" es requerido');
     }
-
-    const totals = await this.internalApi.confirmSale(items, shippingCost ?? 0);
-
-    const message = `${summary}\n\nSubtotal: Q${totals.subtotal}\nEnvío: Q${totals.shippingCost}\n*Total: Q${totals.total}*`;
 
     if (ctx.isTest) {
       ctx.sideEffects.push({
         action: 'confirmSale',
-        args: { items, totals, message },
+        args: { items, shippingCost, total },
       });
-      this.logger.log(`confirmSale [TEST]: total Q${totals.total}`);
-      return `Venta confirmada. Total: Q${totals.total}`;
+      this.logger.log(`confirmSale [TEST]: total Q${total}`);
+      return `Venta confirmada. Total: Q${total}`;
     }
 
-    // Enviar resumen al cliente
-    const response = await this.evolutionService.sendTextMessage(
-      ctx.instanceName,
-      ctx.clientPhone,
-      message,
-    );
-
-    const messageData = buildOutgoingMessageData(
-      ctx.conversationId,
-      MessageType.text,
-      message,
-      'pending',
-      null,
-      response.key.id,
-      null,
-      null,
-      null,
-      'bot',
-    );
-
-    await this.internalApi.sendMessageTransaction(
-      ctx.conversationId,
-      ctx.userId,
-      messageData,
-      {
-        lastMessageAt: new Date(),
-        lastMessagePreview: message.substring(0, 100),
-      },
-    );
-
-    // Transferir a HITL (temporalmente, hasta que exista el nodo de facturación/despacho)
+    // TODO: transicionar al nodo Facturación/Despacho cuando exista
+    // Por ahora: HITL temporal
     await this.internalApi.updateConversationMode(ctx.conversationId, 'hitl');
 
-    this.logger.log(`confirmSale: total Q${totals.total}, sent to ${ctx.clientPhone} → HITL`);
+    this.logger.log(`confirmSale: total Q${total} → HITL (temporal)`);
 
-    return `Venta confirmada. Total: Q${totals.total}. Transferido a HITL para facturación/despacho.`;
+    return `Venta confirmada. Total: Q${total}.`;
   }
 }
