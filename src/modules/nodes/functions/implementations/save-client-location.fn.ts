@@ -18,7 +18,7 @@ export class SaveClientLocationFn {
       function: {
         name: 'saveClientLocation',
         description:
-          'Guarda la ubicación del cliente. Normaliza el nombre (ej: xela → Quetzaltenango ciudad). Usa esto cuando el cliente confirma o da su ubicación.',
+          'Guarda la ubicación default del cliente.',
         parameters: {
           type: 'object',
           properties: {

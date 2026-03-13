@@ -29,7 +29,7 @@ export class LoadClientProductsFn {
 - 2x1 en cartuchos HP 664: Q150.00 (Cartucho HP 664 Negro, Cartucho HP 664 Color) — Lleva negro y color por Q150
 
 --- ENVÍO ---
-Ubicación del cliente: Guatemala ciudad`;
+Ubicación default del cliente: Guatemala ciudad`;
     }
 
     // Obtener clientId desde la conversación
@@ -71,10 +71,10 @@ Ubicación del cliente: Guatemala ciudad`;
       }
     }
 
-    // Envío: solo la ubicación del cliente si existe (zonas se obtienen vía calculateShipping)
+    // Envío: solo la ubicación del cliente si existe (zonas se obtienen vía calculateSale)
     if (shipping.clientLocation) {
       result += '\n--- ENVÍO ---\n';
-      result += `Ubicación del cliente: ${shipping.clientLocation}\n`;
+      result += `Ubicación default del cliente: ${shipping.clientLocation}\n`;
     }
 
     this.logger.log(
