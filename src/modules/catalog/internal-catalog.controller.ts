@@ -155,22 +155,6 @@ export class InternalCatalogController {
   }
 
   /**
-   * confirmSale (postCode): calcula total (precios ya incluyen IVA).
-   */
-  @Post('confirm-sale')
-  async confirmSale(
-    @Body() body: { items: Array<{ productName: string; unitPrice: number; quantity: number }>; shippingCost: number },
-  ) {
-    const subtotal = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    const total = subtotal + body.shippingCost;
-    return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      shippingCost: body.shippingCost,
-      total: Math.round(total * 100) / 100,
-    };
-  }
-
-  /**
    * registerMissingProduct (postCode): registra producto faltante.
    */
   @Post('register-missing-product')
@@ -186,37 +170,34 @@ export class InternalCatalogController {
   }
 
   /**
-   * calculateShipping (tool): calcula costo de envío según ubicación.
-   * 1. Busca match en ShippingLocation del usuario
-   * 2. Si no hay match → defaultShippingCost de UserSettings
-   * 3. Si no hay default (0) → envío gratis
+   * calculateSale (tool): calcula subtotal + envío + total.
+   * Envío: 1. Match en ShippingLocation → 2. defaultShippingCost → 3. gratis
    */
-  @Post('calculate-shipping')
-  async calculateShipping(
-    @Body() body: { userId: string; location: string },
+  @Post('calculate-sale')
+  async calculateSale(
+    @Body() body: { userId: string; items: Array<{ productName: string; unitPrice: number; quantity: number }>; location: string },
   ) {
+    const subtotal = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
     const shippingLocation = await this.shippingLocationRepository.findByUserIdAndName(
       body.userId,
       body.location,
     );
 
+    let shippingCost: number;
     if (shippingLocation) {
-      return {
-        location: body.location,
-        isFreeShipping: shippingLocation.isFreeShipping,
-        shippingCost: shippingLocation.isFreeShipping ? 0 : shippingLocation.shippingCost,
-        source: 'shipping_location',
-      };
+      shippingCost = shippingLocation.isFreeShipping ? 0 : shippingLocation.shippingCost;
+    } else {
+      const settings = await this.userSettingsRepository.findByUserId(body.userId);
+      shippingCost = settings?.defaultShippingCost ?? 0;
     }
 
-    const settings = await this.userSettingsRepository.findByUserId(body.userId);
-    const defaultCost = settings?.defaultShippingCost ?? 0;
+    const total = subtotal + shippingCost;
 
     return {
-      location: body.location,
-      isFreeShipping: defaultCost === 0,
-      shippingCost: defaultCost,
-      source: defaultCost === 0 ? 'free_fallback' : 'default_setting',
+      subtotal: Math.round(subtotal * 100) / 100,
+      shippingCost: Math.round(shippingCost * 100) / 100,
+      total: Math.round(total * 100) / 100,
     };
   }
 

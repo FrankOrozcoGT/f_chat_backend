@@ -344,27 +344,16 @@ export class InternalApiClient {
     return this.request('POST', '/catalog/check-promotions', { userId, clientId, productName });
   }
 
-  async confirmSale(
+  async calculateSale(
+    userId: string,
     items: Array<{ productName: string; unitPrice: number; quantity: number }>,
-    shippingCost: number,
+    location: string,
   ): Promise<{
     subtotal: number;
     shippingCost: number;
     total: number;
   }> {
-    return this.request('POST', '/catalog/confirm-sale', { items, shippingCost });
-  }
-
-  async calculateShipping(
-    userId: string,
-    location: string,
-  ): Promise<{
-    location: string;
-    isFreeShipping: boolean;
-    shippingCost: number;
-    source: string;
-  }> {
-    return this.request('POST', '/catalog/calculate-shipping', { userId, location });
+    return this.request('POST', '/catalog/calculate-sale', { userId, items, location });
   }
 
   async saveClientLocation(
