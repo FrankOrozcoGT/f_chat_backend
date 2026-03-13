@@ -6,6 +6,7 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from './clients/internal-api.client';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
 import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { DbNodeSessionStore } from '@modules/nodes/stores/db-node-session.store';
 import { EvolutionService } from '@common/evolution/evolution.service';
 
 export interface IncomingMessageEvent {
@@ -66,7 +67,8 @@ export class AiAgentService {
       );
 
       // Si pasa la validación, ejecutar workflow
-      await this.workflow.execute(payload);
+      const sessionStore = new DbNodeSessionStore(this.nodeSessionRepo);
+      await this.workflow.execute(payload, sessionStore);
     } catch (error) {
       // Si es error de límite de créditos, orquestar rechazo
       if (

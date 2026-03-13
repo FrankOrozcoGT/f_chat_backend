@@ -4,17 +4,15 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { NodeSessionRepository } from '../../../nodes/repositories/node-session.repository';
-import { NodeRunnerService } from '../../../nodes/services/node-runner.service';
-import { NodeContext } from '../../../nodes/functions/node-function.context';
-import { buildVirtualRouterNode } from '../../../nodes/router-config';
+import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
+import { NodeContext } from '@modules/nodes/functions/node-function.context';
+import { buildVirtualRouterNode } from '@modules/nodes/router-config';
 
 @Injectable()
 export class IntentRouterNode {
   private readonly logger = new Logger(IntentRouterNode.name);
 
   constructor(
-    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly nodeRunner: NodeRunnerService,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
@@ -31,6 +29,7 @@ export class IntentRouterNode {
       userId,
       instanceName,
       clientPhone,
+      sessionStore,
       apiCalls: existingApiCalls,
       totalCost: existingCost,
       error: previousError,
@@ -39,7 +38,7 @@ export class IntentRouterNode {
     if (previousError) return {};
 
     // 1. Check if there's an active nodeSession with currentNodeId → skip router, go to custom_node
-    const existingSession = await this.nodeSessionRepo.findActiveByConversationId(conversationId);
+    const existingSession = await sessionStore.findActiveByConversationId(conversationId);
     if (existingSession?.currentNodeId) {
       this.logger.log(
         `IntentRouter: active session found, currentNodeId=${existingSession.currentNodeId} → custom_node`,
@@ -78,11 +77,13 @@ export class IntentRouterNode {
     ctx.clientPhone = clientPhone;
     ctx.node = virtualRouterNode;
     ctx.isTest = state.isTest ?? false;
+    ctx.sessionStore = sessionStore;
 
-    // If there's an existing session (without currentNodeId), use it
-    if (existingSession) {
-      ctx.nodeSession = existingSession;
-      ctx.flow = existingSession.flow as any;
+    // Ensure a session exists (create without flow if needed)
+    const session = existingSession ?? await sessionStore.findOrCreate(conversationId);
+    ctx.nodeSession = session;
+    if (session.flow) {
+      ctx.flow = session.flow;
     }
 
     try {
@@ -133,7 +134,7 @@ export class IntentRouterNode {
       }
 
       // Reload nodeSession to get updated currentNodeId (findFlowForIntent may have changed it)
-      const updatedSession = await this.nodeSessionRepo.findActiveByConversationId(conversationId);
+      const updatedSession = await sessionStore.findActiveByConversationId(conversationId);
 
       this.logger.log(
         `IntentRouter: action=${routerAction}, intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens`,
@@ -142,17 +143,29 @@ export class IntentRouterNode {
       const preferredFormat: 'audio' | 'text' =
         messageType === 'voice' || messageType === 'audio' ? 'audio' : 'text';
 
+      // Register node transitions for test visibility
+      const nodeTransitions = [...(state.nodeTransitions ?? [])];
+      const newNodeId = updatedSession?.currentNodeId ?? null;
+      if (routerAction === 'findFlowForIntent' && newNodeId) {
+        nodeTransitions.push({ from: 'router', to: newNodeId, reason: `intent: ${result.intent}` });
+      } else if (routerAction === 'closeSession') {
+        nodeTransitions.push({ from: 'router', to: null, reason: 'closeSession' });
+      } else if (routerAction === 'responder') {
+        nodeTransitions.push({ from: 'router', to: null, reason: `responder: ${result.intent}` });
+      }
+
       return {
         responseText: '',
         intent: result.intent,
         preferredFormat,
         routerAction,
-        currentNodeId: updatedSession?.currentNodeId ?? null,
+        currentNodeId: newNodeId,
         flowId: updatedSession?.flowId ?? null,
         nodeSessionId: updatedSession?.id ?? null,
         sideEffects: ctx.sideEffects,
         apiCalls: [...existingApiCalls, apiCall],
         totalCost: existingCost + result.costUsd,
+        nodeTransitions,
       };
     } catch (error) {
       this.logger.error(`IntentRouter failed: ${error.message}`);

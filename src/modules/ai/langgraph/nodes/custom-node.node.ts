@@ -5,10 +5,9 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { NodeRunnerService } from '../../../nodes/services/node-runner.service';
-import { NodeRepository } from '../../../nodes/repositories/node.repository';
-import { NodeSessionRepository } from '../../../nodes/repositories/node-session.repository';
-import { NodeContext } from '../../../nodes/functions/node-function.context';
+import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
+import { NodeRepository } from '@modules/nodes/repositories/node.repository';
+import { NodeContext } from '@modules/nodes/functions/node-function.context';
 
 @Injectable()
 export class CustomNode {
@@ -17,7 +16,6 @@ export class CustomNode {
   constructor(
     private readonly nodeRunner: NodeRunnerService,
     private readonly nodeRepo: NodeRepository,
-    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
@@ -36,6 +34,7 @@ export class CustomNode {
       currentNodeId,
       flowId,
       nodeSessionId,
+      sessionStore,
       apiCalls: existingApiCalls,
       totalCost: existingCost,
       error: previousError,
@@ -81,14 +80,17 @@ export class CustomNode {
     ctx.clientPhone = clientPhone;
     ctx.node = activeNode;
     ctx.isTest = state.isTest ?? false;
+    ctx.sessionStore = sessionStore;
 
-    // Load flow and nodeSession
-    if (flowId) {
-      ctx.flow = await this.nodeRepo.findFlowWithNodes(flowId) as any;
-    }
+    // Load flow and nodeSession via sessionStore
     if (nodeSessionId) {
-      const session = await this.nodeSessionRepo.findById(nodeSessionId);
-      if (session) ctx.nodeSession = session;
+      const session = await sessionStore.findById(nodeSessionId);
+      if (session) {
+        ctx.nodeSession = session;
+        if (session.flow) ctx.flow = session.flow;
+      }
+    } else if (flowId) {
+      ctx.flow = await this.nodeRepo.findFlowWithNodes(flowId);
     }
 
     try {
@@ -135,6 +137,15 @@ export class CustomNode {
         `CustomNode: intent=${result.intent}, format=${preferredFormat}, response="${result.response.substring(0, 80)}"`,
       );
 
+      // Register node transition for test visibility
+      const nodeTransitions = [...(state.nodeTransitions ?? [])];
+      const terminationTool = result.toolResult?.terminationTool ?? null;
+      if (terminationTool) {
+        nodeTransitions.push({ from: currentNodeId, to: null, reason: terminationTool });
+      } else {
+        nodeTransitions.push({ from: currentNodeId, to: currentNodeId, reason: `responder: ${result.intent}` });
+      }
+
       return {
         responseText: result.response,
         intent: result.intent,
@@ -142,6 +153,8 @@ export class CustomNode {
         sideEffects: ctx.sideEffects,
         apiCalls: [...existingApiCalls, apiCall],
         totalCost: existingCost + result.costUsd,
+        preCodeContext: result.preCodeContext ?? null,
+        nodeTransitions,
       };
     } catch (error) {
       this.logger.error(`CustomNode: failed: ${error.message}`);

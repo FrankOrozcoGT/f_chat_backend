@@ -8,6 +8,7 @@ import { CustomNode } from './nodes/custom-node.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
+import { NodeSessionStore } from '@modules/nodes/stores/node-session-store.interface';
 
 export interface WorkflowResult {
   responseText: string;
@@ -16,6 +17,8 @@ export interface WorkflowResult {
   sideEffects: any[];
   totalCost: number;
   error: any;
+  preCodeContext: string | null;
+  nodeTransitions: Array<{ from: string | null; to: string | null; reason: string }>;
 }
 
 @Injectable()
@@ -76,7 +79,11 @@ export class AiWorkflow {
     return builder.compile();
   }
 
-  async execute(payload: IncomingMessageEvent, isTest = false): Promise<WorkflowResult> {
+  async execute(
+    payload: IncomingMessageEvent,
+    sessionStore: NodeSessionStore,
+    isTest = false,
+  ): Promise<WorkflowResult> {
     const initialState: Partial<WorkflowStateType> = {
       messageId: payload.messageId,
       conversationId: payload.conversationId,
@@ -91,11 +98,13 @@ export class AiWorkflow {
       sideEffects: [],
       totalCost: 0,
       isTest,
+      sessionStore,
       error: null,
       currentNodeId: null,
       flowId: null,
       nodeSessionId: null,
       routerAction: null,
+      nodeTransitions: [],
     };
 
     const result = await this.langSmithService.tracePipeline(
@@ -120,6 +129,8 @@ export class AiWorkflow {
       sideEffects: result.sideEffects ?? [],
       totalCost: result.totalCost ?? 0,
       error: result.error ?? null,
+      preCodeContext: result.preCodeContext ?? null,
+      nodeTransitions: result.nodeTransitions ?? [],
     };
   }
 }
