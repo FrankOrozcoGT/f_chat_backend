@@ -1,6 +1,8 @@
 import { Annotation } from '@langchain/langgraph';
 import { ApiName, MessageType } from '@prisma/client';
 import { CreateApiCallData } from '../repositories/ai.repository';
+import { TestSideEffect } from '@modules/nodes/functions/node-function.context';
+import { NodeSessionStore } from '@modules/nodes/stores/node-session-store.interface';
 
 export const WorkflowState = Annotation.Root({
   // Input (from IncomingMessageEvent)
@@ -24,7 +26,7 @@ export const WorkflowState = Annotation.Root({
   currentNodeId: Annotation<string | null>,
   flowId: Annotation<string | null>,
   nodeSessionId: Annotation<string | null>,
-  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | null>,
+  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | null>,
 
   // After LLM / custom_node
   responseText: Annotation<string>,
@@ -41,6 +43,15 @@ export const WorkflowState = Annotation.Root({
   // Accumulated across nodes
   apiCalls: Annotation<CreateApiCallData[]>,
   totalCost: Annotation<number>,
+
+  // Session store (DB in prod, Redis in test)
+  sessionStore: Annotation<NodeSessionStore>,
+
+  // Test mode
+  isTest: Annotation<boolean>,
+  sideEffects: Annotation<TestSideEffect[]>,
+  preCodeContext: Annotation<string | null>,
+  nodeTransitions: Annotation<Array<{ from: string | null; to: string | null; reason: string }>>,
 
   // Error tracking
   error: Annotation<{ step: string; apiName: ApiName; message: string } | null>,

@@ -10,12 +10,15 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { MessageType } from '@prisma/client';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { TestSessionService } from './services/test-session.service';
-import { DispatcherService } from './services/dispatcher.service';
+import { AiWorkflow } from '../ai/langgraph/workflow';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { RedisNodeSessionStore } from './stores/redis-node-session.store';
+import { RedisService } from '@common/redis/redis.service';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
 import { TestStepBackDto } from './dto/test-step-back.dto';
@@ -29,8 +32,9 @@ export class NodesController {
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly testSessionService: TestSessionService,
-    private readonly dispatcherService: DispatcherService,
+    private readonly workflow: AiWorkflow,
     private readonly phoneRepo: PhoneRepository,
+    private readonly redisService: RedisService,
   ) {}
 
   @Get('flows')
@@ -94,30 +98,53 @@ export class NodesController {
   async sendTest(@Body() dto: TestSendDto) {
     const session = await this.testSessionService.getSession(dto.testId);
 
-    const result = await this.dispatcherService.dispatchTest(session, dto.message);
+    const sessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
 
-    // Construir history actualizado con el mensaje del usuario + respuesta
+    // Ejecutar el mismo workflow de LangGraph en modo test
+    const result = await this.workflow.execute(
+      {
+        messageId: `test-${dto.testId}-${Date.now()}`,
+        conversationId: session.conversationId,
+        instanceName: session.instanceName,
+        clientPhone: session.clientPhone,
+        userId: session.userId,
+        messageType: MessageType.text,
+        content: dto.message,
+        mediaRelativePath: null,
+        mediaMetadata: null,
+      },
+      sessionStore,
+      true, // isTest
+    );
+
+    // Extraer response del side effect sendMessage si responseText está vacío
+    const sendMsg = result.sideEffects.find((se) => se.action === 'sendMessage');
+    const response = result.responseText || (sendMsg?.args?.mensaje as string) || '';
+
+    // Guardar step en Redis
     const updatedHistory = [
       ...session.history,
       { role: 'user', content: dto.message },
     ];
-    if (result.response) {
-      updatedHistory.push({ role: 'assistant', content: result.response });
+    if (response) {
+      updatedHistory.push({ role: 'assistant', content: response });
     }
 
-    // Guardar step en Redis
     await this.testSessionService.pushStep(dto.testId, {
       message: dto.message,
-      response: result.response,
-      nodeId: session.currentNodeId,
+      response,
+      nodeId: result.currentNodeId,
+      flowId: (result as any).flowId ?? session.flowId,
       historySnapshot: updatedHistory,
     });
 
     return {
-      response: result.response,
+      response,
       intent: result.intent,
-      currentNodeId: session.currentNodeId,
-      sideEffects: result.sideEffects ?? [],
+      currentNodeId: result.currentNodeId,
+      sideEffects: result.sideEffects,
+      preCodeContext: result.preCodeContext ?? null,
+      nodeTransitions: result.nodeTransitions ?? [],
     };
   }
 

@@ -8,6 +8,18 @@ import { CustomNode } from './nodes/custom-node.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
+import { NodeSessionStore } from '@modules/nodes/stores/node-session-store.interface';
+
+export interface WorkflowResult {
+  responseText: string;
+  intent: string;
+  currentNodeId: string | null;
+  sideEffects: any[];
+  totalCost: number;
+  error: any;
+  preCodeContext: string | null;
+  nodeTransitions: Array<{ from: string | null; to: string | null; reason: string }>;
+}
 
 @Injectable()
 export class AiWorkflow {
@@ -59,15 +71,23 @@ export class AiWorkflow {
         return 'output_router';
       })
 
-      // custom_node → output_router → finalize → END
-      .addEdge('custom_node', 'output_router')
+      // custom_node → intent_router (exitFlow) OR output_router
+      .addConditionalEdges('custom_node', (state: WorkflowStateType) => {
+        if (state.error) return 'finalize';
+        if (state.routerAction === 'exitFlow') return 'intent_router';
+        return 'output_router';
+      })
       .addEdge('output_router', 'finalize')
       .addEdge('finalize', END);
 
     return builder.compile();
   }
 
-  async execute(payload: IncomingMessageEvent): Promise<void> {
+  async execute(
+    payload: IncomingMessageEvent,
+    sessionStore: NodeSessionStore,
+    isTest = false,
+  ): Promise<WorkflowResult> {
     const initialState: Partial<WorkflowStateType> = {
       messageId: payload.messageId,
       conversationId: payload.conversationId,
@@ -79,27 +99,42 @@ export class AiWorkflow {
       mediaRelativePath: payload.mediaRelativePath,
       mediaMetadata: payload.mediaMetadata,
       apiCalls: [],
+      sideEffects: [],
       totalCost: 0,
+      isTest,
+      sessionStore,
       error: null,
       currentNodeId: null,
       flowId: null,
       nodeSessionId: null,
       routerAction: null,
+      nodeTransitions: [],
     };
 
-    await this.langSmithService.tracePipeline(
+    const result = await this.langSmithService.tracePipeline(
       async () => {
-        const result = await this.graph.invoke(initialState);
+        const res = await this.graph.invoke(initialState);
         this.logger.log(
-          `Workflow completed for ${payload.conversationId} | cost=$${result.totalCost?.toFixed(6)}`,
+          `Workflow completed for ${payload.conversationId} | cost=$${res.totalCost?.toFixed(6)}${isTest ? ' [TEST]' : ''}`,
         );
-        return result;
+        return res;
       },
       {
         conversationId: payload.conversationId,
         clientPhone: payload.clientPhone,
-        mode: 'AI',
+        mode: isTest ? 'TEST' : 'AI',
       },
     );
+
+    return {
+      responseText: result.responseText ?? '',
+      intent: result.intent ?? '',
+      currentNodeId: result.currentNodeId ?? null,
+      sideEffects: result.sideEffects ?? [],
+      totalCost: result.totalCost ?? 0,
+      error: result.error ?? null,
+      preCodeContext: result.preCodeContext ?? null,
+      nodeTransitions: result.nodeTransitions ?? [],
+    };
   }
 }
