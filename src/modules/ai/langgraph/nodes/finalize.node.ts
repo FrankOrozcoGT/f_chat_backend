@@ -45,7 +45,7 @@ export class FinalizeNode {
         this.logger.warn(`FinalizeNode: API error (${error.apiName}) → HITL activated for ${conversationId}`);
       }
 
-      if (apiCalls.length > 0) {
+      if (!isTest && apiCalls.length > 0) {
         await this.aiRepository.saveApiCalls(apiCalls);
       }
 
@@ -54,8 +54,8 @@ export class FinalizeNode {
       };
     }
 
-    // Guardar API calls
-    if (apiCalls.length > 0) {
+    // Guardar API calls (skip en test mode)
+    if (!isTest && apiCalls.length > 0) {
       await this.aiRepository.saveApiCalls(apiCalls);
     }
 
