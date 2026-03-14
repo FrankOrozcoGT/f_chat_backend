@@ -165,10 +165,11 @@ model Flow {
   userId       String
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  routerNode   Node          @relation("FlowRouter", fields: [routerNodeId], references: [id])
+  routerNode   Node              @relation("FlowRouter", fields: [routerNodeId], references: [id])
   nodes        FlowNode[]
   nodeSessions NodeSession[]
   intents      Intent[]
+  transitions  FlowTransition[]
 
   @@index([userId])
 }
@@ -185,9 +186,11 @@ model Node {
   onError              NodeOnError   @default(hitl)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
-  routerForFlows       Flow[]        @relation("FlowRouter")
+  routerForFlows       Flow[]             @relation("FlowRouter")
   flowNodes            FlowNode[]
-  currentNodeSessions  NodeSession[] @relation("CurrentNode")
+  currentNodeSessions  NodeSession[]      @relation("CurrentNode")
+  transitionsFrom      FlowTransition[]   @relation("TransitionFrom")
+  transitionsTo        FlowTransition[]   @relation("TransitionTo")
 }
 
 model FlowNode {
@@ -202,6 +205,21 @@ model FlowNode {
   @@index([nodeId])
 }
 
+model FlowTransition {
+  id             String @id @default(uuid())
+  flowId         String
+  fromNodeId     String
+  toNodeId       String
+  transitionCode String
+
+  flow           Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  fromNode       Node   @relation("TransitionFrom", fields: [fromNodeId], references: [id])
+  toNode         Node   @relation("TransitionTo", fields: [toNodeId], references: [id])
+
+  @@unique([flowId, transitionCode])
+  @@index([flowId, fromNodeId])
+}
+
 model NodeSession {
   id             String            @id @default(uuid())
   conversationId String
@@ -209,6 +227,7 @@ model NodeSession {
   currentNodeId  String?
   detectedIntent String?
   flowSummary    String?
+  cachedNodeData Json?
   status         NodeSessionStatus @default(active)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -433,9 +452,7 @@ model UserSettings {
   analysisMode        AnalysisMode @default(manual)
   messageLimit        Int          @default(30)
   defaultShippingCost Float        @default(0)
-  workStartHour       Int          @default(8)
-  workEndHour         Int          @default(17)
-  workDays            String       @default("1,2,3,4,5")
+  workSchedule        Json         @default("{\"1\":{\"start\":8,\"end\":18},\"2\":{\"start\":8,\"end\":18},\"3\":{\"start\":8,\"end\":18},\"4\":{\"start\":8,\"end\":18},\"5\":{\"start\":8,\"end\":18},\"6\":{\"start\":8,\"end\":12}}")
   createdAt           DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -534,11 +551,12 @@ model ContactLabel {
   id        String   @id @default(uuid())
   userId    String
   label     String
-  clientId  String
+  clientId  String?
+  groupJid  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([userId, label])
   @@index([userId])
@@ -553,6 +571,7 @@ model QueueRequest {
   instanceName     String
   label            String
   destinationPhone String
+  groupJid         String?
   outgoingMessage  String
   responseMessage  String?
   toolName         String
