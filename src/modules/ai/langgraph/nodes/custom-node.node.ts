@@ -9,6 +9,8 @@ import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
 
+const MAX_TRANSITIONS = 5;
+
 @Injectable()
 export class CustomNode {
   private readonly logger = new Logger(CustomNode.name);
@@ -31,153 +33,206 @@ export class CustomNode {
       userId,
       instanceName,
       clientPhone,
-      currentNodeId,
-      flowId,
       nodeSessionId,
       sessionStore,
-      apiCalls: existingApiCalls,
-      totalCost: existingCost,
       error: previousError,
     } = state;
 
     if (previousError) return {};
 
-    if (!currentNodeId) {
-      throw new Error(
-        `CustomNode: currentNodeId is null for conversation ${conversationId}. ` +
-        `This node should only be reached when a flow has been activated.`,
+    let activeNodeId = state.currentNodeId;
+    const apiCalls = [...(state.apiCalls ?? [])];
+    let totalCost = state.totalCost ?? 0;
+    const nodeTransitions = [...(state.nodeTransitions ?? [])];
+    let allSideEffects = [...(state.sideEffects ?? [])];
+    let lastResponse = '';
+    let lastIntent = '';
+    let lastPreCodeContext: string | null = null;
+    let lastPreferredFormat: 'audio' | 'text' = 'text';
+
+    for (let iteration = 0; iteration <= MAX_TRANSITIONS; iteration++) {
+      if (!activeNodeId) {
+        throw new Error(
+          `CustomNode: currentNodeId is null for conversation ${conversationId}. ` +
+          `This node should only be reached when a flow has been activated.`,
+        );
+      }
+
+      // Load session
+      let session: import('@modules/nodes/stores/node-session-store.interface').SessionData | null = null;
+      if (nodeSessionId) {
+        session = await sessionStore.findById(nodeSessionId);
+      }
+
+      // Load node — use cache only on first iteration
+      let activeNode: import('@prisma/client').Node;
+      const cached = (iteration === 0)
+        ? session?.cachedNodeData as import('@modules/nodes/stores/node-session-store.interface').CachedNodeData | null
+        : null;
+      if (cached?.node) {
+        activeNode = cached.node;
+        this.logger.log(`CustomNode: using cached node "${activeNode.name}" (${activeNodeId})`);
+      } else {
+        const dbNode = await this.nodeRepo.findById(activeNodeId);
+        if (!dbNode) {
+          throw new Error(`CustomNode: node ${activeNodeId} not found`);
+        }
+        activeNode = dbNode;
+      }
+
+      // Load history
+      const messages = await this.internalApi.getMessageHistory(conversationId, 31);
+      const previousMessages = messages.slice(0, -1);
+      const history = previousMessages
+        .filter((m) => m.content)
+        .map((m) => ({
+          role: m.direction === 'incoming' ? 'user' : 'assistant',
+          content: m.content,
+        }));
+
+      this.logger.log(
+        `CustomNode: executing node "${activeNode.name}" (${activeNodeId}) for conversation ${conversationId}`,
       );
-    }
 
-    // Load node from DB
-    const activeNode = await this.nodeRepo.findById(currentNodeId);
-    if (!activeNode) {
-      throw new Error(`CustomNode: node ${currentNodeId} not found`);
-    }
+      // Build NodeContext
+      const ctx = new NodeContext();
+      ctx.messageId = messageId;
+      ctx.userId = userId;
+      ctx.conversationId = conversationId;
+      ctx.transcription = transcription;
+      ctx.history = history;
+      ctx.instanceName = instanceName;
+      ctx.clientPhone = clientPhone;
+      ctx.imageUrl = imageUrl;
+      ctx.node = activeNode;
+      ctx.isTest = state.isTest ?? false;
+      ctx.sessionStore = sessionStore;
 
-    // Load history
-    const messages = await this.internalApi.getMessageHistory(conversationId, 31);
-    const previousMessages = messages.slice(0, -1);
-    const history = previousMessages
-      .filter((m) => m.content)
-      .map((m) => ({
-        role: m.direction === 'incoming' ? 'user' : 'assistant',
-        content: m.content,
-      }));
-
-    this.logger.log(
-      `CustomNode: executing node "${activeNode.name}" (${currentNodeId}) for conversation ${conversationId}`,
-    );
-
-    // Build NodeContext
-    const ctx = new NodeContext();
-    ctx.messageId = messageId;
-    ctx.userId = userId;
-    ctx.conversationId = conversationId;
-    ctx.transcription = transcription;
-    ctx.history = history;
-    ctx.instanceName = instanceName;
-    ctx.clientPhone = clientPhone;
-    ctx.node = activeNode;
-    ctx.isTest = state.isTest ?? false;
-    ctx.sessionStore = sessionStore;
-
-    // Load flow and nodeSession via sessionStore
-    if (nodeSessionId) {
-      const session = await sessionStore.findById(nodeSessionId);
       if (session) {
         ctx.nodeSession = session;
-        if (session.flow) ctx.flow = session.flow;
-      }
-    } else if (flowId) {
-      ctx.flow = await this.nodeRepo.findFlowWithNodes(flowId);
-    }
-
-    // Inject flowSummary if resuming a paused flow
-    if (ctx.nodeSession?.flowSummary) {
-      activeNode.systemPrompt =
-        activeNode.systemPrompt +
-        '\n\n--- PROGRESO PREVIO DEL FLUJO ---\n' +
-        ctx.nodeSession.flowSummary +
-        '\n--- FIN PROGRESO ---';
-    }
-
-    try {
-      const traceMessages = [
-        ...history,
-        {
-          role: 'user',
-          content: imageUrl
-            ? `${transcription} [imagen: ${imageUrl}]`
-            : transcription,
-        },
-      ];
-
-      const result = await this.langSmithService.traceLLM(
-        () => this.nodeRunner.runNode(ctx, activeNode, transcription, imageUrl, history),
-        traceMessages,
-      );
-
-      const apiCall: CreateApiCallData = {
-        messageId,
-        apiType: 'kimi_llm',
-        operation: 'chat',
-        tokensInput: result.tokensInput,
-        tokensOutput: result.tokensOutput,
-        costUsd: result.costUsd,
-        latencyMs: result.latencyMs,
-      };
-
-      const actualCredits = this.limitsService.calculateCreditsFromLlm(
-        result.tokensInput,
-        result.tokensOutput,
-      );
-      await this.internalApi.incrementCreditsUsed(userId, actualCredits);
-      this.logger.log(
-        `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${result.tokensInput}in+${result.tokensOutput}out)`,
-      );
-
-      const preferredFormat: 'audio' | 'text' =
-        messageType === MessageType.voice || messageType === MessageType.audio
-          ? 'audio'
-          : 'text';
-
-      this.logger.log(
-        `CustomNode: intent=${result.intent}, format=${preferredFormat}, response="${result.response.substring(0, 80)}"`,
-      );
-
-      // Register node transition for test visibility
-      const nodeTransitions = [...(state.nodeTransitions ?? [])];
-      const terminationTool = result.toolResult?.terminationTool ?? null;
-      if (terminationTool) {
-        nodeTransitions.push({ from: currentNodeId, to: null, reason: terminationTool });
-      } else {
-        nodeTransitions.push({ from: currentNodeId, to: currentNodeId, reason: `responder: ${result.intent}` });
+        if (cached?.flow) {
+          ctx.flow = cached.flow;
+        } else if (session.flow) {
+          ctx.flow = session.flow;
+        }
+      } else if (state.flowId) {
+        ctx.flow = await this.nodeRepo.findFlowWithNodes(state.flowId);
       }
 
-      const returnState: Partial<WorkflowStateType> = {
-        responseText: result.response,
-        intent: result.intent,
-        preferredFormat,
-        sideEffects: ctx.sideEffects,
-        apiCalls: [...existingApiCalls, apiCall],
-        totalCost: existingCost + result.costUsd,
-        preCodeContext: result.preCodeContext ?? null,
-        nodeTransitions,
-      };
-
-      // If exitFlow was called, signal workflow to return to intent_router
-      if (terminationTool === 'exitFlow') {
-        returnState.routerAction = 'exitFlow';
-        returnState.currentNodeId = null;
+      if (ctx.nodeSession?.flowSummary) {
+        activeNode.systemPrompt =
+          activeNode.systemPrompt +
+          '\n\n--- PROGRESO PREVIO DEL FLUJO ---\n' +
+          ctx.nodeSession.flowSummary +
+          '\n--- FIN PROGRESO ---';
       }
 
-      return returnState;
-    } catch (error) {
-      this.logger.error(`CustomNode: failed: ${error.message}`);
-      return {
-        error: { step: 'custom_node', apiName: 'kimi_llm', message: error.message },
-      };
+      try {
+        const traceMessages = [
+          ...history,
+          {
+            role: 'user',
+            content: imageUrl
+              ? `${transcription} [imagen: ${imageUrl}]`
+              : transcription,
+          },
+        ];
+
+        const result = await this.langSmithService.traceLLM(
+          () => this.nodeRunner.runNode(ctx, activeNode, transcription, imageUrl, history),
+          traceMessages,
+        );
+
+        const apiCall: CreateApiCallData = {
+          messageId,
+          apiType: 'kimi_llm',
+          operation: 'chat',
+          tokensInput: result.tokensInput,
+          tokensOutput: result.tokensOutput,
+          costUsd: result.costUsd,
+          latencyMs: result.latencyMs,
+        };
+
+        const actualCredits = this.limitsService.calculateCreditsFromLlm(
+          result.tokensInput,
+          result.tokensOutput,
+        );
+        await this.internalApi.incrementCreditsUsed(userId, actualCredits);
+        this.logger.log(
+          `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${result.tokensInput}in+${result.tokensOutput}out)`,
+        );
+
+        lastPreferredFormat =
+          messageType === MessageType.voice || messageType === MessageType.audio
+            ? 'audio'
+            : 'text';
+
+        this.logger.log(
+          `CustomNode: intent=${result.intent}, format=${lastPreferredFormat}, response="${result.response.substring(0, 80)}"`,
+        );
+
+        const terminationTool = result.toolResult?.terminationTool ?? null;
+        if (terminationTool === 'transitionToNode') {
+          const updatedSession = await sessionStore.findById(ctx.nodeSession.id);
+          const newNodeId = updatedSession?.currentNodeId ?? null;
+          nodeTransitions.push({ from: activeNodeId, to: newNodeId, reason: `transitionToNode: ${result.toolResult?.terminationArgs?.transitionCode ?? ''}` });
+        } else if (terminationTool) {
+          nodeTransitions.push({ from: activeNodeId, to: null, reason: terminationTool });
+        } else {
+          nodeTransitions.push({ from: activeNodeId, to: activeNodeId, reason: `responder: ${result.intent}` });
+        }
+
+        apiCalls.push(apiCall);
+        totalCost += result.costUsd;
+        allSideEffects = [...allSideEffects, ...ctx.sideEffects];
+        lastResponse = result.response;
+        lastIntent = result.intent;
+        lastPreCodeContext = result.preCodeContext ?? null;
+
+        // exitFlow → let workflow route back to intent_router
+        if (terminationTool === 'exitFlow') {
+          return {
+            responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
+            sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
+            nodeTransitions, routerAction: 'exitFlow', currentNodeId: null,
+          };
+        }
+
+        // transitionToNode → loop internally to the new node
+        if (terminationTool === 'transitionToNode') {
+          const updatedSession2 = await sessionStore.findById(ctx.nodeSession.id);
+          activeNodeId = updatedSession2?.currentNodeId ?? null;
+          this.logger.log(`CustomNode: transitioning to node ${activeNodeId}`);
+          continue;
+        }
+
+        // Normal termination — cache and return
+        if (!cached && ctx.nodeSession) {
+          sessionStore.setCachedNodeData(ctx.nodeSession.id, {
+            node: activeNode,
+            flow: ctx.flow ?? null,
+            preCodeResult: result.preCodeContext ?? null,
+          }).catch((err) => this.logger.warn(`Failed to cache node data: ${err.message}`));
+        }
+
+        return {
+          responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
+          sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
+          nodeTransitions,
+        };
+      } catch (error) {
+        this.logger.error(`CustomNode: failed: ${error.message}`);
+        return {
+          error: { step: 'custom_node', apiName: 'kimi_llm', message: error.message },
+        };
+      }
     }
+
+    this.logger.error(`CustomNode: max transitions (${MAX_TRANSITIONS}) reached for ${conversationId}`);
+    return {
+      responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
+      sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
+      nodeTransitions,
+    };
   }
 }

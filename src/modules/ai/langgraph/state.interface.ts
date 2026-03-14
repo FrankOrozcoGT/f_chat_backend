@@ -26,7 +26,7 @@ export const WorkflowState = Annotation.Root({
   currentNodeId: Annotation<string | null>,
   flowId: Annotation<string | null>,
   nodeSessionId: Annotation<string | null>,
-  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | null>,
+  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | 'transitionToNode' | null>,
 
   // After LLM / custom_node
   responseText: Annotation<string>,
@@ -41,7 +41,10 @@ export const WorkflowState = Annotation.Root({
   responseFileSize: Annotation<number | null>,
 
   // Accumulated across nodes
-  apiCalls: Annotation<CreateApiCallData[]>,
+  apiCalls: Annotation<CreateApiCallData[]>({
+    reducer: (_left, right) => right,
+    default: () => [],
+  }),
   totalCost: Annotation<number>,
 
   // Session store (DB in prod, Redis in test)
@@ -49,9 +52,15 @@ export const WorkflowState = Annotation.Root({
 
   // Test mode
   isTest: Annotation<boolean>,
-  sideEffects: Annotation<TestSideEffect[]>,
+  sideEffects: Annotation<TestSideEffect[]>({
+    reducer: (_left, right) => right,
+    default: () => [],
+  }),
   preCodeContext: Annotation<string | null>,
-  nodeTransitions: Annotation<Array<{ from: string | null; to: string | null; reason: string }>>,
+  nodeTransitions: Annotation<Array<{ from: string | null; to: string | null; reason: string }>>({
+    reducer: (_left, right) => right,
+    default: () => [],
+  }),
 
   // Error tracking
   error: Annotation<{ step: string; apiName: ApiName; message: string } | null>,
