@@ -163,6 +163,12 @@ export class NodesController {
     if (!session) {
       throw new NotFoundException('Test session not found');
     }
+    // Clean up node session from Redis
+    const nodeSessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
+    const nodeSession = await nodeSessionStore.findActiveByConversationId(session.conversationId);
+    if (nodeSession) {
+      await nodeSessionStore.close(nodeSession.id);
+    }
     await this.testSessionService.deleteSession(dto.testId);
     return {};
   }

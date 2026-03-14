@@ -18,13 +18,15 @@ import { LoadClientProductsFn } from './functions/implementations/load-client-pr
 import { SearchProductFn } from './functions/implementations/search-product.fn';
 import { CheckPromotionsFn } from './functions/implementations/check-promotions.fn';
 import { CalculateSaleFn } from './functions/implementations/calculate-sale.fn';
-import { ConfirmSaleFn } from './functions/implementations/confirm-sale.fn';
 import { MoveToNegotiationFn } from './functions/implementations/move-to-negotiation.fn';
+import { TransitionToNodeFn } from './functions/implementations/transition-to-node.fn';
 import { SalesRejectionFn } from './functions/implementations/sales-rejection.fn';
 import { RegisterMissingProductFn } from './functions/implementations/register-missing-product.fn';
 import { SaveClientLocationFn } from './functions/implementations/save-client-location.fn';
 import { ExitFlowFn } from './functions/implementations/exit-flow.fn';
 import { SaveProductPriceFn } from './functions/implementations/save-product-price.fn';
+import { ForwardReceiptFn } from './functions/implementations/forward-receipt.fn';
+import { SendToVerificationFn } from './functions/implementations/send-to-verification.fn';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
@@ -52,13 +54,15 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     SearchProductFn,
     CheckPromotionsFn,
     CalculateSaleFn,
-    ConfirmSaleFn,
+    TransitionToNodeFn,
     MoveToNegotiationFn,
     SalesRejectionFn,
     RegisterMissingProductFn,
     ExitFlowFn,
     SaveClientLocationFn,
     SaveProductPriceFn,
+    ForwardReceiptFn,
+    SendToVerificationFn,
     SecurityEventRepository,
     TemplateRepository,
     TestSessionService,
