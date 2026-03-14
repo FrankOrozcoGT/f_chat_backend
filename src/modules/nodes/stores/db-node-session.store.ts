@@ -18,8 +18,8 @@ export class DbNodeSessionStore implements NodeSessionStore {
     return this.repo.findOrCreate(conversationId, flowId) as Promise<SessionData>;
   }
 
-  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData> {
-    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent, flowId) as Promise<SessionData>;
+  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string, flowSummary?: string): Promise<SessionData> {
+    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent, flowId, flowSummary) as Promise<SessionData>;
   }
 
   async pauseFlow(id: string, summary: string): Promise<void> {

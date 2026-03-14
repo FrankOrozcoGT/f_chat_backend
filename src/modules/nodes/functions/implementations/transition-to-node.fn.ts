@@ -31,14 +31,19 @@ export class TransitionToNodeFn {
               type: 'string',
               description: 'Código de la transición configurada (ej: "venta_confirmada")',
             },
+            summary: {
+              type: 'string',
+              description: 'Resumen breve del progreso hasta ahora para que el siguiente nodo tenga contexto (ej: "Cliente pidió 3 cajas de leche, total Q110, envío a Guatemala ciudad")',
+            },
           },
-          required: ['transitionCode'],
+          required: ['transitionCode', 'summary'],
         },
       },
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
     const transitionCode = ctx.toolCallArgs?.transitionCode as string;
+    const summary = ctx.toolCallArgs?.summary as string | undefined;
 
     if (!transitionCode) {
       throw new Error('transitionToNode: "transitionCode" es requerido');
@@ -113,10 +118,13 @@ export class TransitionToNodeFn {
       return 'hitl_wrong_transition_origin';
     }
 
-    // Actualizar currentNodeId en la sesión al nodo destino (test y prod)
+    // Actualizar currentNodeId en la sesión al nodo destino + guardar resumen (test y prod)
     await ctx.sessionStore.updateCurrentNode(
       ctx.nodeSession.id,
       transition.toNodeId,
+      undefined,
+      undefined,
+      summary ?? null,
     );
 
     if (ctx.isTest) {

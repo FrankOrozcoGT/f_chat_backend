@@ -47,9 +47,11 @@ export class NodeSessionRepository {
     currentNodeId: string | null,
     detectedIntent?: string,
     flowId?: string,
+    flowSummary?: string,
   ) {
     const data: any = { currentNodeId, detectedIntent, cachedNodeData: Prisma.DbNull };
     if (flowId !== undefined) data.flowId = flowId;
+    if (flowSummary !== undefined) data.flowSummary = flowSummary;
     return this.prisma.nodeSession.update({
       where: { id },
       data,

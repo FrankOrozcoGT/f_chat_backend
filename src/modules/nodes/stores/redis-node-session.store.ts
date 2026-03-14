@@ -92,7 +92,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     return this.hydrate(state);
   }
 
-  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData> {
+  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string, flowSummary?: string): Promise<SessionData> {
     const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
     if (!state) {
       throw new Error(`RedisNodeSessionStore.updateCurrentNode: session ${id} not found`);
@@ -100,6 +100,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     state.currentNodeId = currentNodeId;
     if (detectedIntent !== undefined) state.detectedIntent = detectedIntent;
     if (flowId !== undefined) state.flowId = flowId;
+    if (flowSummary !== undefined) state.flowSummary = flowSummary;
     await this.save(state);
     return this.hydrate(state);
   }

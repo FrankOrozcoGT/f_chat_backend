@@ -80,15 +80,19 @@ export class CustomNode {
         activeNode = dbNode;
       }
 
-      // Load history
-      const messages = await this.internalApi.getMessageHistory(conversationId, 31);
-      const previousMessages = messages.slice(0, -1);
-      const history = previousMessages
-        .filter((m) => m.content)
-        .map((m) => ({
-          role: m.direction === 'incoming' ? 'user' : 'assistant',
-          content: m.content,
-        }));
+      // Load history — skip on internal transitions (iteration > 0)
+      // because the new node gets context via flowSummary in systemPrompt
+      let history: { role: string; content: string }[] = [];
+      if (iteration === 0) {
+        const messages = await this.internalApi.getMessageHistory(conversationId, 31);
+        const previousMessages = messages.slice(0, -1);
+        history = previousMessages
+          .filter((m) => m.content)
+          .map((m) => ({
+            role: m.direction === 'incoming' ? 'user' : 'assistant',
+            content: m.content,
+          }));
+      }
 
       this.logger.log(
         `CustomNode: executing node "${activeNode.name}" (${activeNodeId}) for conversation ${conversationId}`,

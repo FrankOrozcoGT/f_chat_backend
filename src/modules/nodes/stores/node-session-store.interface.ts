@@ -23,7 +23,7 @@ export interface NodeSessionStore {
   findActiveByConversationId(conversationId: string): Promise<SessionData | null>;
   findById(id: string): Promise<SessionData | null>;
   findOrCreate(conversationId: string, flowId?: string): Promise<SessionData>;
-  updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData>;
+  updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string, flowSummary?: string): Promise<SessionData>;
   setCachedNodeData(id: string, data: CachedNodeData): Promise<void>;
   pauseFlow(id: string, summary: string): Promise<void>;
   close(id: string): Promise<void>;
