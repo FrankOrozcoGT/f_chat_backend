@@ -105,6 +105,7 @@ export class FindFlowForIntentFn {
       sessionId,
       targetFlow.routerNode.id,
       intentName,
+      targetFlow.id,
     );
     ctx.nodeSession = updated;
     ctx.flow = targetFlow;

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
-import { NodeSessionStore, SessionData } from './node-session-store.interface';
+import { CachedNodeData, NodeSessionStore, SessionData } from './node-session-store.interface';
 
 @Injectable()
 export class DbNodeSessionStore implements NodeSessionStore {
@@ -18,12 +18,16 @@ export class DbNodeSessionStore implements NodeSessionStore {
     return this.repo.findOrCreate(conversationId, flowId) as Promise<SessionData>;
   }
 
-  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string): Promise<SessionData> {
-    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent) as Promise<SessionData>;
+  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData> {
+    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent, flowId) as Promise<SessionData>;
   }
 
   async pauseFlow(id: string, summary: string): Promise<void> {
     await this.repo.pauseFlow(id, summary);
+  }
+
+  async setCachedNodeData(id: string, data: CachedNodeData): Promise<void> {
+    await this.repo.setCachedNodeData(id, data);
   }
 
   async close(id: string): Promise<void> {

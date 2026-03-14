@@ -16,6 +16,7 @@ export class NodeRepository {
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
+        transitions: { include: { fromNode: true, toNode: true } },
       },
     });
   }
@@ -26,6 +27,7 @@ export class NodeRepository {
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
+        transitions: { include: { fromNode: true, toNode: true } },
       },
     });
   }
@@ -36,6 +38,7 @@ export class NodeRepository {
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
+        transitions: { include: { fromNode: true, toNode: true } },
       },
     });
   }
@@ -65,6 +68,13 @@ export class NodeRepository {
   async removeNodeFromFlow(flowId: string, nodeId: string) {
     return this.prisma.flowNode.deleteMany({
       where: { flowId, nodeId },
+    });
+  }
+
+  async findTransition(flowId: string, fromNodeId: string, transitionCode: string) {
+    return this.prisma.flowTransition.findUnique({
+      where: { flowId_transitionCode: { flowId, transitionCode } },
+      include: { toNode: true },
     });
   }
 }

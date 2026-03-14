@@ -1,5 +1,11 @@
 import { Node, Flow, NodeSessionStatus } from '@prisma/client';
 
+export interface CachedNodeData {
+  node: Node;
+  flow: Flow | null;
+  preCodeResult: string | null;
+}
+
 export interface SessionData {
   id: string;
   conversationId: string;
@@ -7,6 +13,7 @@ export interface SessionData {
   currentNodeId: string | null;
   detectedIntent: string | null;
   flowSummary: string | null;
+  cachedNodeData: CachedNodeData | unknown | null;
   status: NodeSessionStatus;
   currentNode: Node | null;
   flow: Flow | null;
@@ -16,7 +23,8 @@ export interface NodeSessionStore {
   findActiveByConversationId(conversationId: string): Promise<SessionData | null>;
   findById(id: string): Promise<SessionData | null>;
   findOrCreate(conversationId: string, flowId?: string): Promise<SessionData>;
-  updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string): Promise<SessionData>;
+  updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData>;
+  setCachedNodeData(id: string, data: CachedNodeData): Promise<void>;
   pauseFlow(id: string, summary: string): Promise<void>;
   close(id: string): Promise<void>;
 }

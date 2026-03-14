@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { NodeSessionStatus } from '@prisma/client';
+import { Prisma, NodeSessionStatus } from '@prisma/client';
 
 @Injectable()
 export class NodeSessionRepository {
@@ -46,11 +46,21 @@ export class NodeSessionRepository {
     id: string,
     currentNodeId: string | null,
     detectedIntent?: string,
+    flowId?: string,
   ) {
+    const data: any = { currentNodeId, detectedIntent, cachedNodeData: Prisma.DbNull };
+    if (flowId !== undefined) data.flowId = flowId;
     return this.prisma.nodeSession.update({
       where: { id },
-      data: { currentNodeId, detectedIntent },
+      data,
       include: { currentNode: true, flow: true },
+    });
+  }
+
+  async setCachedNodeData(id: string, data: unknown) {
+    await this.prisma.nodeSession.update({
+      where: { id },
+      data: { cachedNodeData: data as any },
     });
   }
 
@@ -65,7 +75,7 @@ export class NodeSessionRepository {
   async pauseFlow(id: string, flowSummary: string) {
     return this.prisma.nodeSession.update({
       where: { id },
-      data: { currentNodeId: null, detectedIntent: null, flowSummary },
+      data: { currentNodeId: null, detectedIntent: null, flowId: null, flowSummary },
     });
   }
 

@@ -1,7 +1,7 @@
 import { NodeSessionStatus } from '@prisma/client';
 import { RedisService } from '@common/redis/redis.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { NodeSessionStore, SessionData } from '@modules/nodes/stores/node-session-store.interface';
+import { CachedNodeData, NodeSessionStore, SessionData } from '@modules/nodes/stores/node-session-store.interface';
 import { v4 as uuidv4 } from 'uuid';
 
 const KEY_PREFIX = 'test-node-session';
@@ -55,6 +55,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       currentNodeId: state.currentNodeId,
       detectedIntent: state.detectedIntent,
       flowSummary: state.flowSummary,
+      cachedNodeData: null,
       status: state.status,
       currentNode: currentNode ?? null,
       flow: flow ?? null,
@@ -91,13 +92,14 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     return this.hydrate(state);
   }
 
-  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string): Promise<SessionData> {
+  async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string): Promise<SessionData> {
     const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
     if (!state) {
       throw new Error(`RedisNodeSessionStore.updateCurrentNode: session ${id} not found`);
     }
     state.currentNodeId = currentNodeId;
     if (detectedIntent !== undefined) state.detectedIntent = detectedIntent;
+    if (flowId !== undefined) state.flowId = flowId;
     await this.save(state);
     return this.hydrate(state);
   }
@@ -107,9 +109,14 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     if (state) {
       state.currentNodeId = null;
       state.detectedIntent = null;
+      state.flowId = null;
       state.flowSummary = summary;
       await this.save(state);
     }
+  }
+
+  async setCachedNodeData(_id: string, _data: CachedNodeData): Promise<void> {
+    // No-op in test mode — sessions are ephemeral
   }
 
   async close(id: string): Promise<void> {
