@@ -9,6 +9,9 @@ import { ProductRepository } from './repositories/product.repository';
 import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
 import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
+import { ShippingLocationRepository } from './repositories/shipping-location.repository';
+import { UserSettingsRepository } from '../user-settings/repositories/user-settings.repository';
+import { PrismaService } from '@common/prisma/prisma.service';
 
 @Controller('internal/catalog')
 @UseGuards(InternalGuard)
@@ -18,6 +21,9 @@ export class InternalCatalogController {
     private readonly discountRepository: DiscountRepository,
     private readonly promotionRepository: PromotionRepository,
     private readonly promotionDiscountRepository: PromotionDiscountRepository,
+    private readonly shippingLocationRepository: ShippingLocationRepository,
+    private readonly userSettingsRepository: UserSettingsRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('products/upsert')
@@ -62,6 +68,151 @@ export class InternalCatalogController {
     @Body() body: { promotionId: string; clientId?: string | null; discountPrice: number },
   ) {
     return this.promotionDiscountRepository.upsert(body);
+  }
+
+  // --- Endpoints para funciones del nodo Identificación+Precio ---
+
+  /**
+   * loadClientProducts (preCode): productos del usuario con descuentos del cliente + promos.
+   */
+  @Post('load-client-products')
+  async loadClientProducts(
+    @Body() body: { userId: string; clientId: string | null },
+  ) {
+    const products = await this.productRepository.findByUserId(body.userId);
+
+    // Filtrar descuentos: solo los del cliente o los genéricos (sin clientId)
+    const productsWithRelevantDiscounts = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      basePrice: p.basePrice,
+      description: p.description,
+      discounts: p.discounts.filter(
+        (d) => d.clientId === body.clientId || d.clientId === null,
+      ),
+    }));
+
+    // Promos: por cliente si hay clientId, sino generales del usuario
+    const promotions = body.clientId
+      ? await this.promotionRepository.findByClientId(body.clientId)
+      : await this.promotionRepository.findByUserId(body.userId);
+
+    // Shipping: ubicación del cliente + zonas de envío del usuario + default
+    const clientLocation = body.clientId
+      ? (await this.prisma.client.findUnique({ where: { id: body.clientId }, select: { location: true } }))?.location ?? null
+      : null;
+
+    const shippingLocations = await this.shippingLocationRepository.findByUserId(body.userId);
+
+    const settings = await this.userSettingsRepository.findByUserId(body.userId);
+    const defaultShippingCost = settings?.defaultShippingCost ?? 0;
+
+    return {
+      products: productsWithRelevantDiscounts,
+      promotions,
+      shipping: {
+        clientLocation,
+        locations: shippingLocations,
+        defaultShippingCost,
+      },
+    };
+  }
+
+  /**
+   * searchProduct (tool): busca producto por nombre/descripción.
+   */
+  @Post('search-product')
+  async searchProduct(
+    @Body() body: { userId: string; query: string },
+  ) {
+    const products = await this.productRepository.findByUserId(body.userId);
+    const queryLower = body.query.toLowerCase();
+    const matches = products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(queryLower) ||
+        (p.description && p.description.toLowerCase().includes(queryLower)),
+    );
+    return { matches };
+  }
+
+  /**
+   * checkPromotions (tool): promos aplicables a un producto.
+   */
+  @Post('check-promotions')
+  async checkPromotions(
+    @Body() body: { userId: string; clientId: string | null; productName: string },
+  ) {
+    const promotions = body.clientId
+      ? await this.promotionRepository.findByClientId(body.clientId)
+      : await this.promotionRepository.findByUserId(body.userId);
+
+    const applicable = promotions.filter((promo) =>
+      promo.promotionProducts.some(
+        (pp) => pp.product.name.toLowerCase() === body.productName.toLowerCase(),
+      ),
+    );
+    return { promotions: applicable };
+  }
+
+  /**
+   * registerMissingProduct (postCode): registra producto faltante.
+   */
+  @Post('register-missing-product')
+  async registerMissingProduct(
+    @Body() body: { userId: string; productName: string; clientId: string | null; notes: string },
+  ) {
+    // Crear producto con precio 0 como placeholder
+    const product = await this.productRepository.upsertByName(body.userId, body.productName, {
+      basePrice: 0,
+      description: `[PENDIENTE DE PRECIO] ${body.notes}`,
+    });
+    return { product, registered: true };
+  }
+
+  /**
+   * calculateSale (tool): calcula subtotal + envío + total.
+   * Envío: 1. Match en ShippingLocation → 2. defaultShippingCost → 3. gratis
+   */
+  @Post('calculate-sale')
+  async calculateSale(
+    @Body() body: { userId: string; items: Array<{ productName: string; unitPrice: number; quantity: number }>; location: string },
+  ) {
+    const subtotal = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+    const shippingLocation = await this.shippingLocationRepository.findByUserIdAndName(
+      body.userId,
+      body.location,
+    );
+
+    let shippingCost: number;
+    if (shippingLocation) {
+      shippingCost = shippingLocation.isFreeShipping ? 0 : shippingLocation.shippingCost;
+    } else {
+      const settings = await this.userSettingsRepository.findByUserId(body.userId);
+      shippingCost = settings?.defaultShippingCost ?? 0;
+    }
+
+    const total = subtotal + shippingCost;
+
+    return {
+      subtotal: Math.round(subtotal * 100) / 100,
+      shippingCost: Math.round(shippingCost * 100) / 100,
+      total: Math.round(total * 100) / 100,
+    };
+  }
+
+  /**
+   * saveClientLocation (tool): guarda la ubicación del cliente.
+   */
+  @Post('save-client-location')
+  async saveClientLocation(
+    @Body() body: { clientId: string; location: string },
+  ) {
+    const client = await this.prisma.client.update({
+      where: { id: body.clientId },
+      data: { location: body.location },
+    });
+    return { clientId: client.id, location: client.location };
   }
 
   /**

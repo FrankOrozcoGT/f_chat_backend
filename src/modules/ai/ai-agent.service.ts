@@ -5,6 +5,7 @@ import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from './clients/internal-api.client';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
+import { TestQueueResultStore } from '@modules/nodes/services/test-queue-result.store';
 
 export interface IncomingMessageEvent {
   messageId: string;
@@ -16,6 +17,7 @@ export interface IncomingMessageEvent {
   content: string | null;
   mediaRelativePath: string | null;
   mediaMetadata: { fileName: string; mimeType: string } | null;
+  isTest?: boolean;
 }
 
 @Injectable()
@@ -27,6 +29,7 @@ export class AiAgentService {
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
     private readonly sessionLifecycle: SessionLifecycleService,
+    private readonly testQueueResultStore: TestQueueResultStore,
   ) {}
 
   @OnEvent('ai.incoming.message')
@@ -46,8 +49,22 @@ export class AiAgentService {
         estimatedCredits,
       );
 
-      // Si pasa la validación, ejecutar workflow
-      await this.workflow.execute(payload);
+      const result = await this.workflow.execute(payload, payload.isTest ?? false);
+
+      // In test mode, store the result so sendTest can pick it up via polling
+      if (payload.isTest) {
+        const sendMsg = result.sideEffects?.find((se) => se.action === 'sendMessage');
+        const response = result.responseText || (sendMsg?.args?.mensaje as string) || '';
+        this.testQueueResultStore.set(payload.conversationId, {
+          response,
+          intent: result.intent ?? '',
+          currentNodeId: result.currentNodeId ?? null,
+          sideEffects: result.sideEffects ?? [],
+          preCodeContext: result.preCodeContext ?? null,
+          nodeTransitions: result.nodeTransitions ?? [],
+        });
+        this.logger.log(`[test] Stored queue result for conversation ${payload.conversationId}`);
+      }
     } catch (error) {
       // Si es error de límite de créditos, orquestar rechazo
       if (

@@ -185,7 +185,7 @@ export class KimiClient {
       };
     } catch (error) {
       const latencyMs = Date.now() - startTime;
-      this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message}`);
+      this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause?.message ?? error.cause} | type=${error.constructor?.name}`);
       throw error;
     }
   }
@@ -211,21 +211,30 @@ export class KimiClient {
     const startTime = Date.now();
 
     for (let i = 0; i < maxIterations; i++) {
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'kimi-k2.5',
-          messages: conversationMessages,
-          tools,
-          tool_choice: 'required',
-          max_tokens: maxTokens,
-          thinking: { type: 'disabled' },
-        }),
+      const body = JSON.stringify({
+        model: 'kimi-k2.5',
+        messages: conversationMessages,
+        tools,
+        tool_choice: 'required',
+        max_tokens: maxTokens,
+        thinking: { type: 'disabled' },
       });
+      this.logger.log(`chatWithTools iter=${i} payload=${(body.length / 1024).toFixed(1)}KB msgs=${conversationMessages.length}`);
+
+      let response: Response;
+      try {
+        response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body,
+        });
+      } catch (error) {
+        this.logger.error(`chatWithTools fetch failed at iter=${i}:`, error);
+        throw error;
+      }
 
       if (!response.ok) {
         const errorBody = await response.text();

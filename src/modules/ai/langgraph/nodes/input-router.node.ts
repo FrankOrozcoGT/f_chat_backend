@@ -7,6 +7,11 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
+import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { NodeRepository } from '@modules/nodes/repositories/node.repository';
+import { RedisService } from '@common/redis/redis.service';
+import { DbNodeSessionStore } from '@modules/nodes/stores/db-node-session.store';
+import { RedisNodeSessionStore } from '@modules/nodes/stores/redis-node-session.store';
 
 @Injectable()
 export class InputRouterNode {
@@ -18,6 +23,9 @@ export class InputRouterNode {
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
+    private readonly nodeSessionRepo: NodeSessionRepository,
+    private readonly nodeRepo: NodeRepository,
+    private readonly redisService: RedisService,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -28,8 +36,14 @@ export class InputRouterNode {
       mediaMetadata,
       messageId,
       conversationId,
+      isTest,
     } = state;
     const apiCalls: CreateApiCallData[] = [];
+
+    this.logger.log(`InputRouter: isTest=${isTest} messageId=${messageId}`);
+    const sessionStore = isTest
+      ? new RedisNodeSessionStore(this.redisService, this.nodeRepo)
+      : new DbNodeSessionStore(this.nodeSessionRepo);
 
     if (
       messageType === MessageType.voice ||
@@ -43,6 +57,7 @@ export class InputRouterNode {
         );
         return {
           transcription: existingMessage.transcription,
+          sessionStore,
           apiCalls,
           totalCost: 0,
         };
@@ -65,6 +80,7 @@ export class InputRouterNode {
             apiName: 'qwen_stt',
             message: 'Conversation not found',
           },
+          sessionStore,
           apiCalls,
           totalCost: 0,
         };
@@ -100,6 +116,7 @@ export class InputRouterNode {
 
         return {
           transcription: sttResult.text,
+          sessionStore,
           apiCalls,
           totalCost: sttResult.costUsd,
         };
@@ -111,6 +128,7 @@ export class InputRouterNode {
             apiName: 'qwen_stt',
             message: error.message,
           },
+          sessionStore,
           apiCalls,
           totalCost: 0,
         };
@@ -122,6 +140,7 @@ export class InputRouterNode {
 
       return {
         transcription: content || '',
+        sessionStore,
         apiCalls,
         totalCost: 0,
       };
@@ -133,7 +152,7 @@ export class InputRouterNode {
 
       if (mediaRelativePath) {
         const imageBuffer =
-          await this.fileStorageService.readFile(mediaRelativePath);
+          await this.fileStorageService.readFile(mediaRelativePath.replace(/^\//, ''));
         const mimeType = mediaMetadata?.mimeType || 'image/jpeg';
         const base64 = imageBuffer.toString('base64');
         imageUrl = `data:${mimeType};base64,${base64}`;
@@ -145,6 +164,7 @@ export class InputRouterNode {
       return {
         transcription: caption || 'El usuario envió una imagen.',
         imageUrl,
+        sessionStore,
         apiCalls,
         totalCost: 0,
       };
@@ -157,6 +177,7 @@ export class InputRouterNode {
 
     return {
       transcription,
+      sessionStore,
       apiCalls,
       totalCost: 0,
     };

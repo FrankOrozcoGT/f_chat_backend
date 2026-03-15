@@ -6,13 +6,14 @@ export interface TestStep {
   message: string;
   response: string;
   nodeId: string | null;
+  flowId?: string | null;
   historySnapshot: Array<{ role: string; content: string }>;
 }
 
 export interface TestSession {
   testId: string;
   conversationId: string;
-  flowId: string;
+  flowId: string | null;
   clientPhone: string;
   instanceName: string;
   userId: string;
@@ -30,7 +31,7 @@ export class TestSessionService {
 
   async start(
     conversationId: string,
-    flowId: string,
+    flowId: string | null,
     clientPhone: string,
     instanceName: string,
     userId: string,
@@ -61,6 +62,7 @@ export class TestSessionService {
     const session = await this.getSession(testId);
     session.steps.push(step);
     session.currentNodeId = step.nodeId;
+    if (step.flowId !== undefined) session.flowId = step.flowId;
     session.history = step.historySnapshot;
     await this.redis.setJson(`${KEY_PREFIX}:${testId}`, session, TTL_SECONDS);
   }
@@ -73,6 +75,7 @@ export class TestSessionService {
     session.steps.pop();
     const prevStep = session.steps[session.steps.length - 1] ?? null;
     session.currentNodeId = prevStep?.nodeId ?? null;
+    session.flowId = prevStep?.flowId ?? null;
     session.history = prevStep?.historySnapshot ?? [];
     await this.redis.setJson(`${KEY_PREFIX}:${testId}`, session, TTL_SECONDS);
     return {

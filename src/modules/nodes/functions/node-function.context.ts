@@ -1,5 +1,6 @@
-import { Node, Flow, NodeSession } from '@prisma/client';
+import { Node, Flow } from '@prisma/client';
 import { ToolChatResult } from '../../ai/clients/kimi.client';
+import { NodeSessionStore, SessionData } from '@modules/nodes/stores/node-session-store.interface';
 
 export interface TestSideEffect {
   action: string;
@@ -15,17 +16,21 @@ export class NodeContext {
   history: { role: string; content: string }[];
   instanceName: string;
   clientPhone: string;
+  imageUrl: string | null = null;
 
   // Node data
   node: Node;
-  nodeSession: NodeSession;
-  flow: Flow;
+  nodeSession: SessionData;
+  flow: Flow | null;
 
   // LLM result (only available in postCode)
   llmResult?: ToolChatResult;
 
   // Tool call args (only available when executing as a tool)
   toolCallArgs?: Record<string, unknown>;
+
+  // Session store (DB in prod, Redis in test)
+  sessionStore: NodeSessionStore;
 
   // Test mode
   isTest = false;

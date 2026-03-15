@@ -13,8 +13,8 @@ interface RegisteredFunction {
   method: string;
 }
 
-// Default postCode outputs que siempre se agregan a todo nodo
-const DEFAULT_POST_CODES: string[] = ['switchToHitl', 'reportHacking', 'moveToLastConversation'];
+// Default postCode que siempre se agrega a todo nodo (solo seguridad)
+const DEFAULT_POST_CODES: string[] = ['reportHacking'];
 
 @Injectable()
 export class NodeFunctionRegistry implements OnModuleInit {

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class TestSendDto {
   @IsString()
@@ -8,4 +8,8 @@ export class TestSendDto {
   @IsString()
   @IsNotEmpty()
   message: string;
+
+  @IsString()
+  @IsOptional()
+  mediaUrl?: string;
 }

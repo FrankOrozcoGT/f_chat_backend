@@ -4,10 +4,13 @@ export class ConversationSummaryDto {
   isActive: boolean;
   updatedAt: Date;
 
+  summary: string | null;
+
   constructor(data: { id: string; isActive: boolean; lastMessagePreview: string | null; summary: string | null; updatedAt: Date }) {
     this.id = data.id;
     this.isActive = data.isActive;
-    this.lastMessage = data.isActive ? data.lastMessagePreview : data.summary;
+    this.summary = data.summary;
+    this.lastMessage = data.lastMessagePreview;
     this.updatedAt = data.updatedAt;
   }
 }

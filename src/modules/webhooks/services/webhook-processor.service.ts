@@ -9,6 +9,8 @@ import { MessageRepository } from '../repositories/message.repository';
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
+import { ContactLabelService } from '@modules/queue-system/services/contact-label.service';
+import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 
 @Injectable()
 export class WebhookProcessorService {
@@ -30,6 +32,8 @@ export class WebhookProcessorService {
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly contactLabelService: ContactLabelService,
+    private readonly queueRequestService: QueueRequestService,
   ) {}
 
   /**
@@ -221,24 +225,52 @@ export class WebhookProcessorService {
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
-    // Si mode=AI y es mensaje entrante individual, emitir evento para AI agent
-    if (!fromMe && !isGroup && conversation.mode === 'AI') {
-      this.eventEmitter.emit('ai.incoming.message', {
-        messageId: message.id,
-        conversationId: conversation.id,
-        instanceName,
-        clientPhone,
-        userId: phone.userId,
-        messageType: message.type,
-        content: message.content,
-        mediaRelativePath: mediaData?.relativePath || null,
-        mediaMetadata: mediaData
-          ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType }
-          : null,
-      });
-      this.logger.log(
-        `Emitted ai.incoming.message for conversation ${conversation.id}`,
-      );
+    // Si es mensaje entrante individual, verificar si es contacto etiquetado (supervisor, etc.)
+    if (!fromMe && !isGroup && clientPhone) {
+      const isLabeled = await this.contactLabelService.isLabeledContact(clientPhone);
+
+      if (isLabeled) {
+        // Contactos etiquetados NUNCA van al flujo normal — su respuesta va al queue system
+        const queueRequest = await this.queueRequestService.handleResponse(
+          instanceName,
+          clientPhone,
+          message.content,
+        );
+        if (queueRequest) {
+          this.eventEmitter.emit('queue.response.received', {
+            queueRequestId: queueRequest.id,
+            messageId: message.id,
+          });
+          this.logger.log(
+            `[queue] Response from labeled contact ${clientPhone} matched QueueRequest ${queueRequest.id}`,
+          );
+        } else {
+          this.logger.log(
+            `[queue] Message from labeled contact ${clientPhone} but no pending QueueRequest found`,
+          );
+        }
+        return;
+      }
+
+      // Si mode=AI, emitir evento para AI agent
+      if (conversation.mode === 'AI') {
+        this.eventEmitter.emit('ai.incoming.message', {
+          messageId: message.id,
+          conversationId: conversation.id,
+          instanceName,
+          clientPhone,
+          userId: phone.userId,
+          messageType: message.type,
+          content: message.content,
+          mediaRelativePath: mediaData?.relativePath || null,
+          mediaMetadata: mediaData
+            ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType }
+            : null,
+        });
+        this.logger.log(
+          `Emitted ai.incoming.message for conversation ${conversation.id}`,
+        );
+      }
     }
   }
 

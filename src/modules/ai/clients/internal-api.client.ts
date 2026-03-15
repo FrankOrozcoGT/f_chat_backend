@@ -282,6 +282,101 @@ export class InternalApiClient {
     return this.request('POST', '/messages/process-analysis-splits', data);
   }
 
+  // --- Catalog: Nodo Identificación+Precio ---
+
+  async loadClientProducts(
+    userId: string,
+    clientId: string | null,
+  ): Promise<{
+    products: Array<{
+      id: string;
+      name: string;
+      basePrice: number;
+      description: string | null;
+      discounts: Array<{ discountPrice: number; clientId: string | null }>;
+    }>;
+    promotions: Array<{
+      id: string;
+      name: string | null;
+      description: string | null;
+      specialPrice: number;
+      promotionProducts: Array<{ product: { name: string } }>;
+    }>;
+    shipping: {
+      clientLocation: string | null;
+      locations: Array<{
+        name: string;
+        isFreeShipping: boolean;
+        shippingCost: number;
+      }>;
+      defaultShippingCost: number;
+    };
+  }> {
+    return this.request('POST', '/catalog/load-client-products', { userId, clientId });
+  }
+
+  async searchProduct(
+    userId: string,
+    query: string,
+  ): Promise<{
+    matches: Array<{
+      id: string;
+      name: string;
+      basePrice: number;
+      description: string | null;
+    }>;
+  }> {
+    return this.request('POST', '/catalog/search-product', { userId, query });
+  }
+
+  async checkPromotions(
+    userId: string,
+    clientId: string | null,
+    productName: string,
+  ): Promise<{
+    promotions: Array<{
+      id: string;
+      name: string | null;
+      description: string | null;
+      specialPrice: number;
+    }>;
+  }> {
+    return this.request('POST', '/catalog/check-promotions', { userId, clientId, productName });
+  }
+
+  async calculateSale(
+    userId: string,
+    items: Array<{ productName: string; unitPrice: number; quantity: number }>,
+    location: string,
+  ): Promise<{
+    subtotal: number;
+    shippingCost: number;
+    total: number;
+  }> {
+    return this.request('POST', '/catalog/calculate-sale', { userId, items, location });
+  }
+
+  async saveClientLocation(
+    clientId: string,
+    location: string,
+  ): Promise<{ clientId: string; location: string }> {
+    return this.request('POST', '/catalog/save-client-location', { clientId, location });
+  }
+
+  async registerMissingProduct(
+    userId: string,
+    productName: string,
+    clientId: string | null,
+    notes: string,
+  ): Promise<{ product: { id: string; name: string }; registered: boolean }> {
+    return this.request('POST', '/catalog/register-missing-product', {
+      userId,
+      productName,
+      clientId,
+      notes,
+    });
+  }
+
   async processAnalysisCatalog(data: {
     userId: string;
     clientId: string | null;

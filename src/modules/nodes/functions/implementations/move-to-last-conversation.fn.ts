@@ -2,15 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InternalApiClient } from '../../../ai/clients/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
-import { NodeSessionRepository } from '../../repositories/node-session.repository';
-
 @Injectable()
 export class MoveToLastConversationFn {
   private readonly logger = new Logger(MoveToLastConversationFn.name);
 
   constructor(
     private readonly internalApi: InternalApiClient,
-    private readonly nodeSessionRepo: NodeSessionRepository,
   ) {}
 
   @NodeFunction({
@@ -25,6 +22,7 @@ export class MoveToLastConversationFn {
         { action: 'moveToLastConversation', args: { messageId: ctx.messageId } },
         { action: 'closeNodeSession', args: { nodeSessionId: ctx.nodeSession.id } },
       );
+      await ctx.sessionStore.close(ctx.nodeSession.id);
       this.logger.log(`MoveToLastConversation [TEST]: skipped`);
       return 'moved_to_last_conversation';
     }
@@ -35,7 +33,7 @@ export class MoveToLastConversationFn {
       `Moved message ${ctx.messageId} to last conversation for ${ctx.clientPhone}`,
     );
 
-    await this.nodeSessionRepo.close(ctx.nodeSession.id);
+    await ctx.sessionStore.close(ctx.nodeSession.id);
 
     return 'moved_to_last_conversation';
   }

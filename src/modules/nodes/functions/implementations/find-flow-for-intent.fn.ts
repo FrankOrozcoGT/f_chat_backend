@@ -3,7 +3,6 @@ import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { IntentRepository } from '../../repositories/intent.repository';
 import { NodeRepository } from '../../repositories/node.repository';
-import { NodeSessionRepository } from '../../repositories/node-session.repository';
 import { SessionLifecycleService } from '../../../ai/services/session-lifecycle.service';
 
 @Injectable()
@@ -13,7 +12,6 @@ export class FindFlowForIntentFn {
   constructor(
     private readonly intentRepo: IntentRepository,
     private readonly nodeRepo: NodeRepository,
-    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly sessionLifecycle: SessionLifecycleService,
   ) {}
 
@@ -93,23 +91,34 @@ export class FindFlowForIntentFn {
       );
     }
 
+    // Create or reuse session via sessionStore (works for both prod DB and test Redis)
+    let sessionId: string;
+    if (nodeSession) {
+      sessionId = nodeSession.id;
+    } else {
+      const newSession = await ctx.sessionStore.findOrCreate(conversationId, targetFlow.id);
+      sessionId = newSession.id;
+      ctx.nodeSession = newSession;
+    }
+
+    const updated = await ctx.sessionStore.updateCurrentNode(
+      sessionId,
+      targetFlow.routerNode.id,
+      intentName,
+      targetFlow.id,
+    );
+    ctx.nodeSession = updated;
+    ctx.flow = targetFlow;
+
     if (ctx.isTest) {
       ctx.sideEffects.push({
         action: 'transitionToFlow',
         args: { flowId: targetFlow.id, flowName: targetFlow.name, nodeId: targetFlow.routerNode.id, intentName },
       });
-      this.logger.log(`FindFlowForIntent [TEST]: → flow "${targetFlow.name}"`);
-      return 'transitioned';
     }
 
-    await this.nodeSessionRepo.updateCurrentNode(
-      nodeSession.id,
-      targetFlow.routerNode.id,
-      intentName,
-    );
-
     this.logger.log(
-      `Transitioned to flow "${targetFlow.name}" node "${targetFlow.routerNode.name}"`,
+      `Transitioned to flow "${targetFlow.name}" node "${targetFlow.routerNode.name}"${ctx.isTest ? ' [TEST]' : ''}`,
     );
     return 'transitioned';
   }
