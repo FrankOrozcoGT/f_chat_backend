@@ -1,4 +1,4 @@
-import { Client, Phone, ConversationParticipant } from '@prisma/client';
+import { Client, Phone, ConversationParticipant, ConversationStats } from '@prisma/client';
 
 export class ConversationResponseDto {
   id: string;
@@ -13,6 +13,12 @@ export class ConversationResponseDto {
   summary: string | null;
   createdAt: Date;
   updatedAt: Date;
+
+  // Stats (unread count, last message direction)
+  stats: {
+    lastMessageDirection: string | null;
+    unreadCount: number;
+  } | null;
 
   // Datos del cliente (null para grupos)
   client: {
@@ -40,7 +46,7 @@ export class ConversationResponseDto {
     status: string;
   };
 
-  constructor(conversation: { id: string; phoneId: string; type: string; groupJid?: string | null; groupName?: string | null; groupPictureUrl?: string | null; mode: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; summary: string | null; createdAt: Date; updatedAt: Date; client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[] }) {
+  constructor(conversation: { id: string; phoneId: string; type: string; groupJid?: string | null; groupName?: string | null; groupPictureUrl?: string | null; mode: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; summary: string | null; createdAt: Date; updatedAt: Date; client: Client | null; phone: Phone; participants?: (ConversationParticipant & { client: Client })[]; stats?: ConversationStats | null }) {
     this.id = conversation.id;
     this.phoneId = conversation.phoneId;
     this.type = conversation.type;
@@ -53,6 +59,13 @@ export class ConversationResponseDto {
     this.summary = conversation.summary;
     this.createdAt = conversation.createdAt;
     this.updatedAt = conversation.updatedAt;
+
+    this.stats = conversation.stats
+      ? {
+          lastMessageDirection: conversation.stats.lastMessageDirection,
+          unreadCount: conversation.stats.unreadCount,
+        }
+      : null;
 
     this.client = conversation.client
       ? {

@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Query,
   UseGuards,
   Req,
@@ -162,5 +163,12 @@ export class ConversationsController {
         createdAt: c.createdAt,
       })),
     };
+  }
+
+  @Patch(':id/read')
+  @UseGuards(JwtAuthGuard)
+  async markAsRead(@Param('id') id: string) {
+    await this.conversationRepository.resetUnread(id);
+    return { ok: true };
   }
 }
