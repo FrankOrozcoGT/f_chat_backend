@@ -72,6 +72,7 @@ export class WebhookProcessorService {
         this.logger.log(
           `Message ${messageKey.id} already in DB, emitted to frontend`,
         );
+        await this.conversationRepository.upsertStats(existingMessage.conversationId, 'outbound');
         return;
       }
 
@@ -86,8 +87,9 @@ export class WebhookProcessorService {
     }
 
     // Upsert Conversation (individual o grupo)
-    let conversation: { id: string; mode: string };
+    let conversation: { id: string; mode: string; groupName?: string | null };
     let clientPhone: string | null = null;
+    let clientName: string | null = null;
     const rawParticipant = webhookData?.data?.key?.participant || '';
     const participantAlt = webhookData?.data?.key?.participantAlt || '';
     const senderJid = rawParticipant.endsWith('@lid') && participantAlt
@@ -138,6 +140,7 @@ export class WebhookProcessorService {
       const clientData = this.webhooksService.buildClientData(webhookData, fromMe);
       clientPhone = clientData.phoneNumber;
       const client = await this.clientRepository.upsert(clientData);
+      clientName = client.name ?? null;
       const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
       conversation = await this.conversationRepository.upsert(conversationData);
 
@@ -216,12 +219,25 @@ export class WebhookProcessorService {
     const conversationUpdate = this.webhooksService.buildConversationUpdate(message);
     await this.conversationRepository.updateLastMessage(conversation.id, conversationUpdate);
 
+    // Actualizar stats (direction + unreadCount)
+    // Solo incrementar unread si es mensaje entrante y la conversación está en modo hitl
+    const direction = fromMe ? 'outbound' : 'inbound';
+    const incrementUnread = direction === 'inbound' && conversation.mode === 'hitl';
+    await this.conversationRepository.upsertStats(conversation.id, direction, incrementUnread);
+
     // Emitir al frontend
     if (fromMe) {
       this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
       this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
-      this.websocketGateway.emit('message:incoming', message);
+      const conversationName = isGroup
+        ? (conversation.groupName ?? null)
+        : (clientName ?? senderName ?? null);
+      this.websocketGateway.emit('message:incoming', {
+        ...message,
+        conversationName,
+        senderName: isGroup ? senderName : null,
+      });
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
