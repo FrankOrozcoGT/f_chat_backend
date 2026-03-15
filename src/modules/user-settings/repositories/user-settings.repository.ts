@@ -12,6 +12,10 @@ export class UserSettingsRepository {
     });
   }
 
+  async findAll() {
+    return this.prisma.userSettings.findMany();
+  }
+
   async upsert(
     userId: string,
     data: { analysisMode?: AnalysisMode; messageLimit?: number },

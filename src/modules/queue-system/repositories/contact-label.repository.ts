@@ -26,11 +26,11 @@ export class ContactLabelRepository {
     });
   }
 
-  async upsert(userId: string, label: string, clientId: string) {
+  async upsert(userId: string, label: string, data: { clientId?: string; groupJid?: string }) {
     return this.prisma.contactLabel.upsert({
       where: { userId_label: { userId, label } },
-      create: { userId, label, clientId },
-      update: { clientId },
+      create: { userId, label, ...data },
+      update: data,
       include: { client: true },
     });
   }
