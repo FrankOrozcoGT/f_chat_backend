@@ -64,6 +64,21 @@
 - Supervisora siempre manda el mensaje que se le envio con el recibo y la palabra "confirmado"
 - Si no se paso por facturacion/despacho antes → se pasa ahora
 
+### NODO DECISOR (hardcodeado en LangGraph, no customizable)
+- Se activa cuando una transición entre nodos falla (transición no configurada o inválida)
+- Lee los TODOs/requisitos de cada nodo del flow actual
+- Con base en los requisitos de cada nodo y la conversación del usuario, decide:
+  - Ir a un nodo específico del flow (el que mejor corresponda según los TODOs)
+  - Salir del flow (exitFlow → router)
+  - Ir a HITL
+- Es un nodo interno del sistema, no aparece como nodo configurable para el usuario
+- Aplica a todos los flows, no es específico de venta
+
+### Nota: SystemPrompt como TODOs
+- Los nodos customizables usan formato TODO en su systemPrompt: el usuario define qué debe lograr el nodo y sus reglas como items de checklist
+- El LLM del nodo verifica los TODOs antes de transicionar
+- El nodo decisor puede leer estos TODOs de todos los nodos del flow para decidir a cuál ir
+
 ---
 
 ## Regla General: Notificaciones al usuario
