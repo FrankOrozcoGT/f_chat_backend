@@ -124,7 +124,7 @@ export class TransitionToNodeFn {
       transition.toNodeId,
       undefined,
       undefined,
-      summary ?? null,
+      summary ?? undefined,
     );
 
     if (ctx.isTest) {

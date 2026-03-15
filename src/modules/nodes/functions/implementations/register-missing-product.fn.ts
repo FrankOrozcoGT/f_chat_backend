@@ -73,7 +73,7 @@ export class RegisterMissingProductFn {
     );
 
     // 2. Encolar consulta al supervisor para obtener precio
-    const { isOutsideWorkHours } = await this.queueRequestService.enqueue({
+    await this.queueRequestService.enqueue({
       userId: ctx.userId,
       nodeSessionId: ctx.nodeSession.id,
       conversationId: ctx.conversationId,
@@ -85,7 +85,7 @@ export class RegisterMissingProductFn {
       toolContext: { productName, notes, clientId },
     });
 
-    this.logger.log(`registerMissingProduct: ${productName} → enqueued to supervisor (outsideHours=${isOutsideWorkHours})`);
+    this.logger.log(`registerMissingProduct: ${productName} → enqueued to supervisor`);
 
     return 'Producto registrado como faltante. Consulta enviada al supervisor.';
   }
