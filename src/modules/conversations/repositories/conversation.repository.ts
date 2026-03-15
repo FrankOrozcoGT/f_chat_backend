@@ -52,6 +52,7 @@ export class ConversationRepository {
         include: {
           phone: true,
           participants: { include: { client: true } },
+          stats: true,
         },
         orderBy: { lastMessageAt: 'desc' },
         skip: (page - 1) * limit,
@@ -63,6 +64,8 @@ export class ConversationRepository {
     const data = raw.map((conv) => ({
       ...conv,
       client: conv.participants[0]?.client ?? null,
+      phone: conv.phone,
+      stats: conv.stats,
     }));
 
     return { data, total, page, limit };
@@ -316,6 +319,29 @@ export class ConversationRepository {
         isActive: false,
         participants: { some: { clientId } },
       },
+    });
+  }
+
+  async upsertStats(conversationId: string, direction: 'inbound' | 'outbound', incrementUnread = false) {
+    await this.prisma.conversationStats.upsert({
+      where: { conversationId },
+      create: {
+        conversationId,
+        lastMessageDirection: direction,
+        unreadCount: incrementUnread ? 1 : 0,
+      },
+      update: {
+        lastMessageDirection: direction,
+        ...(incrementUnread && { unreadCount: { increment: 1 } }),
+        ...(direction === 'outbound' && { unreadCount: 0 }),
+      },
+    });
+  }
+
+  async resetUnread(conversationId: string) {
+    await this.prisma.conversationStats.updateMany({
+      where: { conversationId },
+      data: { unreadCount: 0 },
     });
   }
 
