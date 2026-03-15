@@ -14,7 +14,10 @@ export class QueueRequestRepository {
     instanceName: string;
     label: string;
     destinationPhone: string;
+    groupJid?: string | null;
     outgoingMessage: string;
+    imageUrl?: string | null;
+    isTest?: boolean;
     toolName: string;
     toolContext?: any;
   }) {
@@ -40,6 +43,16 @@ export class QueueRequestRepository {
     return this.prisma.queueRequest.findFirst({
       where: {
         destinationPhone,
+        status: 'sent',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async findPendingByGroup(groupJid: string) {
+    return this.prisma.queueRequest.findFirst({
+      where: {
+        groupJid,
         status: 'sent',
       },
       orderBy: { createdAt: 'asc' },

@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
 import { ContactLabelService } from './contact-label.service';
-import { WorkScheduleService } from './work-schedule.service';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { UserQueueManager } from './user-queue-manager.service';
 
 export interface EnqueueParams {
   userId: string;
@@ -14,6 +11,8 @@ export interface EnqueueParams {
   instanceName: string;
   label: string;
   message: string;
+  imageUrl?: string;
+  isTest?: boolean;
   toolName: string;
   toolContext?: any;
 }
@@ -23,18 +22,16 @@ export class QueueRequestService {
   private readonly logger = new Logger(QueueRequestService.name);
 
   constructor(
-    @InjectQueue('outbound-queue') private readonly outboundQueue: Queue,
     private readonly queueRequestRepo: QueueRequestRepository,
     private readonly contactLabelService: ContactLabelService,
-    private readonly workScheduleService: WorkScheduleService,
-    private readonly nodeSessionRepo: NodeSessionRepository,
+    private readonly userQueueManager: UserQueueManager,
   ) {}
 
   async enqueue(params: EnqueueParams) {
     const { userId, label, message } = params;
 
-    // Resolve label → client phone
-    const { phoneNumber } = await this.contactLabelService.resolve(userId, label);
+    // Resolve label → remoteJid (individual or group)
+    const resolved = await this.contactLabelService.resolve(userId, label);
 
     // Create QueueRequest record
     const queueRequest = await this.queueRequestRepo.create({
@@ -44,43 +41,28 @@ export class QueueRequestService {
       currentNodeId: params.currentNodeId,
       instanceName: params.instanceName,
       label,
-      destinationPhone: phoneNumber,
+      destinationPhone: resolved.isGroup ? '' : resolved.remoteJid.replace('@s.whatsapp.net', ''),
+      groupJid: resolved.isGroup ? resolved.remoteJid : null,
       outgoingMessage: message,
+      imageUrl: params.imageUrl ?? null,
+      isTest: params.isTest ?? false,
       toolName: params.toolName,
       toolContext: params.toolContext,
     });
 
-    // Mark NodeSession as waiting_queue
-    await this.nodeSessionRepo.updateStatus(params.nodeSessionId, 'waiting_queue');
+    // Add job to user's queue (pause/resume handled by QueueSchedulerService)
+    await this.userQueueManager.addJob(userId, { queueRequestId: queueRequest.id });
 
-    // Check work hours for delay
-    const withinHours = await this.workScheduleService.isWithinWorkHours(userId);
-    let delay = 0;
+    this.logger.log(`[enqueue] Created QueueRequest ${queueRequest.id} label=${label} dest=${resolved.remoteJid}`);
 
-    if (!withinHours) {
-      delay = await this.workScheduleService.getDelayUntilNextWorkHour(userId);
-      this.logger.log(`[enqueue] Outside work hours, delaying ${delay}ms for request ${queueRequest.id}`);
-    }
-
-    // Add job to BullMQ queue
-    await this.outboundQueue.add(
-      'send-message',
-      { queueRequestId: queueRequest.id },
-      {
-        delay,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-      },
-    );
-
-    this.logger.log(`[enqueue] Created QueueRequest ${queueRequest.id} label=${label} dest=${phoneNumber} delay=${delay}`);
-
-    return { queueRequest, isOutsideWorkHours: !withinHours };
+    return { queueRequest };
   }
 
-  async handleResponse(instanceName: string, senderPhone: string, responseMessage: string) {
-    // Find the pending sent request for this sender
-    const queueRequest = await this.queueRequestRepo.findPendingByDestination(senderPhone);
+  async handleResponse(instanceName: string, senderPhone: string, responseMessage: string, groupJid?: string) {
+    // Find the pending sent request — by groupJid if from a group, otherwise by individual phone
+    const queueRequest = groupJid
+      ? await this.queueRequestRepo.findPendingByGroup(groupJid)
+      : await this.queueRequestRepo.findPendingByDestination(senderPhone);
     if (!queueRequest) return null;
 
     // Update request with response
@@ -89,7 +71,7 @@ export class QueueRequestService {
       respondedAt: new Date(),
     });
 
-    this.logger.log(`[handleResponse] QueueRequest ${queueRequest.id} responded by ${senderPhone}`);
+    this.logger.log(`[handleResponse] QueueRequest ${queueRequest.id} responded by ${senderPhone}${groupJid ? ` in group ${groupJid}` : ''}`);
 
     return queueRequest;
   }

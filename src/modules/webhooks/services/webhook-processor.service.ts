@@ -239,6 +239,7 @@ export class WebhookProcessorService {
         if (queueRequest) {
           this.eventEmitter.emit('queue.response.received', {
             queueRequestId: queueRequest.id,
+            messageId: message.id,
           });
           this.logger.log(
             `[queue] Response from labeled contact ${clientPhone} matched QueueRequest ${queueRequest.id}`,

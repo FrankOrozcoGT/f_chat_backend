@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -11,21 +10,17 @@ export class QueueResumeService {
 
   constructor(
     private readonly queueRequestRepo: QueueRequestRepository,
-    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
   @OnEvent('queue.response.received')
-  async handleQueueResponse(payload: { queueRequestId: string }) {
+  async handleQueueResponse(payload: { queueRequestId: string; messageId: string }) {
     const queueRequest = await this.queueRequestRepo.findById(payload.queueRequestId);
     if (!queueRequest) {
       this.logger.warn(`[resume] QueueRequest ${payload.queueRequestId} not found`);
       return;
     }
-
-    // Reactivate nodeSession
-    await this.nodeSessionRepo.updateStatus(queueRequest.nodeSessionId, 'active');
 
     // Get conversation details for the synthetic message
     const conversation = await this.prisma.conversation.findUnique({
@@ -47,8 +42,12 @@ export class QueueResumeService {
     // The content includes the queue context so the AI knows this is a response
     const syntheticContent = `[RESPUESTA DE COLA - ${queueRequest.label}]: ${queueRequest.responseMessage}`;
 
+    const resolvedMessageId = queueRequest.isTest
+      ? `test-msg-queue-${queueRequest.id}`
+      : payload.messageId;
+
     this.eventEmitter.emit('ai.incoming.message', {
-      messageId: null, // synthetic, no real message
+      messageId: resolvedMessageId,
       conversationId: queueRequest.conversationId,
       instanceName: queueRequest.instanceName,
       clientPhone,
@@ -57,6 +56,7 @@ export class QueueResumeService {
       content: syntheticContent,
       mediaRelativePath: null,
       mediaMetadata: null,
+      isTest: queueRequest.isTest,
     });
 
     this.logger.log(

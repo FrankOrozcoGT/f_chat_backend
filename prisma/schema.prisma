@@ -573,6 +573,8 @@ model QueueRequest {
   destinationPhone String
   groupJid         String?
   outgoingMessage  String
+  imageUrl         String?
+  isTest           Boolean            @default(false)
   responseMessage  String?
   toolName         String
   toolContext       Json?
