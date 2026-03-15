@@ -30,6 +30,7 @@ import { SendToVerificationFn } from './functions/implementations/send-to-verifi
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
+import { TestQueueResultStore } from './services/test-queue-result.store';
 import { NodesController } from './nodes.controller';
 import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
@@ -66,7 +67,8 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     SecurityEventRepository,
     TemplateRepository,
     TestSessionService,
+    TestQueueResultStore,
   ],
-  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry],
+  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry, TestQueueResultStore],
 })
 export class NodesModule {}
