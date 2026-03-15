@@ -10,16 +10,24 @@ export class DbNodeSessionStore implements NodeSessionStore {
     return this.repo.findActiveByConversationId(conversationId) as Promise<SessionData | null>;
   }
 
+  async findActiveOrWaitingByConversationId(conversationId: string): Promise<SessionData | null> {
+    return this.repo.findActiveOrWaitingByConversationId(conversationId) as Promise<SessionData | null>;
+  }
+
   async findById(id: string): Promise<SessionData | null> {
     return this.repo.findById(id) as Promise<SessionData | null>;
   }
 
   async findOrCreate(conversationId: string, flowId?: string): Promise<SessionData> {
-    return this.repo.findOrCreate(conversationId, flowId) as Promise<SessionData>;
+    return this.repo.findOrCreate(conversationId, flowId);
   }
 
   async updateCurrentNode(id: string, currentNodeId: string | null, detectedIntent?: string, flowId?: string, flowSummary?: string): Promise<SessionData> {
-    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent, flowId, flowSummary) as Promise<SessionData>;
+    return this.repo.updateCurrentNode(id, currentNodeId, detectedIntent, flowId, flowSummary);
+  }
+
+  async updateStatus(id: string, status: import('@prisma/client').NodeSessionStatus): Promise<void> {
+    await this.repo.updateStatus(id, status);
   }
 
   async pauseFlow(id: string, summary: string): Promise<void> {

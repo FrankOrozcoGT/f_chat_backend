@@ -68,6 +68,12 @@ export class RedisNodeSessionStore implements NodeSessionStore {
     return this.hydrate(state);
   }
 
+  async findActiveOrWaitingByConversationId(conversationId: string): Promise<SessionData | null> {
+    const state = await this.redis.getJson<RedisSessionState>(this.convKey(conversationId));
+    if (!state || (state.status !== 'active' && state.status !== 'waiting_queue')) return null;
+    return this.hydrate(state);
+  }
+
   async findById(id: string): Promise<SessionData | null> {
     const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
     if (!state) return null;
@@ -112,6 +118,14 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       state.detectedIntent = null;
       state.flowId = null;
       state.flowSummary = summary;
+      await this.save(state);
+    }
+  }
+
+  async updateStatus(id: string, status: NodeSessionStatus): Promise<void> {
+    const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
+    if (state) {
+      state.status = status;
       await this.save(state);
     }
   }

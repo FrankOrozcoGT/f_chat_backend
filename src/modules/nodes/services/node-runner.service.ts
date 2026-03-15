@@ -69,14 +69,16 @@ export class NodeRunnerService {
         '\n--- FIN HISTORIAL ---'
       : '';
 
+    const userContent = imageUrl
+      ? [
+          { type: 'text', text: transcription },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ]
+      : transcription;
+
     const messages = [
       { role: 'system', content: systemPrompt + historyText },
-      {
-        role: 'user',
-        content: imageUrl
-          ? `${transcription} [imagen: ${imageUrl}]`
-          : transcription,
-      },
+      { role: 'user', content: userContent },
     ];
 
     const result = await this.kimiClient.chatWithTools({
