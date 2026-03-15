@@ -5,9 +5,7 @@ import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from './clients/internal-api.client';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
-import { DbNodeSessionStore } from '@modules/nodes/stores/db-node-session.store';
-import { EvolutionService } from '@common/evolution/evolution.service';
+import { TestQueueResultStore } from '@modules/nodes/services/test-queue-result.store';
 
 export interface IncomingMessageEvent {
   messageId: string;
@@ -19,6 +17,7 @@ export interface IncomingMessageEvent {
   content: string | null;
   mediaRelativePath: string | null;
   mediaMetadata: { fileName: string; mimeType: string } | null;
+  isTest?: boolean;
 }
 
 @Injectable()
@@ -30,28 +29,12 @@ export class AiAgentService {
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
     private readonly sessionLifecycle: SessionLifecycleService,
-    private readonly nodeSessionRepo: NodeSessionRepository,
-    private readonly evolutionService: EvolutionService,
+    private readonly testQueueResultStore: TestQueueResultStore,
   ) {}
 
   @OnEvent('ai.incoming.message')
   async handleIncomingMessage(payload: IncomingMessageEvent): Promise<void> {
     try {
-      // Si la nodeSession está en waiting_queue, responder amablemente y no ejecutar workflow
-      const nodeSession = await this.nodeSessionRepo.findActiveOrWaitingByConversationId(payload.conversationId);
-      if (nodeSession?.status === 'waiting_queue') {
-        if (payload.clientPhone && payload.instanceName) {
-          const remoteJid = `${payload.clientPhone}@s.whatsapp.net`;
-          await this.evolutionService.sendTextMessage(
-            payload.instanceName,
-            remoteJid,
-            'Estoy verificando tu solicitud, en cuanto tenga respuesta te aviso 😊',
-          );
-        }
-        this.logger.log(`[waiting_queue] Client message while waiting, sent friendly response for conversation ${payload.conversationId}`);
-        return;
-      }
-
       // Validar créditos ANTES de ejecutar el workflow
       // Estimación conservadora: STT (30s) + LLM (500 tokens) = ~0.65 créditos
       const estimatedCredits =
@@ -66,9 +49,22 @@ export class AiAgentService {
         estimatedCredits,
       );
 
-      // Si pasa la validación, ejecutar workflow
-      const sessionStore = new DbNodeSessionStore(this.nodeSessionRepo);
-      await this.workflow.execute(payload, sessionStore);
+      const result = await this.workflow.execute(payload, payload.isTest ?? false);
+
+      // In test mode, store the result so sendTest can pick it up via polling
+      if (payload.isTest) {
+        const sendMsg = result.sideEffects?.find((se) => se.action === 'sendMessage');
+        const response = result.responseText || (sendMsg?.args?.mensaje as string) || '';
+        this.testQueueResultStore.set(payload.conversationId, {
+          response,
+          intent: result.intent ?? '',
+          currentNodeId: result.currentNodeId ?? null,
+          sideEffects: result.sideEffects ?? [],
+          preCodeContext: result.preCodeContext ?? null,
+          nodeTransitions: result.nodeTransitions ?? [],
+        });
+        this.logger.log(`[test] Stored queue result for conversation ${payload.conversationId}`);
+      }
     } catch (error) {
       // Si es error de límite de créditos, orquestar rechazo
       if (

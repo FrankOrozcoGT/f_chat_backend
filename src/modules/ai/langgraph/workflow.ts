@@ -8,8 +8,6 @@ import { CustomNode } from './nodes/custom-node.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
-import { NodeSessionStore } from '@modules/nodes/stores/node-session-store.interface';
-
 export interface WorkflowResult {
   responseText: string;
   intent: string;
@@ -85,7 +83,6 @@ export class AiWorkflow {
 
   async execute(
     payload: IncomingMessageEvent,
-    sessionStore: NodeSessionStore,
     isTest = false,
   ): Promise<WorkflowResult> {
     const initialState: Partial<WorkflowStateType> = {
@@ -102,7 +99,6 @@ export class AiWorkflow {
       sideEffects: [],
       totalCost: 0,
       isTest,
-      sessionStore,
       error: null,
       currentNodeId: null,
       flowId: null,

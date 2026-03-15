@@ -18,6 +18,7 @@ import { EvolutionModule } from '@common/evolution/evolution.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { LimitsModule } from '@common/services/limits.module';
 import { NodesModule } from '../nodes/nodes.module';
+import { RedisModule } from '@common/redis/redis.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { NodesModule } from '../nodes/nodes.module';
     EvolutionModule,
     WebSocketModule,
     LimitsModule,
+    RedisModule,
     forwardRef(() => NodesModule),
   ],
   providers: [

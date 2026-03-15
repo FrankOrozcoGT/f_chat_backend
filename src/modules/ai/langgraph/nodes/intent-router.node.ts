@@ -37,8 +37,8 @@ export class IntentRouterNode {
 
     if (previousError) return {};
 
-    // 1. Check if there's an active nodeSession with currentNodeId → skip router, go to custom_node
-    const existingSession = await sessionStore.findActiveByConversationId(conversationId);
+    // 1. Check if there's an active/waiting_queue nodeSession with currentNodeId → skip router, go to custom_node
+    const existingSession = await sessionStore.findActiveOrWaitingByConversationId(conversationId);
     if (existingSession?.currentNodeId) {
       this.logger.log(
         `IntentRouter: active session found, currentNodeId=${existingSession.currentNodeId} → custom_node`,
@@ -137,7 +137,7 @@ export class IntentRouterNode {
       const updatedSession = await sessionStore.findActiveByConversationId(conversationId);
 
       this.logger.log(
-        `IntentRouter: action=${routerAction}, intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens`,
+        `IntentRouter: action=${routerAction}, intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens, updatedSession.currentNodeId=${updatedSession?.currentNodeId ?? 'null'}`,
       );
 
       const preferredFormat: 'audio' | 'text' =

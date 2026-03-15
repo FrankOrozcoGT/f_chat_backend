@@ -62,6 +62,11 @@ export class CustomNode {
       let session: import('@modules/nodes/stores/node-session-store.interface').SessionData | null = null;
       if (nodeSessionId) {
         session = await sessionStore.findById(nodeSessionId);
+        // If session is waiting_queue and this is a queue response, reactivate it
+        if (session?.status === 'waiting_queue' && transcription?.startsWith('[RESPUESTA DE COLA')) {
+          await sessionStore.updateStatus(nodeSessionId, 'active');
+          session = { ...session, status: 'active' };
+        }
       }
 
       // Load node — use cache only on first iteration
@@ -205,7 +210,17 @@ export class CustomNode {
         // transitionToNode → loop internally to the new node
         if (terminationTool === 'transitionToNode') {
           const updatedSession2 = await sessionStore.findById(ctx.nodeSession.id);
-          activeNodeId = updatedSession2?.currentNodeId ?? null;
+          const nextNodeId = updatedSession2?.currentNodeId ?? null;
+          if (!nextNodeId || nextNodeId === activeNodeId) {
+            // Transition failed (node not found) — stop looping
+            this.logger.log(`CustomNode: transitionToNode failed (no node change), stopping`);
+            return {
+              responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
+              sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
+              nodeTransitions,
+            };
+          }
+          activeNodeId = nextNodeId;
           this.logger.log(`CustomNode: transitioning to node ${activeNodeId}`);
           continue;
         }

@@ -29,6 +29,8 @@ export class FinalizeNode {
 
     const sideEffects: TestSideEffect[] = [];
 
+    this.logger.log(`FinalizeNode: isTest=${isTest} apiCalls=${apiCalls.length}`);
+
     // Si hubo error en un node anterior → notificar al cliente y activar HITL
     if (error) {
       if (isTest) {
