@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { TestSessionService } from './services/test-session.service';
+import { TestQueueResultStore } from './services/test-queue-result.store';
 import { AiWorkflow } from '../ai/langgraph/workflow';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { RedisNodeSessionStore } from './stores/redis-node-session.store';
@@ -32,6 +33,7 @@ export class NodesController {
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly testSessionService: TestSessionService,
+    private readonly testQueueResultStore: TestQueueResultStore,
     private readonly workflow: AiWorkflow,
     private readonly phoneRepo: PhoneRepository,
     private readonly redisService: RedisService,
@@ -98,7 +100,8 @@ export class NodesController {
   async sendTest(@Body() dto: TestSendDto) {
     const session = await this.testSessionService.getSession(dto.testId);
 
-    const sessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
+    // Clear any leftover queue result from a previous step
+    this.testQueueResultStore.clear(session.conversationId);
 
     // Ejecutar el mismo workflow de LangGraph en modo test
     const result = await this.workflow.execute(
@@ -108,18 +111,34 @@ export class NodesController {
         instanceName: session.instanceName,
         clientPhone: session.clientPhone,
         userId: session.userId,
-        messageType: MessageType.text,
+        messageType: dto.mediaUrl ? MessageType.image : MessageType.text,
         content: dto.message,
-        mediaRelativePath: null,
-        mediaMetadata: null,
+        mediaRelativePath: dto.mediaUrl
+          ? dto.mediaUrl.replace(/^https?:\/\/[^/]+\//, '')
+          : null,
+        mediaMetadata: dto.mediaUrl ? { fileName: 'comprobante.jpeg', mimeType: 'image/jpeg' } : null,
       },
-      sessionStore,
       true, // isTest
     );
 
     // Extraer response del side effect sendMessage si responseText está vacío
     const sendMsg = result.sideEffects.find((se) => se.action === 'sendMessage');
-    const response = result.responseText || (sendMsg?.args?.mensaje as string) || '';
+    let response = result.responseText || (sendMsg?.args?.mensaje as string) || '';
+
+    let finalResult = result;
+    const allNodeTransitions = [...(result.nodeTransitions ?? [])];
+
+    // Poll in loop — workflows can chain (forwardReceipt → sendToVerification → transitionToNode)
+    let currentSideEffects = result.sideEffects;
+    while (currentSideEffects.some((se) => se.action === 'waitingQueue')) {
+      const queueResult = await this.pollQueueResult(session.conversationId, 15000);
+      if (!queueResult) break;
+      this.testQueueResultStore.clear(session.conversationId);
+      allNodeTransitions.push(...(queueResult.nodeTransitions ?? []));
+      finalResult = { ...finalResult, ...queueResult } as any;
+      response = queueResult.response || response;
+      currentSideEffects = queueResult.sideEffects ?? [];
+    }
 
     // Guardar step en Redis
     const updatedHistory = [
@@ -133,19 +152,34 @@ export class NodesController {
     await this.testSessionService.pushStep(dto.testId, {
       message: dto.message,
       response,
-      nodeId: result.currentNodeId,
-      flowId: (result as any).flowId ?? session.flowId,
+      nodeId: (finalResult as any).currentNodeId ?? result.currentNodeId,
+      flowId: (finalResult as any).flowId ?? session.flowId,
       historySnapshot: updatedHistory,
     });
 
     return {
       response,
-      intent: result.intent,
-      currentNodeId: result.currentNodeId,
+      intent: (finalResult as any).intent ?? result.intent,
+      currentNodeId: (finalResult as any).currentNodeId ?? result.currentNodeId,
       sideEffects: result.sideEffects,
-      preCodeContext: result.preCodeContext ?? null,
-      nodeTransitions: result.nodeTransitions ?? [],
+      preCodeContext: (finalResult as any).preCodeContext ?? result.preCodeContext ?? null,
+      nodeTransitions: allNodeTransitions,
     };
+  }
+
+  /**
+   * Polls for an async queue result in test mode.
+   * The result is written by AiAgentService after the second workflow completes.
+   */
+  private async pollQueueResult(conversationId: string, timeoutMs: number): Promise<import('./services/test-queue-result.store').TestQueueResult | null> {
+    const interval = 200;
+    const maxAttempts = Math.ceil(timeoutMs / interval);
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((r) => setTimeout(r, interval));
+      const result = this.testQueueResultStore.get(conversationId);
+      if (result) return result;
+    }
+    return null;
   }
 
   @Post('test/step-back')
@@ -163,9 +197,10 @@ export class NodesController {
     if (!session) {
       throw new NotFoundException('Test session not found');
     }
+    this.testQueueResultStore.clear(session.conversationId);
     // Clean up node session from Redis
     const nodeSessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
-    const nodeSession = await nodeSessionStore.findActiveByConversationId(session.conversationId);
+    const nodeSession = await nodeSessionStore.findActiveOrWaitingByConversationId(session.conversationId);
     if (nodeSession) {
       await nodeSessionStore.close(nodeSession.id);
     }
