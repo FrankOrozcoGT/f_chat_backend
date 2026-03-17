@@ -9,11 +9,13 @@ import { GoogleStrategy } from '@modules/auth/strategies/google.strategy';
 import { JwtStrategy } from '@modules/auth/strategies/jwt.strategy';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { UsersModule } from '@modules/users/users.module';
+import { TenantsModule } from '@modules/tenants/tenants.module';
 
 @Module({
   imports: [
     PassportModule,
     forwardRef(() => UsersModule),
+    forwardRef(() => TenantsModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {

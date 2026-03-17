@@ -1,54 +1,67 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { User, TenantRole, SystemRole } from '@prisma/client';
 import { UserRepository } from '@modules/users/repositories/user.repository';
-import { User, Plan, Role } from '@prisma/client';
+import { TenantRepository } from '@modules/tenants/repositories/tenant.repository';
 import type { GoogleProfile } from '@modules/auth/strategies/google.strategy';
+
+export interface JwtPayload {
+  userId: string;
+  email: string;
+  tenantId: string;
+  tenantRole: TenantRole;
+  systemRole: SystemRole;
+}
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userRepository: UserRepository,
+    private readonly tenantRepository: TenantRepository,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
   ) {}
 
   async handleGoogleLogin(
     googleProfile: GoogleProfile,
-  ): Promise<{ user: User; token: string }> {
+  ): Promise<{ user: User; tenantId: string; tenantRole: TenantRole; token: string }> {
     const { email, name, picture } = googleProfile;
 
-    // Buscar usuario por email
     let user = await this.userRepository.findByEmail(email);
+    let tenantId: string;
+    let tenantRole: TenantRole;
 
     if (!user) {
-      // Usuario nuevo: crear con role y plan según ADMIN_EMAILS
-      const adminEmails =
-        this.configService.get<string>('ADMIN_EMAILS')?.split(',') || [];
-      const isAdmin = adminEmails.includes(email);
-
-      user = await this.userRepository.create({
-        email,
+      // Nuevo usuario: crear user + tenant + TenantMember(owner)
+      user = await this.userRepository.create({ email, name, picture });
+      const tenant = await this.tenantRepository.create({
         name,
-        picture,
-        plan: isAdmin ? Plan.full : Plan.free,
-        role: isAdmin ? Role.admin : Role.free,
+        ownerId: user.id,
       });
+      tenantId = tenant.id;
+      tenantRole = TenantRole.owner;
     } else {
-      // Usuario existente: actualizar lastLogin
+      // Usuario existente: actualizar lastLogin, obtener primer tenant
       user = await this.userRepository.updateLastLogin(user.id);
+      const member = await this.tenantRepository.findFirstByUserId(user.id);
+      if (!member) {
+        throw new InternalServerErrorException('User has no tenant membership');
+      }
+      tenantId = member.tenantId;
+      tenantRole = member.role;
     }
 
-    // Generar JWT
     const token = this.generateJWT({
       userId: user.id,
       email: user.email,
+      tenantId,
+      tenantRole,
+      systemRole: user.systemRole,
     });
 
-    return { user, token };
+    return { user, tenantId, tenantRole, token };
   }
 
-  generateJWT(payload: { userId: string; email: string }): string {
+  generateJWT(payload: JwtPayload): string {
     return this.jwtService.sign(payload);
   }
 
