@@ -6,10 +6,10 @@ import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
 import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
-import { UserSettingsModule } from '../user-settings/user-settings.module';
+import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant-settings.repository';
 
 @Module({
-  imports: [PrismaModule, UserSettingsModule],
+  imports: [PrismaModule],
   controllers: [InternalCatalogController],
   providers: [
     ProductRepository,
@@ -17,6 +17,7 @@ import { UserSettingsModule } from '../user-settings/user-settings.module';
     PromotionRepository,
     PromotionDiscountRepository,
     ShippingLocationRepository,
+    TenantSettingsRepository,
   ],
   exports: [
     ProductRepository,

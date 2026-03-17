@@ -34,7 +34,7 @@ export class CostsRepository {
               include: {
                 phone: {
                   include: {
-                    user: true,
+                    tenant: true,
                   },
                 },
               },

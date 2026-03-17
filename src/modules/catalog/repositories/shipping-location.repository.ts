@@ -5,27 +5,27 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class ShippingLocationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string) {
+  async findByTenantId(tenantId: string) {
     return this.prisma.shippingLocation.findMany({
-      where: { userId },
+      where: { tenantId },
       orderBy: { name: 'asc' },
     });
   }
 
-  async findByUserIdAndName(userId: string, name: string) {
+  async findByTenantIdAndName(tenantId: string, name: string) {
     return this.prisma.shippingLocation.findUnique({
-      where: { userId_name: { userId, name } },
+      where: { tenantId_name: { tenantId, name } },
     });
   }
 
   async upsert(
-    userId: string,
+    tenantId: string,
     name: string,
     data: { isFreeShipping: boolean; shippingCost: number },
   ) {
     return this.prisma.shippingLocation.upsert({
-      where: { userId_name: { userId, name } },
-      create: { userId, name, ...data },
+      where: { tenantId_name: { tenantId, name } },
+      create: { tenantId, name, ...data },
       update: data,
     });
   }

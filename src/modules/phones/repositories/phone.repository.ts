@@ -6,75 +6,53 @@ import { Phone, PhoneStatus } from '@prisma/client';
 export class PhoneRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllByUserId(userId: string): Promise<Phone[]> {
+  async findAllByTenantId(tenantId: string): Promise<Phone[]> {
     return this.prisma.phone.findMany({
-      where: { userId },
+      where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async create(data: {
-    userId: string;
+    tenantId: string;
     instanceName: string;
     evolutionInstanceId: string;
     status: PhoneStatus;
     phoneNumber: string;
     qrCode?: string;
   }): Promise<Phone> {
-    return this.prisma.phone.create({
-      data,
-    });
+    return this.prisma.phone.create({ data });
   }
 
-  async findByEvolutionInstanceId(
-    evolutionInstanceId: string,
-  ): Promise<Phone | null> {
-    return this.prisma.phone.findUnique({
-      where: { evolutionInstanceId },
-    });
+  async findByEvolutionInstanceId(evolutionInstanceId: string): Promise<Phone | null> {
+    return this.prisma.phone.findUnique({ where: { evolutionInstanceId } });
   }
 
-  async updateStatus(
-    id: string,
-    status: PhoneStatus,
-    lastConnected?: Date,
-  ): Promise<Phone> {
+  async updateStatus(id: string, status: PhoneStatus, lastConnected?: Date): Promise<Phone> {
     return this.prisma.phone.update({
       where: { id },
-      data: {
-        status,
-        ...(lastConnected && { lastConnected }),
-      },
+      data: { status, ...(lastConnected && { lastConnected }) },
     });
   }
 
   async findById(id: string): Promise<Phone | null> {
-    return this.prisma.phone.findUnique({
-      where: { id },
-    });
+    return this.prisma.phone.findUnique({ where: { id } });
   }
 
   async delete(id: string): Promise<Phone> {
-    return this.prisma.phone.delete({
-      where: { id },
-    });
+    return this.prisma.phone.delete({ where: { id } });
   }
 
-  async findFirstByUserId(userId: string): Promise<Phone | null> {
+  async findFirstByTenantId(tenantId: string): Promise<Phone | null> {
     return this.prisma.phone.findFirst({
-      where: { userId },
+      where: { tenantId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async countActiveByUserId(userId: string): Promise<number> {
+  async countActiveByTenantId(tenantId: string): Promise<number> {
     return this.prisma.phone.count({
-      where: {
-        userId,
-        status: {
-          in: ['pending', 'connected'],
-        },
-      },
+      where: { tenantId, status: { in: ['pending', 'connected'] } },
     });
   }
 }

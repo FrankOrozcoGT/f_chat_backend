@@ -1,7 +1,6 @@
-export class UserCostDto {
-  userId: string;
-  userName: string;
-  email: string;
+export class TenantCostDto {
+  tenantId: string;
+  tenantName: string;
   total: number;
   totalConversations: number;
   avgCostPerConversation: number;
@@ -17,6 +16,6 @@ export class CostsResponseDto {
   totalLLM: number;
   totalTTS: number;
   total: number;
-  byUser: UserCostDto[];
+  byUser: TenantCostDto[];
   byDay: DailyCostDto[];
 }

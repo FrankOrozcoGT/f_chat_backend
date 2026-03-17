@@ -52,21 +52,21 @@ export class PhonesController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async findAll(@Req() req): Promise<PhoneResponseDto[]> {
-    const userId = req.user.id;
-    const phones = await this.phoneRepository.findAllByUserId(userId);
+    const tenantId = req.user.tenantId;
+    const phones = await this.phoneRepository.findAllByTenantId(tenantId);
     return phones.map((phone) => new PhoneResponseDto(phone));
   }
 
   @Post('create')
   @UseGuards(JwtAuthGuard)
   async create(@Body() dto: CreatePhoneDto, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     // 1. Validar instanceName
     this.phonesService.validateInstanceName(dto.instanceName);
 
     // 2. Validar límite de WhatsApp
-    await this.limitsService.validateWhatsAppLimit(userId);
+    await this.limitsService.validateWhatsAppLimit(tenantId);
 
     // 3. Crear instancia en Evolution API con QR (webhook se configura global en docker-compose)
     let evolutionData;
@@ -86,7 +86,7 @@ export class PhonesController {
     const phoneData = this.phonesService.buildPhoneData(
       dto,
       evolutionData,
-      userId,
+      tenantId,
     );
 
     // 5. Guardar en DB
@@ -107,7 +107,7 @@ export class PhonesController {
     @Param('id') phoneId: string,
     @Req() req,
   ): Promise<ContactResponseDto[]> {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     // 1. Buscar phone y verificar ownership
     const phone = await this.phoneRepository.findById(phoneId);
@@ -115,7 +115,7 @@ export class PhonesController {
       throw new NotFoundException('Phone not found');
     }
 
-    if (phone.userId !== userId) {
+    if (phone.tenantId !== tenantId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -165,14 +165,14 @@ export class PhonesController {
     @Param('remoteJid') remoteJid: string,
     @Req() req,
   ): Promise<MessageResponseDto[]> {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     // 1. Buscar phone y verificar ownership
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
       throw new NotFoundException('Phone not found');
     }
-    if (phone.userId !== userId) {
+    if (phone.tenantId !== tenantId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -281,7 +281,7 @@ export class PhonesController {
               await this.fileStorageService.downloadAndSaveMediaFromEvolution(
                 this.evolutionService,
                 phone.instanceName,
-                phone.userId,
+                phone.tenantId,
                 conversationId,
                 p.m.key.id,
                 p.m.key,
@@ -327,7 +327,7 @@ export class PhonesController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   async delete(@Param('id') phoneId: string, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     // 1. Buscar phone y verificar ownership
     const phone = await this.phoneRepository.findById(phoneId);
@@ -335,7 +335,7 @@ export class PhonesController {
       throw new NotFoundException('Phone not found');
     }
 
-    if (phone.userId !== userId) {
+    if (phone.tenantId !== tenantId) {
       throw new NotFoundException('Phone not found');
     }
 

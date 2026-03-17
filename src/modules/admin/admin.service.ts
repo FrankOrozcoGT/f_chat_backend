@@ -10,10 +10,9 @@ interface ApiCallWithRelations {
     conversation: {
       id: string;
       phone: {
-        user: {
+        tenant: {
           id: string;
           name: string;
-          email: string;
         };
       };
     };
@@ -44,9 +43,8 @@ export class AdminService {
     const byUserMap = new Map<
       string,
       {
-        userId: string;
-        userName: string;
-        email: string;
+        tenantId: string;
+        tenantName: string;
         total: number;
         conversationIds: Set<string>;
       }
@@ -66,20 +64,19 @@ export class AdminService {
         totalTTS += cost;
       }
 
-      // Agregar por USUARIO
-      const user = apiCall.message.conversation.phone.user;
-      const userKey = user.id;
+      // Agregar por TENANT
+      const tenant = apiCall.message.conversation.phone.tenant;
+      const tenantKey = tenant.id;
       const conversationId = apiCall.message.conversation.id;
 
-      if (byUserMap.has(userKey)) {
-        const userData = byUserMap.get(userKey)!;
-        userData.total += cost;
-        userData.conversationIds.add(conversationId);
+      if (byUserMap.has(tenantKey)) {
+        const tenantData = byUserMap.get(tenantKey)!;
+        tenantData.total += cost;
+        tenantData.conversationIds.add(conversationId);
       } else {
-        byUserMap.set(userKey, {
-          userId: user.id,
-          userName: user.name,
-          email: user.email,
+        byUserMap.set(tenantKey, {
+          tenantId: tenant.id,
+          tenantName: tenant.name,
           total: cost,
           conversationIds: new Set([conversationId]),
         });
@@ -96,16 +93,15 @@ export class AdminService {
 
     // Convertir maps a arrays, calcular promedios, y ordenar
     const byUser = Array.from(byUserMap.values())
-      .map((userData) => {
-        const totalConversations = userData.conversationIds.size;
+      .map((tenantData) => {
+        const totalConversations = tenantData.conversationIds.size;
         const avgCostPerConversation =
-          totalConversations > 0 ? userData.total / totalConversations : 0;
+          totalConversations > 0 ? tenantData.total / totalConversations : 0;
 
         return {
-          userId: userData.userId,
-          userName: userData.userName,
-          email: userData.email,
-          total: parseFloat(userData.total.toFixed(6)),
+          tenantId: tenantData.tenantId,
+          tenantName: tenantData.tenantName,
+          total: parseFloat(tenantData.total.toFixed(6)),
           totalConversations,
           avgCostPerConversation: parseFloat(avgCostPerConversation.toFixed(6)),
         };

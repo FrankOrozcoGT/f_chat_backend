@@ -10,7 +10,7 @@ import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
 import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
-import { UserSettingsRepository } from '../user-settings/repositories/user-settings.repository';
+import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant-settings.repository';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Controller('internal/catalog')
@@ -22,15 +22,15 @@ export class InternalCatalogController {
     private readonly promotionRepository: PromotionRepository,
     private readonly promotionDiscountRepository: PromotionDiscountRepository,
     private readonly shippingLocationRepository: ShippingLocationRepository,
-    private readonly userSettingsRepository: UserSettingsRepository,
+    private readonly tenantSettingsRepository: TenantSettingsRepository,
     private readonly prisma: PrismaService,
   ) {}
 
   @Post('products/upsert')
   async upsertProduct(
-    @Body() body: { userId: string; name: string; basePrice: number; description?: string },
+    @Body() body: { tenantId: string; name: string; basePrice: number; description?: string },
   ) {
-    return this.productRepository.upsertByName(body.userId, body.name, {
+    return this.productRepository.upsertByName(body.tenantId, body.name, {
       basePrice: body.basePrice,
       description: body.description,
     });
@@ -38,9 +38,9 @@ export class InternalCatalogController {
 
   @Post('products/find')
   async findProduct(
-    @Body() body: { userId: string; name: string },
+    @Body() body: { tenantId: string; name: string },
   ) {
-    return this.productRepository.findByUserIdAndName(body.userId, body.name);
+    return this.productRepository.findByTenantIdAndName(body.tenantId, body.name);
   }
 
   @Post('discounts/upsert')
@@ -53,7 +53,7 @@ export class InternalCatalogController {
   @Post('promotions/create')
   async createPromotion(
     @Body() body: {
-      userId: string;
+      tenantId: string;
       name?: string;
       description?: string;
       specialPrice: number;
@@ -73,13 +73,13 @@ export class InternalCatalogController {
   // --- Endpoints para funciones del nodo Identificación+Precio ---
 
   /**
-   * loadClientProducts (preCode): productos del usuario con descuentos del cliente + promos.
+   * loadClientProducts (preCode): productos del tenant con descuentos del cliente + promos.
    */
   @Post('load-client-products')
   async loadClientProducts(
-    @Body() body: { userId: string; clientId: string | null },
+    @Body() body: { tenantId: string; clientId: string | null },
   ) {
-    const products = await this.productRepository.findByUserId(body.userId);
+    const products = await this.productRepository.findByTenantId(body.tenantId);
 
     // Filtrar descuentos: solo los del cliente o los genéricos (sin clientId)
     const productsWithRelevantDiscounts = products.map((p) => ({
@@ -92,19 +92,19 @@ export class InternalCatalogController {
       ),
     }));
 
-    // Promos: por cliente si hay clientId, sino generales del usuario
+    // Promos: por cliente si hay clientId, sino generales del tenant
     const promotions = body.clientId
       ? await this.promotionRepository.findByClientId(body.clientId)
-      : await this.promotionRepository.findByUserId(body.userId);
+      : await this.promotionRepository.findByTenantId(body.tenantId);
 
-    // Shipping: ubicación del cliente + zonas de envío del usuario + default
+    // Shipping: ubicación del cliente + zonas de envío del tenant + default
     const clientLocation = body.clientId
       ? (await this.prisma.client.findUnique({ where: { id: body.clientId }, select: { location: true } }))?.location ?? null
       : null;
 
-    const shippingLocations = await this.shippingLocationRepository.findByUserId(body.userId);
+    const shippingLocations = await this.shippingLocationRepository.findByTenantId(body.tenantId);
 
-    const settings = await this.userSettingsRepository.findByUserId(body.userId);
+    const settings = await this.tenantSettingsRepository.findByTenantId(body.tenantId);
     const defaultShippingCost = settings?.defaultShippingCost ?? 0;
 
     return {
@@ -123,9 +123,9 @@ export class InternalCatalogController {
    */
   @Post('search-product')
   async searchProduct(
-    @Body() body: { userId: string; query: string },
+    @Body() body: { tenantId: string; query: string },
   ) {
-    const products = await this.productRepository.findByUserId(body.userId);
+    const products = await this.productRepository.findByTenantId(body.tenantId);
     const queryLower = body.query.toLowerCase();
     const matches = products.filter(
       (p) =>
@@ -140,11 +140,11 @@ export class InternalCatalogController {
    */
   @Post('check-promotions')
   async checkPromotions(
-    @Body() body: { userId: string; clientId: string | null; productName: string },
+    @Body() body: { tenantId: string; clientId: string | null; productName: string },
   ) {
     const promotions = body.clientId
       ? await this.promotionRepository.findByClientId(body.clientId)
-      : await this.promotionRepository.findByUserId(body.userId);
+      : await this.promotionRepository.findByTenantId(body.tenantId);
 
     const applicable = promotions.filter((promo) =>
       promo.promotionProducts.some(
@@ -159,10 +159,10 @@ export class InternalCatalogController {
    */
   @Post('register-missing-product')
   async registerMissingProduct(
-    @Body() body: { userId: string; productName: string; clientId: string | null; notes: string },
+    @Body() body: { tenantId: string; productName: string; clientId: string | null; notes: string },
   ) {
     // Crear producto con precio 0 como placeholder
-    const product = await this.productRepository.upsertByName(body.userId, body.productName, {
+    const product = await this.productRepository.upsertByName(body.tenantId, body.productName, {
       basePrice: 0,
       description: `[PENDIENTE DE PRECIO] ${body.notes}`,
     });
@@ -175,12 +175,12 @@ export class InternalCatalogController {
    */
   @Post('calculate-sale')
   async calculateSale(
-    @Body() body: { userId: string; items: Array<{ productName: string; unitPrice: number; quantity: number }>; location: string },
+    @Body() body: { tenantId: string; items: Array<{ productName: string; unitPrice: number; quantity: number }>; location: string },
   ) {
     const subtotal = body.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
-    const shippingLocation = await this.shippingLocationRepository.findByUserIdAndName(
-      body.userId,
+    const shippingLocation = await this.shippingLocationRepository.findByTenantIdAndName(
+      body.tenantId,
       body.location,
     );
 
@@ -188,7 +188,7 @@ export class InternalCatalogController {
     if (shippingLocation) {
       shippingCost = shippingLocation.isFreeShipping ? 0 : shippingLocation.shippingCost;
     } else {
-      const settings = await this.userSettingsRepository.findByUserId(body.userId);
+      const settings = await this.tenantSettingsRepository.findByTenantId(body.tenantId);
       shippingCost = settings?.defaultShippingCost ?? 0;
     }
 
@@ -223,7 +223,7 @@ export class InternalCatalogController {
   async processAnalysisCatalog(
     @Body()
     body: {
-      userId: string;
+      tenantId: string;
       clientId: string | null;
       products: Array<{
         name: string;
@@ -238,17 +238,17 @@ export class InternalCatalogController {
       }>;
     },
   ) {
-    const { userId, clientId, products, promotions } = body;
+    const { tenantId, clientId, products, promotions } = body;
 
     // 1. Procesar productos
     for (const product of products) {
-      const existing = await this.productRepository.findByUserIdAndName(
-        userId,
+      const existing = await this.productRepository.findByTenantIdAndName(
+        tenantId,
         product.name,
       );
 
       const upserted = await this.productRepository.upsertByName(
-        userId,
+        tenantId,
         product.name,
         {
           basePrice: existing
@@ -277,7 +277,7 @@ export class InternalCatalogController {
       const productIds: string[] = [];
       for (const productName of promo.productNames) {
         const product = await this.productRepository.upsertByName(
-          userId,
+          tenantId,
           productName,
           { basePrice: 0 },
         );
@@ -285,7 +285,7 @@ export class InternalCatalogController {
       }
 
       const createdPromo = await this.promotionRepository.create({
-        userId,
+        tenantId,
         name: promo.name,
         description: promo.description,
         specialPrice: promo.specialPrice,

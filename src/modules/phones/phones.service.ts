@@ -20,10 +20,10 @@ export class PhonesService {
   buildPhoneData(
     dto: CreatePhoneDto,
     evolutionData: CreateInstanceResponseDto,
-    userId: string,
+    tenantId: string,
   ) {
     return {
-      userId,
+      tenantId,
       instanceName: dto.instanceName,
       // Use instanceName for webhook matching (Evolution sends instanceName in webhooks)
       evolutionInstanceId:

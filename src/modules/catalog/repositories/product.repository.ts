@@ -5,29 +5,29 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class ProductRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string) {
+  async findByTenantId(tenantId: string) {
     return this.prisma.product.findMany({
-      where: { userId },
+      where: { tenantId },
       include: { discounts: true },
       orderBy: { name: 'asc' },
     });
   }
 
-  async findByUserIdAndName(userId: string, name: string) {
+  async findByTenantIdAndName(tenantId: string, name: string) {
     return this.prisma.product.findUnique({
-      where: { userId_name: { userId, name } },
+      where: { tenantId_name: { tenantId, name } },
     });
   }
 
   async upsertByName(
-    userId: string,
+    tenantId: string,
     name: string,
     data: { basePrice: number; description?: string },
   ) {
     return this.prisma.product.upsert({
-      where: { userId_name: { userId, name } },
+      where: { tenantId_name: { tenantId, name } },
       create: {
-        userId,
+        tenantId,
         name,
         basePrice: data.basePrice,
         description: data.description,

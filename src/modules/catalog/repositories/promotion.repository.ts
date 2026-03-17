@@ -5,9 +5,9 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class PromotionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string) {
+  async findByTenantId(tenantId: string) {
     return this.prisma.promotion.findMany({
-      where: { userId },
+      where: { tenantId },
       include: {
         promotionProducts: { include: { product: true } },
         promotionDiscounts: { include: { client: true } },
@@ -29,7 +29,7 @@ export class PromotionRepository {
   }
 
   async create(data: {
-    userId: string;
+    tenantId: string;
     name?: string;
     description?: string;
     specialPrice: number;
@@ -37,7 +37,7 @@ export class PromotionRepository {
   }) {
     return this.prisma.promotion.create({
       data: {
-        userId: data.userId,
+        tenantId: data.tenantId,
         name: data.name,
         description: data.description,
         specialPrice: data.specialPrice,
