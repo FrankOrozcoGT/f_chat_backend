@@ -17,13 +17,14 @@ import { RedisModule } from '@common/redis/redis.module';
 import { AiModule } from '@modules/ai/ai.module';
 import { HitlModule } from '@modules/hitl/hitl.module';
 import { AdminModule } from '@modules/admin/admin.module';
-import { UserSettingsModule } from '@modules/user-settings/user-settings.module';
+import { TenantSettingsModule } from '@modules/tenant-settings/tenant-settings.module';
 import { CatalogModule } from '@modules/catalog/catalog.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 import { QueueModule } from '@common/queue/queue.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
 import { ContactsModule } from '@modules/contacts/contacts.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
+import { TenantsModule } from '@modules/tenants/tenants.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     LangSmithModule,
     RedisModule,
     UsersModule,
+    TenantsModule,
     AuthModule,
     HealthModule,
     PhonesModule,
@@ -49,7 +51,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     AiModule,
     HitlModule,
     AdminModule,
-    UserSettingsModule,
+    TenantSettingsModule,
     CatalogModule,
     ConversationAnalysisModule,
     ContactsModule,

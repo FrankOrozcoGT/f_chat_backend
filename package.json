@@ -51,6 +51,7 @@
     "passport-jwt": "^4.0.1",
     "pg": "^8.18.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.9.4",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
     "ws": "^8.19.0"
@@ -96,12 +97,21 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": ["@swc/jest", {
-        "jsc": {
-          "parser": { "syntax": "typescript", "decorators": true },
-          "transform": { "legacyDecorator": true, "decoratorMetadata": true }
+      "^.+\\.(t|j)s$": [
+        "@swc/jest",
+        {
+          "jsc": {
+            "parser": {
+              "syntax": "typescript",
+              "decorators": true
+            },
+            "transform": {
+              "legacyDecorator": true,
+              "decoratorMetadata": true
+            }
+          }
         }
-      }]
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
