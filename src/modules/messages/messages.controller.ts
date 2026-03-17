@@ -46,10 +46,10 @@ export class MessagesController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async findAll(@Query('conversationId') conversationId: string, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     this.logger.log(
-      `GET /api/messages - userId: ${userId}, conversationId: ${conversationId}`,
+      `GET /api/messages - tenantId: ${tenantId}, conversationId: ${conversationId}`,
     );
 
     // 1. Validar que conversationId existe
@@ -67,7 +67,7 @@ export class MessagesController {
     }
 
     // 3. Validar permisos
-    this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
+    this.messagesService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     // 4. Messages ya vienen en la query
     let messages = conversation.messages;
@@ -145,7 +145,7 @@ export class MessagesController {
         this.logger.log(`[fallback] lidToClientMap: ${lidToClientMap.size} entries`);
       }
 
-      this.bootstrapConversationInBackground(conversation, rawMessages, userId, isGroup ? lidToClientMap : undefined);
+      this.bootstrapConversationInBackground(conversation, rawMessages, tenantId, isGroup ? lidToClientMap : undefined);
 
       return rawMessages
         .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0))
@@ -208,10 +208,10 @@ export class MessagesController {
   @Post('send')
   @UseGuards(JwtAuthGuard)
   async send(@Body() dto: CreateMessageDto, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     this.logger.log(
-      `POST /api/messages/send - userId: ${userId}, conversationId: ${dto.conversationId}`,
+      `POST /api/messages/send - tenantId: ${tenantId}, conversationId: ${dto.conversationId}`,
     );
 
     // 1. Validar contenido del mensaje
@@ -229,7 +229,7 @@ export class MessagesController {
     }
 
     // Validar permisos
-    this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
+    this.messagesService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     // Validar que la conversación esté en modo HITL
     if (conversation.mode !== 'HITL') {
@@ -303,7 +303,7 @@ export class MessagesController {
       );
       const { message } = await this.messageRepository.sendMessageTransaction(
         dto.conversationId,
-        userId,
+        tenantId,
         messageData,
         { lastMessageAt: new Date(), lastMessagePreview: dto.contenido.substring(0, 100) },
       );
@@ -313,7 +313,7 @@ export class MessagesController {
       this.websocketGateway.emit(
         'message:error',
         { conversationId: dto.conversationId, error: 'Failed to send message via WhatsApp' },
-        userId,
+        tenantId,
       );
       throw error;
     }
@@ -360,10 +360,10 @@ export class MessagesController {
     @Body() dto: SendWithFileDto,
     @Req() req,
   ) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     this.logger.log(
-      `POST /api/messages/send-with-file - userId: ${userId}, conversationId: ${dto.conversationId}`,
+      `POST /api/messages/send-with-file - tenantId: ${tenantId}, conversationId: ${dto.conversationId}`,
     );
 
     // 1. Validar que file exista
@@ -393,7 +393,7 @@ export class MessagesController {
     }
 
     // Validar permisos
-    this.messagesService.checkUserOwnsConversation(conversation, conversation.phone, userId);
+    this.messagesService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     // Validar que la conversación esté en modo HITL
     if (conversation.mode !== 'HITL') {
@@ -419,7 +419,7 @@ export class MessagesController {
     try {
       const result = await this.fileStorageService.saveUploadedFile(
         file,
-        userId,
+        tenantId,
         dto.conversationId,
         messageId,
       );
@@ -465,7 +465,7 @@ export class MessagesController {
       );
       const { message } = await this.messageRepository.sendMessageTransaction(
         dto.conversationId,
-        userId,
+        tenantId,
         messageData,
         { lastMessageAt: new Date(), lastMessagePreview: (dto.contenido || fileName).substring(0, 100) },
         messageId,
@@ -476,7 +476,7 @@ export class MessagesController {
       this.websocketGateway.emit(
         'message:error',
         { conversationId: dto.conversationId, error: 'Failed to send message via WhatsApp' },
-        userId,
+        tenantId,
       );
       throw error;
     }
@@ -485,7 +485,7 @@ export class MessagesController {
   private async bootstrapConversationInBackground(
     conversation: any,
     rawMessages: any[],
-    userId: string,
+    tenantId: string,
     lidToClientMap?: Map<string, { phoneNumber: string; name: string | null; profilePicUrl: string | null }>,
   ) {
     try {
@@ -514,7 +514,7 @@ export class MessagesController {
             mediaData = await this.fileStorageService.downloadAndSaveMediaFromEvolution(
               this.evolutionService,
               conversation.phone.evolutionInstanceId,
-              userId,
+              tenantId,
               conversation.id,
               m.key.id,
               m.key,
@@ -522,7 +522,7 @@ export class MessagesController {
             this.websocketGateway.emit(
               'message:media_ready',
               { keyId: m.key.id, conversationId: conversation.id, mediaUrl: mediaData.relativePath },
-              userId,
+              tenantId,
             );
           } catch (err) {
             this.logger.warn(`Failed to download media for keyId ${m.key.id}: ${err.message}`);

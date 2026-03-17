@@ -22,12 +22,12 @@ export class MessagesService {
    * @param userId - ID del usuario autenticado
    * @throws ForbiddenException si el usuario no es dueño
    */
-  checkUserOwnsConversation(
+  checkTenantOwnsConversation(
     conversation: Conversation,
     phone: Phone,
-    userId: string,
+    tenantId: string,
   ): void {
-    if (phone.userId !== userId) {
+    if (phone.tenantId !== tenantId) {
       throw new ForbiddenException(
         'You do not have permission to access this conversation',
       );

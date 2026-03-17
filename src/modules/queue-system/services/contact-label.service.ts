@@ -11,10 +11,10 @@ export interface ResolvedContact {
 export class ContactLabelService {
   constructor(private readonly contactLabelRepo: ContactLabelRepository) {}
 
-  async resolve(userId: string, label: string): Promise<ResolvedContact> {
-    const contactLabel = await this.contactLabelRepo.findByUserIdAndLabel(userId, label);
+  async resolve(tenantId: string, label: string): Promise<ResolvedContact> {
+    const contactLabel = await this.contactLabelRepo.findByTenantIdAndLabel(tenantId, label);
     if (!contactLabel) {
-      throw new NotFoundException(`ContactLabel "${label}" not found for user ${userId}`);
+      throw new NotFoundException(`ContactLabel "${label}" not found for user ${tenantId}`);
     }
 
     if (contactLabel.groupJid) {

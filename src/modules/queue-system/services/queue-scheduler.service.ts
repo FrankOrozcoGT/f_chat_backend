@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
-import { UserSettingsRepository } from '@modules/user-settings/repositories/user-settings.repository';
+import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { UserQueueManager } from './user-queue-manager.service';
 
 export interface DaySchedule {
@@ -17,25 +17,25 @@ export class QueueSchedulerService implements OnModuleInit {
 
   constructor(
     private readonly schedulerRegistry: SchedulerRegistry,
-    private readonly userSettingsRepo: UserSettingsRepository,
+    private readonly tenantSettingsRepo: TenantSettingsRepository,
     private readonly userQueueManager: UserQueueManager,
   ) {}
 
   async onModuleInit() {
-    const allSettings = await this.userSettingsRepo.findAll();
+    const allSettings = await this.tenantSettingsRepo.findAll();
     for (const settings of allSettings) {
       const schedule = settings.workSchedule as unknown as WorkSchedule;
-      this.registerCronsForUser(settings.userId, schedule);
+      this.registerCronsForUser(settings.tenantId, schedule);
     }
-    this.logger.log(`Registered crons for ${allSettings.length} users`);
+    this.logger.log(`Registered crons for ${allSettings.length} tenants`);
   }
 
   /**
-   * Registers pause/resume cron jobs for a user based on their workSchedule.
-   * Call this on init and whenever the user updates their settings.
+   * Registers pause/resume cron jobs for a tenant based on their workSchedule.
+   * Call this on init and whenever the tenant updates their settings.
    */
-  registerCronsForUser(userId: string, schedule: WorkSchedule) {
-    this.clearCronsForUser(userId);
+  registerCronsForUser(tenantId: string, schedule: WorkSchedule) {
+    this.clearCronsForUser(tenantId);
 
     // Group days by same start/end hours to minimize cron jobs
     const resumeGroups = new Map<number, number[]>(); // startHour → [days]
@@ -56,11 +56,11 @@ export class QueueSchedulerService implements OnModuleInit {
     // Create resume crons
     let cronIndex = 0;
     for (const [hour, days] of resumeGroups) {
-      const cronName = `queue-resume-${userId}-${cronIndex}`;
+      const cronName = `queue-resume-${tenantId}-${cronIndex}`;
       const cronExpr = `0 ${hour} * * ${days.join(',')}`;
       const job = new CronJob(cronExpr, async () => {
-        await this.userQueueManager.resumeUser(userId);
-        this.logger.log(`[cron] Resumed queue for user ${userId}`);
+        await this.userQueueManager.resumeUser(tenantId);
+        this.logger.log(`[cron] Resumed queue for tenant ${tenantId}`);
       });
       this.schedulerRegistry.addCronJob(cronName, job);
       job.start();
@@ -69,11 +69,11 @@ export class QueueSchedulerService implements OnModuleInit {
 
     // Create pause crons
     for (const [hour, days] of pauseGroups) {
-      const cronName = `queue-pause-${userId}-${cronIndex}`;
+      const cronName = `queue-pause-${tenantId}-${cronIndex}`;
       const cronExpr = `0 ${hour} * * ${days.join(',')}`;
       const job = new CronJob(cronExpr, async () => {
-        await this.userQueueManager.pauseUser(userId);
-        this.logger.log(`[cron] Paused queue for user ${userId}`);
+        await this.userQueueManager.pauseUser(tenantId);
+        this.logger.log(`[cron] Paused queue for tenant ${tenantId}`);
       });
       this.schedulerRegistry.addCronJob(cronName, job);
       job.start();
@@ -87,18 +87,18 @@ export class QueueSchedulerService implements OnModuleInit {
     const todaySchedule = schedule[currentDay];
 
     if (!todaySchedule || currentHour < todaySchedule.start || currentHour >= todaySchedule.end) {
-      this.userQueueManager.pauseUser(userId).catch((err) =>
-        this.logger.warn(`Failed initial pause for user ${userId}: ${err.message}`),
+      this.userQueueManager.pauseUser(tenantId).catch((err) =>
+        this.logger.warn(`Failed initial pause for tenant ${tenantId}: ${err.message}`),
       );
     }
 
-    this.logger.log(`Registered ${cronIndex} crons for user ${userId}`);
+    this.logger.log(`Registered ${cronIndex} crons for tenant ${tenantId}`);
   }
 
-  clearCronsForUser(userId: string) {
+  clearCronsForUser(tenantId: string) {
     const allCrons = this.schedulerRegistry.getCronJobs();
     for (const [name] of allCrons) {
-      if (name.startsWith(`queue-resume-${userId}-`) || name.startsWith(`queue-pause-${userId}-`)) {
+      if (name.startsWith(`queue-resume-${tenantId}-`) || name.startsWith(`queue-pause-${tenantId}-`)) {
         this.schedulerRegistry.deleteCronJob(name);
       }
     }

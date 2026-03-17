@@ -5,9 +5,9 @@ import { Conversation, Phone } from '@prisma/client';
 export class HitlService {
   validateCanTakeControl(
     conversation: Conversation & { phone: Phone },
-    userId: string,
+    tenantId: string,
   ) {
-    if (conversation.phone.userId !== userId) {
+    if (conversation.phone.tenantId !== tenantId) {
       throw new BadRequestException('You do not own this conversation');
     }
     if (conversation.mode === 'HITL') {
@@ -17,9 +17,9 @@ export class HitlService {
 
   validateCanReturnToAi(
     conversation: Conversation & { phone: Phone },
-    userId: string,
+    tenantId: string,
   ) {
-    if (conversation.phone.userId !== userId) {
+    if (conversation.phone.tenantId !== tenantId) {
       throw new BadRequestException('You do not own this conversation');
     }
     if (conversation.mode === 'AI') {

@@ -24,13 +24,13 @@ export class ContactsController {
       throw new BadRequestException('Search query must be at least 2 characters');
     }
 
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
     const trimmed = search.trim();
 
-    this.logger.log(`GET /api/contacts?search=${trimmed} - userId: ${userId}`);
+    this.logger.log(`GET /api/contacts?search=${trimmed} - tenantId: ${tenantId}`);
 
-    const clients = await this.contactRepository.searchWithConversations(userId, trimmed);
+    const clients = await this.contactRepository.searchWithConversations(tenantId, trimmed);
 
-    return clients.map((client) => new ContactSearchResponseDto(client));
+    return clients.map((client) => new ContactSearchResponseDto(client as any));
   }
 }

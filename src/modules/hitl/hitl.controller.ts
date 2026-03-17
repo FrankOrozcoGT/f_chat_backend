@@ -33,7 +33,7 @@ export class HitlController {
   @Post('take-control')
   @UseGuards(JwtAuthGuard)
   async takeControl(@Body() dto: TakeControlDto, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     const conversation =
       await this.conversationRepository.findByIdWithRelations(
@@ -45,17 +45,17 @@ export class HitlController {
       );
     }
 
-    this.hitlService.validateCanTakeControl(conversation, userId);
+    this.hitlService.validateCanTakeControl(conversation, tenantId);
 
     await this.sessionLifecycle.switchToHitl({
       conversationId: dto.conversationId,
       reason: 'manual_takeover',
-      userId,
+      tenantId: req.user.tenantId,
       extras: { userName: req.user.name },
     });
 
     this.logger.log(
-      `User ${userId} took control of conversation ${dto.conversationId}`,
+      `User ${req.user.id} took control of conversation ${dto.conversationId}`,
     );
 
     return { message: 'Control taken successfully' };
@@ -64,7 +64,7 @@ export class HitlController {
   @Post('return-to-ai')
   @UseGuards(JwtAuthGuard)
   async returnToAi(@Body() dto: ReturnToAiDto, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     const conversation =
       await this.conversationRepository.findByIdWithRelations(
@@ -76,11 +76,11 @@ export class HitlController {
       );
     }
 
-    this.hitlService.validateCanReturnToAi(conversation, userId);
+    this.hitlService.validateCanReturnToAi(conversation, tenantId);
 
     await this.sessionLifecycle.returnToAi({
       conversationId: dto.conversationId,
-      userId,
+      tenantId: req.user.tenantId,
     });
 
     // Verificar si el último mensaje es del cliente para re-trigger AI
@@ -105,7 +105,7 @@ export class HitlController {
             conversationId: conversation.id,
             instanceName: phone.evolutionInstanceId,
             clientPhone: conversation.client.phoneNumber,
-            userId: phone.userId,
+            tenantId: phone.tenantId,
             messageType: lastMessage.type,
             content: lastMessage.content,
             mediaRelativePath: lastMessage.mediaUrl || null,
@@ -121,7 +121,7 @@ export class HitlController {
     }
 
     this.logger.log(
-      `User ${userId} returned conversation ${dto.conversationId} to AI`,
+      `User ${req.user.id} returned conversation ${dto.conversationId} to AI`,
     );
 
     return { message: 'Returned to AI successfully' };

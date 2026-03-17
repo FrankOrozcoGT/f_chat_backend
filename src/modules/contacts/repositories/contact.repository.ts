@@ -5,13 +5,13 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class ContactRepository {
   constructor(private prisma: PrismaService) {}
 
-  async searchWithConversations(userId: string, search: string) {
+  async searchWithConversations(tenantId: string, search: string) {
     return this.prisma.client.findMany({
       where: {
         participations: {
           some: {
             conversation: {
-              phone: { userId },
+              phone: { tenantId },
             },
           },
         },
@@ -27,7 +27,7 @@ export class ContactRepository {
         participations: {
           where: {
             conversation: {
-              phone: { userId },
+              phone: { tenantId },
             },
           },
           select: {

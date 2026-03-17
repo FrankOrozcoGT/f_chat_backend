@@ -5,16 +5,16 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class ContactLabelRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string) {
+  async findByTenantId(tenantId: string) {
     return this.prisma.contactLabel.findMany({
-      where: { userId },
+      where: { tenantId },
       include: { client: true },
     });
   }
 
-  async findByUserIdAndLabel(userId: string, label: string) {
+  async findByTenantIdAndLabel(tenantId: string, label: string) {
     return this.prisma.contactLabel.findUnique({
-      where: { userId_label: { userId, label } },
+      where: { tenantId_label: { tenantId, label } },
       include: { client: true },
     });
   }
@@ -26,10 +26,10 @@ export class ContactLabelRepository {
     });
   }
 
-  async upsert(userId: string, label: string, data: { clientId?: string; groupJid?: string }) {
+  async upsert(tenantId: string, label: string, data: { clientId?: string; groupJid?: string }) {
     return this.prisma.contactLabel.upsert({
-      where: { userId_label: { userId, label } },
-      create: { userId, label, ...data },
+      where: { tenantId_label: { tenantId, label } },
+      create: { tenantId, label, ...data },
       update: data,
       include: { client: true },
     });
