@@ -116,18 +116,14 @@ export class TenantsController {
     const tenant = await this.tenantRepository.findById(id);
     if (!tenant) throw new NotFoundException('Tenant not found');
 
+    // Verificar si ya es miembro (registrado o no, primero chequear)
     const targetUser = await this.userRepository.findByEmail(dto.email);
-
-    // Usuario ya registrado → agregar directamente
     if (targetUser) {
       const existing = await this.tenantRepository.findMember(id, targetUser.id);
       if (existing) throw new BadRequestException('User is already a member of this tenant');
-
-      const member = await this.tenantRepository.addMember(id, targetUser.id, dto.role);
-      return { type: 'added', memberId: member.id, userId: member.userId, role: member.role };
     }
 
-    // Usuario no registrado → crear/reutilizar invitación y enviar email
+    // Siempre usar invitación + email
     const existingInvitation = await this.invitationRepository.findPendingByEmail(id, dto.email);
     if (existingInvitation) {
       throw new BadRequestException('There is already a pending invitation for this email');
