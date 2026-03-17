@@ -32,6 +32,7 @@ export class InvitationRepository {
         tenantId,
         email,
         acceptedAt: null,
+        rejectedAt: null,
         expiresAt: { gt: new Date() },
       },
     });
@@ -41,6 +42,34 @@ export class InvitationRepository {
     await this.prisma.invitation.update({
       where: { token },
       data: { acceptedAt: new Date() },
+    });
+  }
+
+  async findPendingByUserEmail(email: string): Promise<(Invitation & { tenant: { id: string; name: string } })[]> {
+    return this.prisma.invitation.findMany({
+      where: {
+        email,
+        acceptedAt: null,
+        rejectedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: { tenant: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findById(id: string): Promise<Invitation | null> {
+    return this.prisma.invitation.findUnique({ where: { id } });
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.prisma.invitation.delete({ where: { id } });
+  }
+
+  async markRejected(token: string): Promise<void> {
+    await this.prisma.invitation.update({
+      where: { token },
+      data: { rejectedAt: new Date() },
     });
   }
 }

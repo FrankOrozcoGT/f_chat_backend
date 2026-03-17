@@ -87,10 +87,11 @@ model Invitation {
   tenantId  String
   email     String
   role      TenantRole @default(user)
-  token     String     @unique @default(uuid())
-  expiresAt DateTime
+  token      String     @unique @default(uuid())
+  expiresAt  DateTime
   acceptedAt DateTime?
-  createdAt DateTime   @default(now())
+  rejectedAt DateTime?
+  createdAt  DateTime   @default(now())
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])

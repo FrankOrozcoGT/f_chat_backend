@@ -153,6 +153,39 @@ export class TenantsController {
     return { type: 'invited', email: dto.email, role: dto.role };
   }
 
+  @Delete(':id/invitations/:invitationId')
+  @UseGuards(TenantRolesGuard)
+  @TenantRoles(TenantRole.owner)
+  async cancelInvitation(
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+
+    const invitation = await this.invitationRepository.findById(invitationId);
+    if (!invitation) throw new NotFoundException('Invitation not found');
+    if (invitation.tenantId !== id) throw new ForbiddenException('Invitation does not belong to this tenant');
+    if (invitation.acceptedAt) throw new BadRequestException('Cannot cancel an already accepted invitation');
+
+    await this.invitationRepository.deleteById(invitationId);
+    return { message: 'Invitation cancelled' };
+  }
+
+  @Get('invitations/pending')
+  @UseGuards(JwtAuthGuard)
+  async getPendingInvitations(@CurrentUser() user: AuthenticatedUser) {
+    const invitations = await this.invitationRepository.findPendingByUserEmail(user.email);
+    return invitations.map((inv) => ({
+      id: inv.id,
+      token: inv.token,
+      role: inv.role,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt,
+      tenant: inv.tenant,
+    }));
+  }
+
   @Post('invitations/accept/:token')
   @UseGuards(JwtAuthGuard)
   async acceptInvitation(
@@ -163,6 +196,7 @@ export class TenantsController {
 
     if (!invitation) throw new NotFoundException('Invitation not found');
     if (invitation.acceptedAt) throw new BadRequestException('Invitation already accepted');
+    if (invitation.rejectedAt) throw new BadRequestException('Invitation already rejected');
     if (invitation.expiresAt < new Date()) throw new BadRequestException('Invitation has expired');
     if (invitation.email !== user.email) {
       throw new UnauthorizedException('This invitation is for a different email');
@@ -175,6 +209,26 @@ export class TenantsController {
     await this.invitationRepository.markAccepted(token);
 
     return { tenantId: invitation.tenantId, role: invitation.role };
+  }
+
+  @Post('invitations/reject/:token')
+  @UseGuards(JwtAuthGuard)
+  async rejectInvitation(
+    @Param('token') token: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const invitation = await this.invitationRepository.findByToken(token);
+
+    if (!invitation) throw new NotFoundException('Invitation not found');
+    if (invitation.acceptedAt) throw new BadRequestException('Invitation already accepted');
+    if (invitation.rejectedAt) throw new BadRequestException('Invitation already rejected');
+    if (invitation.expiresAt < new Date()) throw new BadRequestException('Invitation has expired');
+    if (invitation.email !== user.email) {
+      throw new UnauthorizedException('This invitation is for a different email');
+    }
+
+    await this.invitationRepository.markRejected(token);
+    return { message: 'Invitation rejected' };
   }
 
   @Patch(':id/members/:userId/role')
