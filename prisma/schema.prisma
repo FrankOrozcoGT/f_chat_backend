@@ -10,25 +10,91 @@ datasource db {
 }
 
 model User {
-  id                 String        @id @default(uuid())
-  email              String        @unique
-  name               String
-  picture            String?
-  plan               Plan          @default(free)
-  role               Role          @default(free)
-  whatsappLimit      Int           @default(1)
-  creditsLimit       Float         @default(0)
-  creditsUsed        Float         @default(0)
-  billingPeriodStart DateTime      @default(now())
-  lastLogin          DateTime?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  phones             Phone[]
-  settings           UserSettings?
-  products           Product[]
-  promotions         Promotion[]
-  shippingLocations  ShippingLocation[]
-  contactLabels      ContactLabel[]
+  id         String         @id @default(uuid())
+  email      String         @unique
+  name       String
+  picture    String?
+  systemRole SystemRole     @default(user)
+  lastLogin  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  tenants    TenantMember[]
+}
+
+enum SystemRole {
+  user
+  super_admin
+}
+
+model Tenant {
+  id                String             @id @default(uuid())
+  name              String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  members           TenantMember[]
+  invitations       Invitation[]
+  phones            Phone[]
+  flows             Flow[]
+  intents           Intent[]
+  products          Product[]
+  promotions        Promotion[]
+  shippingLocations ShippingLocation[]
+  contactLabels     ContactLabel[]
+  templates         Template[]
+  settings          TenantSettings?
+}
+
+model TenantSettings {
+  id                  String       @id @default(uuid())
+  tenantId            String       @unique
+  plan                Plan         @default(free)
+  whatsappLimit       Int          @default(1)
+  creditsLimit        Float        @default(0)
+  creditsUsed         Float        @default(0)
+  billingPeriodStart  DateTime     @default(now())
+  analysisMode        AnalysisMode @default(manual)
+  messageLimit        Int          @default(30)
+  defaultShippingCost Float        @default(0)
+  workSchedule        Json         @default("{\"1\":{\"start\":8,\"end\":18},\"2\":{\"start\":8,\"end\":18},\"3\":{\"start\":8,\"end\":18},\"4\":{\"start\":8,\"end\":18},\"5\":{\"start\":8,\"end\":18},\"6\":{\"start\":8,\"end\":12}}")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  tenant              Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum TenantRole {
+  owner
+  user
+  tecnico
+}
+
+model TenantMember {
+  id        String     @id @default(uuid())
+  tenantId  String
+  userId    String
+  role      TenantRole @default(user)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Invitation {
+  id        String     @id @default(uuid())
+  tenantId  String
+  email     String
+  role      TenantRole @default(user)
+  token     String     @unique @default(uuid())
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime   @default(now())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([token])
 }
 
 enum Plan {
@@ -36,17 +102,11 @@ enum Plan {
   full
 }
 
-enum Role {
-  free
-  full
-  admin
-}
-
 // WhatsApp Models
 
 model Phone {
   id                  String         @id @default(uuid())
-  userId              String
+  tenantId            String
   phoneNumber         String
   instanceName        String
   evolutionInstanceId String         @unique
@@ -55,10 +115,10 @@ model Phone {
   lastConnected       DateTime?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
-  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   conversations       Conversation[]
 
-  @@index([userId])
+  @@index([tenantId])
   @@index([evolutionInstanceId])
 }
 
@@ -169,19 +229,20 @@ model Message {
 // Nodes & Flows
 
 model Flow {
-  id           String        @id @default(uuid())
+  id           String           @id @default(uuid())
   name         String
   routerNodeId String
-  userId       String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  routerNode   Node              @relation("FlowRouter", fields: [routerNodeId], references: [id])
+  tenantId     String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  routerNode   Node             @relation("FlowRouter", fields: [routerNodeId], references: [id])
   nodes        FlowNode[]
   nodeSessions NodeSession[]
   intents      Intent[]
   transitions  FlowTransition[]
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([tenantId])
 }
 
 model Node {
@@ -252,14 +313,15 @@ model NodeSession {
 model Intent {
   id        String   @id @default(uuid())
   name      String
-  userId    String
+  tenantId  String
   flowId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   flow      Flow?    @relation(fields: [flowId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, name])
-  @@index([userId])
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 // AI & HITL Models
@@ -414,12 +476,13 @@ model Template {
   id        String   @id @default(uuid())
   code      String
   content   String
-  userId    String
+  tenantId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([code, userId])
-  @@index([userId])
+  @@unique([code, tenantId])
+  @@index([tenantId])
 }
 
 enum ApiType {
@@ -456,46 +519,35 @@ enum AnalysisMode {
   manual
 }
 
-model UserSettings {
-  id           String       @id @default(uuid())
-  userId       String       @unique
-  analysisMode        AnalysisMode @default(manual)
-  messageLimit        Int          @default(30)
-  defaultShippingCost Float        @default(0)
-  workSchedule        Json         @default("{\"1\":{\"start\":8,\"end\":18},\"2\":{\"start\":8,\"end\":18},\"3\":{\"start\":8,\"end\":18},\"4\":{\"start\":8,\"end\":18},\"5\":{\"start\":8,\"end\":18},\"6\":{\"start\":8,\"end\":12}}")
-  createdAt           DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
 
 model ShippingLocation {
-  id             String  @id @default(uuid())
-  userId         String
+  id             String   @id @default(uuid())
+  tenantId       String
   name           String
-  isFreeShipping Boolean @default(false)
-  shippingCost   Float   @default(0)
+  isFreeShipping Boolean  @default(false)
+  shippingCost   Float    @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, name])
-  @@index([userId])
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Product {
   id                String             @id @default(uuid())
-  userId            String
+  tenantId          String
   name              String
   basePrice         Float
   description       String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   discounts         Discount[]
   promotionProducts PromotionProduct[]
 
-  @@unique([userId, name])
-  @@index([userId])
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Discount {
@@ -515,17 +567,17 @@ model Discount {
 
 model Promotion {
   id                 String              @id @default(uuid())
-  userId             String
+  tenantId           String
   name               String?
   description        String?
   specialPrice       Float
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   promotionProducts  PromotionProduct[]
   promotionDiscounts PromotionDiscount[]
 
-  @@index([userId])
+  @@index([tenantId])
 }
 
 model PromotionProduct {
@@ -559,17 +611,17 @@ model PromotionDiscount {
 
 model ContactLabel {
   id        String   @id @default(uuid())
-  userId    String
+  tenantId  String
   label     String
   clientId  String?
   groupJid  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, label])
-  @@index([userId])
+  @@unique([tenantId, label])
+  @@index([tenantId])
 }
 
 model QueueRequest {
