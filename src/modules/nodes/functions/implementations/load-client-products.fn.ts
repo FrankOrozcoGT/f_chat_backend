@@ -39,7 +39,7 @@ Ubicación default del cliente: Guatemala ciudad`;
     const clientId = conversation.client?.id ?? null;
 
     const { products, promotions, shipping } = await this.internalApi.loadClientProducts(
-      ctx.userId,
+      ctx.tenantId,
       clientId,
     );
 

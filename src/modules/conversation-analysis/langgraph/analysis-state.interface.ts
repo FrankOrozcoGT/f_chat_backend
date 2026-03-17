@@ -46,7 +46,7 @@ export interface AnalysisWarning {
 export const AnalysisState = Annotation.Root({
   // Input
   conversationId: Annotation<string>,
-  userId: Annotation<string>,
+  tenantId: Annotation<string>,
   phoneId: Annotation<string>,
   clientId: Annotation<string | null>,
   messages: Annotation<AnalysisMessage[]>,

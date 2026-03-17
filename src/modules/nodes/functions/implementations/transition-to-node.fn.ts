@@ -85,7 +85,7 @@ export class TransitionToNodeFn {
       await this.sessionLifecycle.switchToHitl({
         conversationId: ctx.conversationId,
         reason: 'api_error',
-        userId: ctx.userId,
+        tenantId: ctx.tenantId,
         extras: {
           apiName: 'node:invalid_transition',
           errorMessage: `Transición "${transitionCode}" no configurada desde nodo ${currentNodeId}`,
@@ -109,7 +109,7 @@ export class TransitionToNodeFn {
       await this.sessionLifecycle.switchToHitl({
         conversationId: ctx.conversationId,
         reason: 'api_error',
-        userId: ctx.userId,
+        tenantId: ctx.tenantId,
         extras: {
           apiName: 'node:wrong_transition_origin',
           errorMessage: `Transición "${transitionCode}" no pertenece al nodo actual ${currentNodeId}`,

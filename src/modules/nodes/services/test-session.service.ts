@@ -16,7 +16,7 @@ export interface TestSession {
   flowId: string | null;
   clientPhone: string;
   instanceName: string;
-  userId: string;
+  tenantId: string;
   currentNodeId: string | null;
   steps: TestStep[];
   history: Array<{ role: string; content: string }>;
@@ -34,7 +34,7 @@ export class TestSessionService {
     flowId: string | null,
     clientPhone: string,
     instanceName: string,
-    userId: string,
+    tenantId: string,
   ): Promise<string> {
     const testId = uuidv4();
     const session: TestSession = {
@@ -43,7 +43,7 @@ export class TestSessionService {
       flowId,
       clientPhone,
       instanceName,
-      userId,
+      tenantId,
       currentNodeId: null,
       steps: [],
       history: [],

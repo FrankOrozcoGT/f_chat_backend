@@ -48,7 +48,7 @@ export class CheckPromotionsFn {
     const clientId = conversation.client?.id ?? null;
 
     const { promotions } = await this.internalApi.checkPromotions(
-      ctx.userId,
+      ctx.tenantId,
       clientId,
       productName,
     );

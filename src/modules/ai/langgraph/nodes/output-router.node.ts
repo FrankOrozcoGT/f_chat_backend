@@ -23,7 +23,7 @@ export class OutputRouterNode {
     const {
       preferredFormat,
       responseText,
-      userId,
+      tenantId,
       conversationId,
       messageId,
       apiCalls: existingApiCalls,
@@ -65,14 +65,14 @@ export class OutputRouterNode {
       const actualCredits = this.limitsService.calculateCreditsFromChars(
         responseText.length,
       );
-      await this.internalApi.incrementCreditsUsed(userId, actualCredits);
+      await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
 
       const { randomUUID } = await import('crypto');
       const responseMessageId = randomUUID();
 
       const savedFile = await this.fileStorageService.saveBuffer(
         ttsResult.audioBuffer,
-        userId,
+        tenantId,
         conversationId,
         responseMessageId,
         '.ogg',

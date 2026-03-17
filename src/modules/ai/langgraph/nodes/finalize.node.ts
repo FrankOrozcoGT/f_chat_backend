@@ -18,7 +18,7 @@ export class FinalizeNode {
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
     const {
       conversationId,
-      userId,
+      tenantId,
       clientPhone,
       apiCalls,
       totalCost,
@@ -40,7 +40,7 @@ export class FinalizeNode {
         await this.sessionLifecycle.switchToHitl({
           conversationId,
           reason: 'api_error',
-          userId,
+          tenantId,
           clientPhone,
           extras: { apiName: error.apiName, errorMessage: error.message },
         });
@@ -62,19 +62,19 @@ export class FinalizeNode {
     }
 
     // Verificar créditos
-    const user = await this.internalApi.getUser(userId);
+    const user = await this.internalApi.getUser(tenantId);
     if (user && user.creditsUsed > user.creditsLimit) {
       if (isTest) {
         sideEffects.push({ action: 'switchToHitl', args: { reason: 'credits_exhausted', creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit } });
         this.logger.warn(`FinalizeNode [TEST]: Credits exceeded → HITL registered`);
       } else {
         this.logger.warn(
-          `Credits exceeded after processing for user ${userId}, conversation ${conversationId}`,
+          `Credits exceeded after processing for user ${tenantId}, conversation ${conversationId}`,
         );
         await this.sessionLifecycle.switchToHitl({
           conversationId,
           reason: 'credits_exhausted',
-          userId,
+          tenantId,
           extras: { creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit },
         });
       }

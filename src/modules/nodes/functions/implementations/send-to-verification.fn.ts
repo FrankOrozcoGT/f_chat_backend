@@ -55,7 +55,7 @@ export class SendToVerificationFn {
       : `Comprobante de pago — ${clientName}\nMonto: Q${amount}`;
 
     await this.queueRequestService.enqueue({
-      userId: ctx.userId,
+      userId: ctx.tenantId,
       nodeSessionId: ctx.nodeSession.id,
       conversationId: ctx.conversationId,
       currentNodeId: ctx.nodeSession.currentNodeId!,

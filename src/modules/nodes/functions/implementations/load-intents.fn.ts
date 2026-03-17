@@ -14,7 +14,7 @@ export class LoadIntentsFn {
       'Lista de intenciones conocidas para este usuario. Usa estos nombres exactos al detectar la intención del cliente.',
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const intents = await this.intentRepo.findByUserId(ctx.userId);
+    const intents = await this.intentRepo.findByTenantId(ctx.tenantId);
 
     if (intents.length === 0) {
       return 'No hay intenciones configuradas.';

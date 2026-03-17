@@ -26,7 +26,7 @@ export class IntentRouterNode {
       messageId,
       messageType,
       imageUrl,
-      userId,
+      tenantId,
       instanceName,
       clientPhone,
       sessionStore,
@@ -69,7 +69,7 @@ export class IntentRouterNode {
     // Build NodeContext
     const ctx = new NodeContext();
     ctx.messageId = messageId;
-    ctx.userId = userId;
+    ctx.tenantId = tenantId;
     ctx.conversationId = conversationId;
     ctx.transcription = transcription;
     ctx.history = history;
@@ -117,7 +117,7 @@ export class IntentRouterNode {
         result.tokensInput,
         result.tokensOutput,
       );
-      await this.internalApi.incrementCreditsUsed(userId, actualCredits);
+      await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
 
       // Determine router action from termination tool
       let routerAction: 'responder' | 'closeSession' | 'findFlowForIntent' | null = null;

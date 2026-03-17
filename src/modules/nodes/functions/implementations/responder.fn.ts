@@ -77,7 +77,7 @@ export class ResponderFn {
 
     await this.internalApi.sendMessageTransaction(
       ctx.conversationId,
-      ctx.userId,
+      ctx.tenantId,
       messageData,
       {
         lastMessageAt: new Date(),

@@ -66,7 +66,7 @@ export class RegisterMissingProductFn {
 
     // 1. Registrar producto placeholder en catálogo
     await this.internalApi.registerMissingProduct(
-      ctx.userId,
+      ctx.tenantId,
       productName,
       clientId,
       notes,
@@ -74,7 +74,7 @@ export class RegisterMissingProductFn {
 
     // 2. Encolar consulta al supervisor para obtener precio
     await this.queueRequestService.enqueue({
-      userId: ctx.userId,
+      userId: ctx.tenantId,
       nodeSessionId: ctx.nodeSession.id,
       conversationId: ctx.conversationId,
       currentNodeId: ctx.node.id,

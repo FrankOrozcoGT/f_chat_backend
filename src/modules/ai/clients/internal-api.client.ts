@@ -52,7 +52,7 @@ export class InternalApiClient {
 
   async getConversation(
     conversationId: string,
-  ): Promise<{ id: string; phone: { userId: string } }> {
+  ): Promise<{ id: string; phone: { tenantId: string } }> {
     return this.request('GET', `/conversations/${conversationId}`);
   }
 
@@ -69,23 +69,22 @@ export class InternalApiClient {
     });
   }
 
-  // --- Users ---
+  // --- Tenant Settings (credits) ---
 
   async getUser(
-    userId: string,
+    tenantId: string,
   ): Promise<{
-    id: string;
     creditsUsed: number;
     creditsLimit: number;
-  }> {
-    return this.request('GET', `/users/${userId}`);
+  } | null> {
+    return this.request('GET', `/tenant-settings/${tenantId}`);
   }
 
   async incrementCreditsUsed(
-    userId: string,
+    tenantId: string,
     credits: number,
   ): Promise<void> {
-    await this.request('PATCH', `/users/${userId}/credits`, { credits });
+    await this.request('PATCH', `/tenant-settings/${tenantId}/credits`, { credits });
   }
 
   // --- Messages ---
@@ -130,7 +129,7 @@ export class InternalApiClient {
     phoneId: string;
     isActive: boolean;
     summary: string | null;
-    phone: { id: string; userId: string };
+    phone: { id: string; tenantId: string };
     client: { id: string; phoneNumber: string; name: string | null } | null;
     participants: { clientId: string }[];
   }> {
@@ -209,19 +208,19 @@ export class InternalApiClient {
     await this.request('PATCH', `/messages/clients/${clientId}/name`, { name });
   }
 
-  // --- User Settings ---
+  // --- Tenant Settings ---
 
-  async getUserSettings(userId: string): Promise<{
+  async getTenantSettings(tenantId: string): Promise<{
     analysisMode: string;
     messageLimit: number;
   }> {
-    return this.request('GET', `/user-settings/${userId}`);
+    return this.request('GET', `/tenant-settings/${tenantId}`);
   }
 
   // --- Catalog ---
 
   async upsertProduct(data: {
-    userId: string;
+    tenantId: string;
     name: string;
     basePrice: number;
     description?: string;
@@ -230,10 +229,10 @@ export class InternalApiClient {
   }
 
   async findProduct(
-    userId: string,
+    tenantId: string,
     name: string,
   ): Promise<{ id: string; name: string; basePrice: number } | null> {
-    return this.request('POST', '/catalog/products/find', { userId, name });
+    return this.request('POST', '/catalog/products/find', { tenantId, name });
   }
 
   async upsertDiscount(data: {
@@ -245,7 +244,7 @@ export class InternalApiClient {
   }
 
   async createPromotion(data: {
-    userId: string;
+    tenantId: string;
     name?: string;
     description?: string;
     specialPrice: number;
@@ -285,7 +284,7 @@ export class InternalApiClient {
   // --- Catalog: Nodo Identificación+Precio ---
 
   async loadClientProducts(
-    userId: string,
+    tenantId: string,
     clientId: string | null,
   ): Promise<{
     products: Array<{
@@ -312,11 +311,11 @@ export class InternalApiClient {
       defaultShippingCost: number;
     };
   }> {
-    return this.request('POST', '/catalog/load-client-products', { userId, clientId });
+    return this.request('POST', '/catalog/load-client-products', { tenantId, clientId });
   }
 
   async searchProduct(
-    userId: string,
+    tenantId: string,
     query: string,
   ): Promise<{
     matches: Array<{
@@ -326,11 +325,11 @@ export class InternalApiClient {
       description: string | null;
     }>;
   }> {
-    return this.request('POST', '/catalog/search-product', { userId, query });
+    return this.request('POST', '/catalog/search-product', { tenantId, query });
   }
 
   async checkPromotions(
-    userId: string,
+    tenantId: string,
     clientId: string | null,
     productName: string,
   ): Promise<{
@@ -341,11 +340,11 @@ export class InternalApiClient {
       specialPrice: number;
     }>;
   }> {
-    return this.request('POST', '/catalog/check-promotions', { userId, clientId, productName });
+    return this.request('POST', '/catalog/check-promotions', { tenantId, clientId, productName });
   }
 
   async calculateSale(
-    userId: string,
+    tenantId: string,
     items: Array<{ productName: string; unitPrice: number; quantity: number }>,
     location: string,
   ): Promise<{
@@ -353,7 +352,7 @@ export class InternalApiClient {
     shippingCost: number;
     total: number;
   }> {
-    return this.request('POST', '/catalog/calculate-sale', { userId, items, location });
+    return this.request('POST', '/catalog/calculate-sale', { tenantId, items, location });
   }
 
   async saveClientLocation(
@@ -364,13 +363,13 @@ export class InternalApiClient {
   }
 
   async registerMissingProduct(
-    userId: string,
+    tenantId: string,
     productName: string,
     clientId: string | null,
     notes: string,
   ): Promise<{ product: { id: string; name: string }; registered: boolean }> {
     return this.request('POST', '/catalog/register-missing-product', {
-      userId,
+      tenantId,
       productName,
       clientId,
       notes,
@@ -378,7 +377,7 @@ export class InternalApiClient {
   }
 
   async processAnalysisCatalog(data: {
-    userId: string;
+    tenantId: string;
     clientId: string | null;
     products: Array<{
       name: string;

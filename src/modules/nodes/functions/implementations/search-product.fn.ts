@@ -59,7 +59,7 @@ export class SearchProductFn {
       return matches.map((p) => `- ${p.name}: Q${p.price} — ${p.description}`).join('\n');
     }
 
-    const { matches } = await this.internalApi.searchProduct(ctx.userId, query);
+    const { matches } = await this.internalApi.searchProduct(ctx.tenantId, query);
 
     if (matches.length === 0) {
       return `No se encontraron productos que coincidan con "${query}".`;

@@ -11,12 +11,12 @@ export class ConversationsService {
    * @param userId - ID del usuario autenticado
    * @throws ForbiddenException si el usuario no es dueño
    */
-  checkUserOwnsConversation(
+  checkTenantOwnsConversation(
     conversation: { id: string; phoneId: string },
     phone: Phone,
-    userId: string,
+    tenantId: string,
   ): void {
-    if (phone.userId !== userId) {
+    if (phone.tenantId !== tenantId) {
       throw new ForbiddenException(
         'You do not have permission to access this conversation',
       );

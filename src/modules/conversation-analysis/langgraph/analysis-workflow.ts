@@ -10,7 +10,7 @@ import { AnalysisNode } from './nodes/analysis.node';
 
 export interface AnalysisWorkflowInput {
   conversationId: string;
-  userId: string;
+  tenantId: string;
   phoneId: string;
   clientId: string | null;
   messages: AnalysisMessage[];
@@ -46,7 +46,7 @@ export class AnalysisWorkflow {
   async execute(input: AnalysisWorkflowInput): Promise<AnalysisStateType> {
     const initialState: Partial<AnalysisStateType> = {
       conversationId: input.conversationId,
-      userId: input.userId,
+      tenantId: input.tenantId,
       phoneId: input.phoneId,
       clientId: input.clientId,
       messages: input.messages,

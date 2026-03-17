@@ -26,7 +26,7 @@ export class SwitchToHitlFn {
     await this.sessionLifecycle.switchToHitl({
       conversationId: ctx.conversationId,
       reason: 'client_request',
-      userId: ctx.userId,
+      tenantId: ctx.tenantId,
     });
 
     this.logger.log(

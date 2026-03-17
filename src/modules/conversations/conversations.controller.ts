@@ -40,10 +40,10 @@ export class ConversationsController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
   ) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     this.logger.log(
-      `GET /api/conversations - userId: ${userId}, phoneId: ${phoneId || 'all'}, page: ${page}, search: ${search || 'none'}`,
+      `GET /api/conversations - tenantId: ${tenantId}, phoneId: ${phoneId || 'all'}, page: ${page}, search: ${search || 'none'}`,
     );
 
     const options = {
@@ -57,8 +57,8 @@ export class ConversationsController {
       total,
       page: currentPage,
       limit: currentLimit,
-    } = await this.conversationRepository.findByUserIdAndPhone(
-      userId,
+    } = await this.conversationRepository.findByTenantIdAndPhone(
+      tenantId,
       phoneId,
       options,
     );
@@ -77,7 +77,7 @@ export class ConversationsController {
 
     // Sin conversaciones en DB — el sync viene via webhook contacts.upsert
     this.logger.log(
-      `No conversations in DB for userId=${userId}, sync pending via webhook`,
+      `No conversations in DB for tenantId=${tenantId}, sync pending via webhook`,
     );
     return {
       data: [],
@@ -91,10 +91,10 @@ export class ConversationsController {
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getDetail(@Param('id') id: string, @Req() req) {
-    const userId = req.user.id;
+    const tenantId = req.user.tenantId;
 
     this.logger.log(
-      `GET /api/conversations/:id - userId: ${userId}, conversationId: ${id}`,
+      `GET /api/conversations/:id - tenantId: ${tenantId}, conversationId: ${id}`,
     );
 
     // 1. Obtener conversación con relaciones (phone + participants → client)
@@ -104,10 +104,10 @@ export class ConversationsController {
     }
 
     // 2. Validar permisos (Service - lógica pura)
-    this.conversationsService.checkUserOwnsConversation(
+    this.conversationsService.checkTenantOwnsConversation(
       conversation,
       conversation.phone,
-      userId,
+      tenantId,
     );
 
     // 3. Datos del cliente
@@ -116,7 +116,7 @@ export class ConversationsController {
     // 4. Cargar en paralelo: productos, descuentos, promociones, sub-conversaciones analizadas
     const [products, clientDiscounts, clientPromotionDiscounts, analyzedConversations] =
       await Promise.all([
-        this.productRepository.findByUserId(userId),
+        this.productRepository.findByTenantId(tenantId),
         clientId
           ? this.discountRepository.findByClientId(clientId)
           : Promise.resolve([]),
@@ -132,7 +132,7 @@ export class ConversationsController {
       ]);
 
     // 5. Obtener promociones del usuario
-    const promotions = await this.promotionRepository.findByUserId(userId);
+    const promotions = await this.promotionRepository.findByTenantId(tenantId);
 
     this.logger.log(`Conversation detail retrieved successfully for id: ${id}`);
 

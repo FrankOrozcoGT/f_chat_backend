@@ -90,7 +90,7 @@ export class AiWorkflow {
       conversationId: payload.conversationId,
       instanceName: payload.instanceName,
       clientPhone: payload.clientPhone,
-      userId: payload.userId,
+      tenantId: payload.tenantId,
       messageType: payload.messageType,
       content: payload.content,
       mediaRelativePath: payload.mediaRelativePath,

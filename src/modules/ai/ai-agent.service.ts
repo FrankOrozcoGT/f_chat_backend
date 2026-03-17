@@ -12,7 +12,7 @@ export interface IncomingMessageEvent {
   conversationId: string;
   instanceName: string;
   clientPhone: string;
-  userId: string;
+  tenantId: string;
   messageType: MessageType;
   content: string | null;
   mediaRelativePath: string | null;
@@ -45,7 +45,7 @@ export class AiAgentService {
           : this.limitsService.calculateCreditsFromTokens(500);
 
       await this.limitsService.validateCredits(
-        payload.userId,
+        payload.tenantId,
         estimatedCredits,
       );
 
@@ -72,15 +72,15 @@ export class AiAgentService {
         error.message.includes('Credits limit reached')
       ) {
         this.logger.warn(
-          `Credits exhausted for user ${payload.userId}, conversation ${payload.conversationId}`,
+          `Credits exhausted for user ${payload.tenantId}, conversation ${payload.conversationId}`,
         );
 
-        const user = await this.internalApi.getUser(payload.userId);
+        const user = await this.internalApi.getUser(payload.tenantId);
 
         await this.sessionLifecycle.switchToHitl({
           conversationId: payload.conversationId,
           reason: 'credits_exhausted',
-          userId: payload.userId,
+          tenantId: payload.tenantId,
           extras: user
             ? { creditsUsed: user.creditsUsed, creditsLimit: user.creditsLimit }
             : undefined,

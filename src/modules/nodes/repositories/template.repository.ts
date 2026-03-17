@@ -7,24 +7,24 @@ const DEFAULT_FAREWELL = 'Â¡Gracias por contactarnos! Que tengas un excelente dÃ
 export class TemplateRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByCode(code: string, userId: string): Promise<string> {
+  async findByCode(code: string, tenantId: string): Promise<string> {
     const template = await this.prisma.template.findUnique({
-      where: { code_userId: { code, userId } },
+      where: { code_tenantId: { code, tenantId } },
     });
     if (code === 'farewell') {
       return template?.content ?? DEFAULT_FAREWELL;
     }
     if (!template) {
-      throw new Error(`Template '${code}' not found for user ${userId}`);
+      throw new Error(`Template '${code}' not found for tenant ${tenantId}`);
     }
     return template.content;
   }
 
-  async upsert(code: string, userId: string, content: string) {
+  async upsert(code: string, tenantId: string, content: string) {
     return this.prisma.template.upsert({
-      where: { code_userId: { code, userId } },
+      where: { code_tenantId: { code, tenantId } },
       update: { content },
-      create: { code, userId, content },
+      create: { code, tenantId, content },
     });
   }
 }

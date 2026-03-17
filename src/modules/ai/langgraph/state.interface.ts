@@ -10,7 +10,7 @@ export const WorkflowState = Annotation.Root({
   conversationId: Annotation<string>,
   instanceName: Annotation<string>,
   clientPhone: Annotation<string>,
-  userId: Annotation<string>,
+  tenantId: Annotation<string>,
   messageType: Annotation<MessageType>,
   content: Annotation<string | null>,
   mediaRelativePath: Annotation<string | null>,

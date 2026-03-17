@@ -31,7 +31,7 @@ export class ConversationAnalysisController {
   @HttpCode(200)
   async analyze(
     @Param('id') conversationId: string,
-    @CurrentUser() user: { id: string },
+    @CurrentUser() user: { id: string; tenantId: string },
   ): Promise<AnalyzeResponseDto> {
     // 1. Obtener conversación completa
     const conversation =
@@ -39,15 +39,15 @@ export class ConversationAnalysisController {
 
     // 2. Validar ownership
     this.analysisService.validateOwnership(
-      conversation.phone.userId,
-      user.id,
+      conversation.phone.tenantId,
+      user.tenantId,
     );
 
-    // 3. Obtener messageLimit del usuario
-    const settings = await this.internalApi.getUserSettings(user.id);
+    // 3. Obtener messageLimit del tenant
+    const settings = await this.internalApi.getTenantSettings(user.tenantId);
 
     // 4. Validar créditos
-    await this.limitsService.validateCredits(user.id, 1);
+    await this.limitsService.validateCredits(user.tenantId, 1);
 
     // 5. Obtener últimos N mensajes no analizados
     const rawMessages = await this.internalApi.findLastNUnanalyzed(
@@ -86,7 +86,7 @@ export class ConversationAnalysisController {
     // 7. Ejecutar workflow LangGraph
     const result = await this.analysisWorkflow.execute({
       conversationId,
-      userId: user.id,
+      tenantId: user.tenantId,
       phoneId: conversation.phoneId,
       clientId,
       messages,
@@ -121,7 +121,7 @@ export class ConversationAnalysisController {
 
     // 9. Procesar catálogo: productos, descuentos, promociones
     await this.internalApi.processAnalysisCatalog({
-      userId: user.id,
+      tenantId: user.tenantId,
       clientId,
       products: result.products,
       promotions: result.promotions,

@@ -72,7 +72,7 @@ export class ForwardReceiptFn {
     const caption = [`Comprobante de ${clientName}`, `Total venta: ${amount}`, receiptData].join('\n');
 
     await this.queueRequestService.enqueue({
-      userId: ctx.userId,
+      userId: ctx.tenantId,
       nodeSessionId: ctx.nodeSession.id,
       conversationId: ctx.conversationId,
       currentNodeId: ctx.nodeSession.currentNodeId!,

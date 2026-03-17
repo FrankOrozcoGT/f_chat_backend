@@ -30,7 +30,7 @@ export class CustomNode {
       messageId,
       messageType,
       imageUrl,
-      userId,
+      tenantId,
       instanceName,
       clientPhone,
       nodeSessionId,
@@ -106,7 +106,7 @@ export class CustomNode {
       // Build NodeContext
       const ctx = new NodeContext();
       ctx.messageId = messageId;
-      ctx.userId = userId;
+      ctx.tenantId = tenantId;
       ctx.conversationId = conversationId;
       ctx.transcription = transcription;
       ctx.history = history;
@@ -166,7 +166,7 @@ export class CustomNode {
           result.tokensInput,
           result.tokensOutput,
         );
-        await this.internalApi.incrementCreditsUsed(userId, actualCredits);
+        await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
         this.logger.log(
           `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${result.tokensInput}in+${result.tokensOutput}out)`,
         );

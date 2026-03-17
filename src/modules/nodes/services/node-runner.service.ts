@@ -214,7 +214,7 @@ export class NodeRunnerService {
         await this.sessionLifecycle.switchToHitl({
           conversationId: ctx.conversationId,
           reason: 'api_error',
-          userId: ctx.userId,
+          tenantId: ctx.tenantId,
           extras: {
             apiName: 'node',
             errorMessage: `[${activeNode.name}] ${error.message}`,

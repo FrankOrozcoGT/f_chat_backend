@@ -28,7 +28,7 @@ export class FindFlowForIntentFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const { userId, conversationId, nodeSession } = ctx;
+    const { tenantId, conversationId, nodeSession } = ctx;
 
     const intentName = ctx.toolCallArgs?.intent as string | undefined;
 
@@ -39,8 +39,8 @@ export class FindFlowForIntentFn {
     }
 
     // Reads are always OK (even in test)
-    const intent = await this.intentRepo.findByUserIdAndName(
-      userId,
+    const intent = await this.intentRepo.findByTenantIdAndName(
+      tenantId,
       intentName,
     );
 
@@ -53,14 +53,14 @@ export class FindFlowForIntentFn {
         this.logger.warn(`FindFlowForIntent [TEST]: unknown intent "${intentName}" → HITL`);
         return 'hitl_unknown_intent';
       }
-      await this.intentRepo.upsert(userId, intentName);
+      await this.intentRepo.upsert(tenantId, intentName);
       this.logger.warn(
         `Unknown intent "${intentName}" — registered and switching to HITL`,
       );
       await this.sessionLifecycle.switchToHitl({
         conversationId,
         reason: 'client_request',
-        userId,
+        tenantId: tenantId,
         extras: { apiName: `node:unknown_intent:${intentName}` },
       });
       return 'hitl_unknown_intent';
@@ -78,7 +78,7 @@ export class FindFlowForIntentFn {
       await this.sessionLifecycle.switchToHitl({
         conversationId,
         reason: 'client_request',
-        userId,
+        tenantId: tenantId,
         extras: { apiName: `node:no_flow:${intentName}` },
       });
       return 'hitl_no_flow';

@@ -85,7 +85,7 @@ export class InputRouterNode {
           totalCost: 0,
         };
       }
-      const userId = conversation.phone.userId;
+      const tenantId = conversation.phone.tenantId;
       const estimatedDurationSeconds = 30; // Para incremento posterior
 
       try {
@@ -108,7 +108,7 @@ export class InputRouterNode {
         const actualCredits = this.limitsService.calculateCreditsFromSeconds(
           estimatedDurationSeconds,
         );
-        await this.internalApi.incrementCreditsUsed(userId, actualCredits);
+        await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
 
         this.logger.log(
           `InputRouter: audio → STT transcription: "${sttResult.text.substring(0, 80)}"`,

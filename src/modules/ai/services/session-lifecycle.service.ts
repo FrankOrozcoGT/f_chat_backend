@@ -6,7 +6,7 @@ import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 export interface SwitchToHitlParams {
   conversationId: string;
   reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover' | 'hacking';
-  userId: string;
+  tenantId: string;
   clientPhone?: string;
   extras?: {
     apiName?: string;
@@ -19,7 +19,7 @@ export interface SwitchToHitlParams {
 
 export interface ReturnToAiParams {
   conversationId: string;
-  userId: string;
+  tenantId: string;
 }
 
 @Injectable()
@@ -33,7 +33,7 @@ export class SessionLifecycleService {
   ) {}
 
   async switchToHitl(params: SwitchToHitlParams): Promise<void> {
-    const { conversationId, reason, userId, clientPhone, extras } = params;
+    const { conversationId, reason, tenantId, clientPhone, extras } = params;
 
     // 1. Mark API down if api_error
     if (reason === 'api_error' && extras?.apiName) {
@@ -49,20 +49,20 @@ export class SessionLifecycleService {
       await this.sessionRepository.close(
         activeSession.id,
         reason,
-        reason === 'manual_takeover' ? userId : undefined,
+        reason === 'manual_takeover' ? tenantId : undefined,
       );
     }
 
     // 4. Create HITL session
     await this.sessionRepository.createHitl(
       conversationId,
-      reason === 'manual_takeover' ? userId : undefined,
+      reason === 'manual_takeover' ? tenantId : undefined,
     );
 
     // 5. Emit WebSocket events based on reason
     switch (reason) {
       case 'api_error':
-        this.websocketGateway.emitApiDown(extras?.apiName || 'unknown', extras?.errorMessage || 'Unknown error', userId);
+        this.websocketGateway.emitApiDown(extras?.apiName || 'unknown', extras?.errorMessage || 'Unknown error', tenantId);
         this.websocketGateway.emit(
           'conversation:hitl',
           {
@@ -72,13 +72,13 @@ export class SessionLifecycleService {
             apiName: extras?.apiName,
             timestamp: new Date().toISOString(),
           },
-          userId,
+          tenantId,
         );
         break;
 
       case 'credits_exhausted':
         if (extras?.creditsUsed !== undefined && extras?.creditsLimit !== undefined) {
-          this.websocketGateway.emitCreditsExhausted(userId, conversationId, extras.creditsUsed, extras.creditsLimit);
+          this.websocketGateway.emitCreditsExhausted(tenantId, conversationId, extras.creditsUsed, extras.creditsLimit);
         }
         break;
 
@@ -90,7 +90,7 @@ export class SessionLifecycleService {
             clientPhone,
             timestamp: new Date().toISOString(),
           },
-          userId,
+          tenantId,
         );
         break;
 
@@ -99,11 +99,11 @@ export class SessionLifecycleService {
           'conversation:taken',
           {
             conversationId,
-            userId,
+            tenantId,
             userName: extras?.userName,
             timestamp: new Date().toISOString(),
           },
-          userId,
+          tenantId,
         );
         break;
 
@@ -117,7 +117,7 @@ export class SessionLifecycleService {
             errorMessage: extras?.errorMessage,
             timestamp: new Date().toISOString(),
           },
-          userId,
+          tenantId,
         );
         break;
     }
@@ -126,7 +126,7 @@ export class SessionLifecycleService {
   }
 
   async returnToAi(params: ReturnToAiParams): Promise<void> {
-    const { conversationId, userId } = params;
+    const { conversationId, tenantId } = params;
 
     // 1. Update conversation mode to AI
     await this.internalApi.updateConversationMode(conversationId, 'AI');
@@ -134,7 +134,7 @@ export class SessionLifecycleService {
     // 2. Close active HITL session if exists
     const activeSession = await this.sessionRepository.findActiveHitlByConversationId(conversationId);
     if (activeSession) {
-      await this.sessionRepository.close(activeSession.id, 'returned_to_ai', userId);
+      await this.sessionRepository.close(activeSession.id, 'returned_to_ai', tenantId);
     }
 
     // 3. Create new AI session
@@ -147,7 +147,7 @@ export class SessionLifecycleService {
         conversationId,
         timestamp: new Date().toISOString(),
       },
-      userId,
+      tenantId,
     );
 
     this.logger.log(`returnToAi: ${conversationId}`);

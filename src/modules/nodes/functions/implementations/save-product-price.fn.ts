@@ -60,7 +60,7 @@ export class SaveProductPriceFn {
     }
 
     const product = await this.internalApi.upsertProduct({
-      userId: ctx.userId,
+      tenantId: ctx.tenantId,
       name,
       basePrice: price,
       description,

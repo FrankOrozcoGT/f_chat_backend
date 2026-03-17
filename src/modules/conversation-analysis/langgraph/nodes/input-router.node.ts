@@ -23,7 +23,7 @@ export class AnalysisInputRouterNode {
   async execute(
     state: AnalysisStateType,
   ): Promise<Partial<AnalysisStateType>> {
-    const { messages, userId } = state;
+    const { messages, tenantId } = state;
     const processedMessages: AnalysisMessage[] = [];
     const warnings: AnalysisWarning[] = [];
     let totalCost = 0;
@@ -59,7 +59,7 @@ export class AnalysisInputRouterNode {
           // Incrementar créditos
           const credits =
             this.limitsService.calculateCreditsFromSeconds(30);
-          await this.internalApi.incrementCreditsUsed(userId, credits);
+          await this.internalApi.incrementCreditsUsed(tenantId, credits);
 
           totalCost += sttResult.costUsd;
 

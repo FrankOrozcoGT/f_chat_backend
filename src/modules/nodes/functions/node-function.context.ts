@@ -10,7 +10,7 @@ export interface TestSideEffect {
 export class NodeContext {
   // Input data
   messageId: string;
-  userId: string;
+  tenantId: string;
   conversationId: string;
   transcription: string;
   history: { role: string; content: string }[];

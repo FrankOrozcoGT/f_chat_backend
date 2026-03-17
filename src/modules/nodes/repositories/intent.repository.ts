@@ -5,32 +5,31 @@ import { PrismaService } from '@common/prisma/prisma.service';
 export class IntentRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string) {
+  async findByTenantId(tenantId: string) {
     return this.prisma.intent.findMany({
-      where: { userId },
+      where: { tenantId },
       include: { flow: true },
     });
   }
 
-  async findByUserIdAndName(userId: string, name: string) {
+  async findByTenantIdAndName(tenantId: string, name: string) {
     return this.prisma.intent.findUnique({
-      where: { userId_name: { userId, name } },
+      where: { tenantId_name: { tenantId, name } },
       include: { flow: true },
     });
   }
 
-  async upsert(userId: string, name: string, flowId?: string) {
+  async upsert(tenantId: string, name: string, flowId?: string) {
     return this.prisma.intent.upsert({
-      where: { userId_name: { userId, name } },
-      create: { userId, name, flowId },
+      where: { tenantId_name: { tenantId, name } },
+      create: { tenantId, name, flowId },
       update: { flowId },
-      include: { flow: true },
     });
   }
 
-  async delete(userId: string, name: string) {
+  async delete(tenantId: string, name: string) {
     return this.prisma.intent.delete({
-      where: { userId_name: { userId, name } },
+      where: { tenantId_name: { tenantId, name } },
     });
   }
 }

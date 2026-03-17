@@ -11,8 +11,8 @@ export interface ConversationSplit {
 
 @Injectable()
 export class ConversationAnalysisService {
-  validateOwnership(phoneUserId: string, jwtUserId: string): void {
-    if (phoneUserId !== jwtUserId) {
+  validateOwnership(phoneTenantId: string, jwtTenantId: string): void {
+    if (phoneTenantId !== jwtTenantId) {
       throw new ForbiddenException(
         'You do not have permission to analyze this conversation',
       );

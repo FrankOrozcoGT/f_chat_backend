@@ -25,7 +25,7 @@ export class AnalysisNode {
   async execute(
     state: AnalysisStateType,
   ): Promise<Partial<AnalysisStateType>> {
-    const { processedMessages, userId, totalCost } = state;
+    const { processedMessages, tenantId, totalCost } = state;
 
     const messagesText = processedMessages
       .map((m) => {
@@ -49,7 +49,7 @@ export class AnalysisNode {
     const llmCredits = this.limitsService.calculateCreditsFromTokens(
       result.tokensInput + result.tokensOutput,
     );
-    await this.internalApi.incrementCreditsUsed(userId, llmCredits);
+    await this.internalApi.incrementCreditsUsed(tenantId, llmCredits);
 
     const parsed = this.parseResponse(result.response);
 

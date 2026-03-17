@@ -41,12 +41,12 @@ export class NodesController {
 
   @Get('flows')
   async getMyFlows(@Req() req) {
-    return this.nodeRepo.findAllFlowsByUserId(req.user.id);
+    return this.nodeRepo.findAllFlowsByTenantId(req.user.tenantId);
   }
 
   @Get('flows/active-sessions')
   async getActiveSessions(@Req() req) {
-    const flows = await this.nodeRepo.findAllFlowsByUserId(req.user.id);
+    const flows = await this.nodeRepo.findAllFlowsByTenantId(req.user.tenantId);
     const flowIds = flows.map((f) => f.id);
     if (flowIds.length === 0) return {};
     return this.nodeSessionRepo.countActiveByNode(flowIds);
@@ -82,7 +82,7 @@ export class NodesController {
 
   @Post('test/start')
   async startTest(@Req() req, @Body() dto: TestStartDto) {
-    const phone = await this.phoneRepo.findFirstByUserId(req.user.id);
+    const phone = await this.phoneRepo.findFirstByTenantId(req.user.tenantId);
     if (!phone) {
       throw new BadRequestException('No phone found for user. Connect a phone first.');
     }
@@ -91,7 +91,7 @@ export class NodesController {
       dto.flowId ?? null,
       dto.clientPhone,
       phone.instanceName,
-      req.user.id,
+      req.user.tenantId,
     );
     return { testId };
   }
@@ -110,7 +110,7 @@ export class NodesController {
         conversationId: session.conversationId,
         instanceName: session.instanceName,
         clientPhone: session.clientPhone,
-        userId: session.userId,
+        tenantId: session.tenantId,
         messageType: dto.mediaUrl ? MessageType.image : MessageType.text,
         content: dto.message,
         mediaRelativePath: dto.mediaUrl

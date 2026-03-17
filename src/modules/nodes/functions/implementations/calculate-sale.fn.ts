@@ -70,7 +70,7 @@ export class CalculateSaleFn {
       return `Subtotal: Q${subtotal.toFixed(2)}, Envío a ${location}: Q${shippingCost.toFixed(2)}, Total: Q${total.toFixed(2)}`;
     }
 
-    const result = await this.internalApi.calculateSale(ctx.userId, items, location);
+    const result = await this.internalApi.calculateSale(ctx.tenantId, items, location);
 
     this.logger.log(
       `calculateSale: ${items.length} items, ${location} → subtotal=Q${result.subtotal}, envío=Q${result.shippingCost}, total=Q${result.total}`,

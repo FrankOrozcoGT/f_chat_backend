@@ -21,9 +21,9 @@ export class NodeRepository {
     });
   }
 
-  async findFlowByUserId(userId: string) {
+  async findFlowByTenantId(tenantId: string) {
     return this.prisma.flow.findFirst({
-      where: { userId },
+      where: { tenantId },
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
@@ -32,9 +32,9 @@ export class NodeRepository {
     });
   }
 
-  async findAllFlowsByUserId(userId: string) {
+  async findAllFlowsByTenantId(tenantId: string) {
     return this.prisma.flow.findMany({
-      where: { userId },
+      where: { tenantId },
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
@@ -54,7 +54,7 @@ export class NodeRepository {
   async createFlow(data: {
     name: string;
     routerNodeId: string;
-    userId: string;
+    tenantId: string;
   }) {
     return this.prisma.flow.create({ data });
   }

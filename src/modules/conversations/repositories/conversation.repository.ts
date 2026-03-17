@@ -7,8 +7,8 @@ export class ConversationRepository {
 
   constructor(private prisma: PrismaService) {}
 
-  async findByUserIdAndPhone(
-    userId: string,
+  async findByTenantIdAndPhone(
+    tenantId: string,
     phoneId?: string,
     options?: { page?: number; limit?: number; search?: string },
   ) {
@@ -19,7 +19,7 @@ export class ConversationRepository {
     const where = {
       isActive: true,
       phone: {
-        userId,
+        tenantId,
         ...(phoneId && { id: phoneId }),
       },
       ...(search && {

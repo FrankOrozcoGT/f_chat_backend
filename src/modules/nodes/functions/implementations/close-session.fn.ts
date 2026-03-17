@@ -23,7 +23,7 @@ export class CloseSessionFn {
     description: 'Cierra la conversacion cuando el cliente se despide y HAY historial previo en la conversacion. Envia un mensaje de despedida y cierra la sesion.',
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const farewell = await this.templateRepo.findByCode('farewell', ctx.userId);
+    const farewell = await this.templateRepo.findByCode('farewell', ctx.tenantId);
 
     if (!ctx.nodeSession) {
       throw new Error(
@@ -71,7 +71,7 @@ export class CloseSessionFn {
 
     await this.internalApi.sendMessageTransaction(
       ctx.conversationId,
-      ctx.userId,
+      ctx.tenantId,
       messageData,
       {
         lastMessageAt: new Date(),

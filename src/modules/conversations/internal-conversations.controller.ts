@@ -25,7 +25,7 @@ export class InternalConversationsController {
     if (!conversation) {
       throw new NotFoundException(`Conversation ${id} not found`);
     }
-    return { id: conversation.id, phone: { userId: conversation.phone.userId } };
+    return { id: conversation.id, phone: { tenantId: conversation.phone.tenantId } };
   }
 
   @Get(':id/full')

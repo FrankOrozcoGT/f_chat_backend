@@ -40,7 +40,7 @@ export class ReportHackingFn {
 
     await this.securityEventRepo.create({
       type: 'prompt_injection',
-      userId: ctx.userId,
+      userId: ctx.tenantId,
       conversationId: ctx.conversationId,
       clientPhone: ctx.clientPhone,
       description,
@@ -57,7 +57,7 @@ export class ReportHackingFn {
     await this.sessionLifecycle.switchToHitl({
       conversationId: ctx.conversationId,
       reason: 'hacking',
-      userId: ctx.userId,
+      tenantId: ctx.tenantId,
       clientPhone: ctx.clientPhone,
       extras: {
         errorMessage: description,
