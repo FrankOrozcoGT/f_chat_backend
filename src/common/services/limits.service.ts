@@ -5,71 +5,64 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { differenceInMonths } from 'date-fns';
-import { UserRepository } from '@modules/users/repositories/user.repository';
+import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 
 @Injectable()
 export class LimitsService {
   constructor(
-    private readonly userRepository: UserRepository,
+    private readonly tenantSettingsRepository: TenantSettingsRepository,
     private readonly phoneRepository: PhoneRepository,
     private readonly configService: ConfigService,
   ) {}
 
-  async validateWhatsAppLimit(userId: string): Promise<void> {
-    // 1. Obtener usuario con sus límites
-    const user = await this.userRepository.findById(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
+  async validateWhatsAppLimit(tenantId: string): Promise<void> {
+    const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
+    if (!settings) {
+      throw new NotFoundException('Tenant settings not found');
     }
 
-    // 2. Contar phones activos del usuario (pending + connected)
-    const activePhones = await this.phoneRepository.countActiveByUserId(userId);
+    const activePhones = await this.phoneRepository.countActiveByTenantId(tenantId);
 
-    // 3. Validar contra límite
-    if (activePhones >= user.whatsappLimit) {
+    if (activePhones >= settings.whatsappLimit) {
       throw new ForbiddenException(
-        `WhatsApp limit reached. Current: ${activePhones}, Limit: ${user.whatsappLimit}`,
+        `WhatsApp limit reached. Current: ${activePhones}, Limit: ${settings.whatsappLimit}`,
       );
     }
   }
 
   async validateCredits(
-    userId: string,
+    tenantId: string,
     estimatedCredits: number,
   ): Promise<void> {
-    // 1. Obtener usuario
-    const user = await this.userRepository.findById(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
+    const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
+    if (!settings) {
+      throw new NotFoundException('Tenant settings not found');
     }
 
-    // 2. Verificar y resetear periodo de facturación si es necesario
-    await this.checkAndResetBillingPeriod(userId, user.billingPeriodStart);
+    await this.checkAndResetBillingPeriod(tenantId, settings.billingPeriodStart);
 
-    // 3. Obtener usuario actualizado después del posible reset
-    const updatedUser = await this.userRepository.findById(userId);
-    if (!updatedUser) {
-      throw new NotFoundException('User not found after billing period check');
+    const updatedSettings = await this.tenantSettingsRepository.findByTenantId(tenantId);
+    if (!updatedSettings) {
+      throw new NotFoundException('Tenant settings not found after billing period check');
     }
 
-    // 4. Validar contra límite
-    const projectedUsage = updatedUser.creditsUsed + estimatedCredits;
-    if (projectedUsage > updatedUser.creditsLimit) {
+    const projectedUsage = updatedSettings.creditsUsed + estimatedCredits;
+    if (projectedUsage > updatedSettings.creditsLimit) {
       throw new ForbiddenException(
-        `Credits limit reached. Current: ${updatedUser.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedUser.creditsLimit}`,
+        `Credits limit reached. Current: ${updatedSettings.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedSettings.creditsLimit}`,
       );
     }
   }
 
   async checkAndResetBillingPeriod(
-    userId: string,
+    tenantId: string,
     billingPeriodStart: Date,
   ): Promise<void> {
     const monthsDiff = differenceInMonths(new Date(), billingPeriodStart);
 
     if (monthsDiff >= 1) {
-      await this.userRepository.resetBillingPeriod(userId);
+      await this.tenantSettingsRepository.resetBillingPeriod(tenantId);
     }
   }
 

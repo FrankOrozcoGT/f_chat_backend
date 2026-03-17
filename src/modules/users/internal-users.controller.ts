@@ -1,9 +1,7 @@
 import {
   Controller,
   Get,
-  Patch,
   Param,
-  Body,
   UseGuards,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,16 +21,8 @@ export class InternalUsersController {
     }
     return {
       id: user.id,
-      creditsUsed: user.creditsUsed,
-      creditsLimit: user.creditsLimit,
+      email: user.email,
+      name: user.name,
     };
-  }
-
-  @Patch(':id/credits')
-  async incrementCredits(
-    @Param('id') id: string,
-    @Body('credits') credits: number,
-  ) {
-    await this.userRepository.incrementCreditsUsed(id, credits);
   }
 }

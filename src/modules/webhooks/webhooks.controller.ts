@@ -50,7 +50,7 @@ export class WebhooksController {
 
       const jobData = {
         phoneId: phone.id,
-        userId: phone.userId,
+        tenantId: phone.tenantId,
         instanceName: phone.instanceName,
         webhookData,
       };
@@ -143,13 +143,13 @@ export class WebhooksController {
     }
 
     this.logger.log(
-      `[${new Date().toISOString()}] phone:qr_updated phone=${phoneId} userId=${phone.userId}`,
+      `[${new Date().toISOString()}] phone:qr_updated phone=${phoneId} tenantId=${phone.tenantId}`,
     );
 
     this.websocketGateway.emit(
       'phone:qr_updated',
       { phoneId, qrCode },
-      phone.userId,
+      phone.tenantId,
     );
   }
 
@@ -171,13 +171,13 @@ export class WebhooksController {
     }
 
     this.logger.log(
-      `[${new Date().toISOString()}] phone:status_changed phone=${phoneId} userId=${phone.userId} status=${status}`,
+      `[${new Date().toISOString()}] phone:status_changed phone=${phoneId} tenantId=${phone.tenantId} status=${status}`,
     );
 
     this.websocketGateway.emit(
       'phone:status_changed',
       { phoneId, status },
-      phone.userId,
+      phone.tenantId,
     );
 
     // Si conectó, avisar al frontend que empieza el sync
@@ -185,7 +185,7 @@ export class WebhooksController {
       this.websocketGateway.emit(
         'phone:syncing',
         { phoneId, contactsCount: 0 },
-        phone.userId,
+        phone.tenantId,
       );
       this.logger.log(
         `[${new Date().toISOString()}] phone:syncing emitted for phone=${phoneId}`,
@@ -210,7 +210,7 @@ export class WebhooksController {
     this.websocketGateway.emit(
       'phone:sync_progress',
       { phoneId, progress, isLatest },
-      phone.userId,
+      phone.tenantId,
     );
 
     this.logger.log(
@@ -296,7 +296,7 @@ export class WebhooksController {
           conversationId: updatedMessage.conversationId,
           status: mappedStatus,
         },
-        phone.userId,
+        phone.tenantId,
       );
 
       this.logger.log(

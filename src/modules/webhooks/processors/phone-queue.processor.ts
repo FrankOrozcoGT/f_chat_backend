@@ -15,7 +15,7 @@ export class PhoneQueueProcessor extends WorkerHost {
   }
 
   async process(job: Job<WebhookJobData>): Promise<void> {
-    const { type, phoneId, userId, instanceName, webhookData } = job.data;
+    const { type, phoneId, tenantId, instanceName, webhookData } = job.data;
 
     this.logger.log(
       `[process] job=${job.id} type=${type} phone=${phoneId} attempt=${job.attemptsMade + 1}`,
@@ -27,7 +27,7 @@ export class PhoneQueueProcessor extends WorkerHost {
         break;
 
       case 'sync-contacts':
-        await this.webhookProcessor.syncContacts(phoneId, userId, webhookData);
+        await this.webhookProcessor.syncContacts(phoneId, tenantId, webhookData);
         break;
 
       case 'sync-group':

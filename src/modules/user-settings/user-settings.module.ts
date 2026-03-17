@@ -1,12 +1,10 @@
+// @deprecated — Replaced by TenantSettingsModule. Kept as stub.
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@common/prisma/prisma.module';
-import { UserSettingsController } from './user-settings.controller';
-import { InternalUserSettingsController } from './internal-user-settings.controller';
 import { UserSettingsRepository } from './repositories/user-settings.repository';
+import { PrismaModule } from '@common/prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [UserSettingsController, InternalUserSettingsController],
   providers: [UserSettingsRepository],
   exports: [UserSettingsRepository],
 })

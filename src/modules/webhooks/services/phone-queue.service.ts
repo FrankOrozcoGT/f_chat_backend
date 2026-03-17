@@ -5,7 +5,7 @@ import { Queue } from 'bullmq';
 export interface WebhookJobData {
   type: 'process-message' | 'sync-contacts' | 'sync-group' | 'sync-chats';
   phoneId: string;
-  userId: string;
+  tenantId: string;
   instanceName: string;
   webhookData: any;
   attempt?: number;

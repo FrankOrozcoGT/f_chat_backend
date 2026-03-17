@@ -133,7 +133,7 @@ export class WebhookProcessorService {
           conversation.id,
           instanceName,
           remoteJid,
-          phone.userId,
+          phone.tenantId,
         );
       }
     } else {
@@ -161,7 +161,7 @@ export class WebhookProcessorService {
             conversation.id,
             instanceName,
             clientRemoteJid,
-            phone.userId,
+            phone.tenantId,
           );
         }
       }
@@ -183,13 +183,13 @@ export class WebhookProcessorService {
     if (hasMedia && messageKey) {
       try {
         this.logger.log(
-          `[media] Attempting download instanceName=${instanceName} userId=${phone.userId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
+          `[media] Attempting download instanceName=${instanceName} userId=${phone.tenantId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
         );
         mediaData =
           await this.fileStorageService.downloadAndSaveMediaFromEvolution(
             this.evolutionService,
             instanceName,
-            phone.userId,
+            phone.tenantId,
             conversation.id,
             messageKey.id,
             messageKey,
@@ -275,7 +275,7 @@ export class WebhookProcessorService {
           conversationId: conversation.id,
           instanceName,
           clientPhone,
-          userId: phone.userId,
+          userId: phone.tenantId,
           messageType: message.type,
           content: message.content,
           mediaRelativePath: mediaData?.relativePath || null,
@@ -295,7 +295,7 @@ export class WebhookProcessorService {
    */
   async syncContacts(
     phoneId: string,
-    userId: string,
+    tenantId: string,
     webhookData: any,
   ) {
     const raw: Array<{ remoteJid?: string; pushName?: string; profilePicUrl?: string | null }> =
@@ -320,7 +320,7 @@ export class WebhookProcessorService {
       this.websocketGateway.emit(
         'phone:sync_complete',
         { phoneId, contactsCount: finalCount },
-        userId,
+        tenantId,
       );
       this.logger.log(
         `[${new Date().toISOString()}] phone:sync_complete phone=${phoneId} contactsCount=${finalCount}`,
@@ -379,7 +379,7 @@ export class WebhookProcessorService {
     this.websocketGateway.emit(
       'phone:sync_progress',
       { phoneId, contactsCount: total },
-      userId,
+      tenantId,
     );
 
     this.logger.log(
