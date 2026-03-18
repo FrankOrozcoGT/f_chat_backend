@@ -27,6 +27,8 @@ import { ExitFlowFn } from './functions/implementations/exit-flow.fn';
 import { SaveProductPriceFn } from './functions/implementations/save-product-price.fn';
 import { ForwardReceiptFn } from './functions/implementations/forward-receipt.fn';
 import { SendToVerificationFn } from './functions/implementations/send-to-verification.fn';
+import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
+import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
@@ -64,6 +66,8 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     SaveProductPriceFn,
     ForwardReceiptFn,
     SendToVerificationFn,
+    UpdateTodosFn,
+    OutOfPathFn,
     SecurityEventRepository,
     TemplateRepository,
     TestSessionService,

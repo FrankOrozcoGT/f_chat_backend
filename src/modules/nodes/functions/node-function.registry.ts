@@ -15,7 +15,7 @@ interface RegisteredFunction {
 }
 
 // Default postCode que siempre se agrega a todo nodo (solo seguridad)
-const DEFAULT_POST_CODES: string[] = ['reportHacking', 'exitFlow'];
+const DEFAULT_POST_CODES: string[] = ['reportHacking', 'outOfPath'];
 
 @Injectable()
 export class NodeFunctionRegistry implements OnModuleInit {
