@@ -98,7 +98,7 @@ export class IntentRouterNode {
       ];
 
       const result = await this.langSmithService.traceLLM(
-        () => this.nodeRunner.runNode(ctx, virtualRouterNode, transcription, imageUrl, history),
+        () => this.nodeRunner.runNode(ctx, virtualRouterNode, transcription, imageUrl, history, ['exitFlow']),
         traceMessages,
       );
 

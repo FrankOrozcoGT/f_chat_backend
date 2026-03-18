@@ -140,7 +140,17 @@ export class NodeRunnerService {
     transcription: string,
     imageUrl: string | null,
     history: { role: string; content: string }[],
+    skipDefaultCodes: string[] = [],
   ): Promise<NodeRunResult> {
+    // 0. Parsear todos — solo se inyectan si el nodo los tiene definidos
+    // La validación de que sean obligatorios se hace en custom-node (nodos de DB)
+    const nodeTodos: Array<{ id: string; name: string; description?: string; functions?: string[] }> | null =
+      Array.isArray(activeNode.todos)
+        ? (activeNode.todos as any[])
+        : activeNode.todos
+          ? JSON.parse(String(activeNode.todos))
+          : null;
+
     // 1. preCode
     let systemPromptExtra = '';
     const preCodePipeline = this.parseJsonArray(activeNode.preCode);
@@ -149,14 +159,23 @@ export class NodeRunnerService {
       systemPromptExtra = await this.fnRegistry.executePreCode(preCodePipeline, ctx);
     }
 
-    // 2. Resolver tools cíclicas
+    // 1b. Inyectar todos en el system prompt si el nodo los tiene definidos
+    const completedTodos = (ctx.nodeSession?.completedTodos as Record<string, boolean> | null) ?? {};
+    if (nodeTodos && nodeTodos.length > 0) {
+      systemPromptExtra += this.buildTodosSection(nodeTodos, completedTodos);
+    }
+
+    // 2. Resolver tools cíclicas + agregar updateTodos si hay todos
     const toolCodes = this.parseJsonArray(activeNode.tools);
+    if (nodeTodos && nodeTodos.length > 0 && !toolCodes.includes('updateTodos')) {
+      toolCodes.push('updateTodos');
+    }
     const resolvedTools = toolCodes.length > 0
       ? this.fnRegistry.resolveTools(toolCodes)
       : null;
 
     // 3. Resolver postCode (terminación)
-    const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode);
+    const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode, skipDefaultCodes);
     const resolvedPostCode = this.fnRegistry.resolvePostCode(postCodes);
 
     // 4. Verificar no haya duplicados entre tools y postCode
@@ -224,6 +243,25 @@ export class NodeRunnerService {
 
       throw error;
     }
+  }
+
+  private buildTodosSection(
+    todos: Array<{ id: string; name: string; description?: string; functions?: string[] }>,
+    completed: Record<string, boolean>,
+  ): string {
+    const lines = todos.map((t) => {
+      const done = completed[t.id] ? '[x]' : '[ ]';
+      const fns = t.functions?.length ? ` (tools: ${t.functions.join(', ')})` : '';
+      return `${done} ${t.name}${fns}${t.description ? ` — ${t.description}` : ''}`;
+    });
+
+    return (
+      '\n\n--- TAREAS DE ESTE NODO ---\n' +
+      lines.join('\n') +
+      '\n\nUsa updateTodos({"id": true/false}) para marcar o corregir tareas. ' +
+      'Puedes actualizar varias a la vez. El sistema te dirá cuáles faltan para el happy path.\n' +
+      '--- FIN TAREAS ---'
+    );
   }
 
   private parseJsonArray(value: unknown): string[] {
