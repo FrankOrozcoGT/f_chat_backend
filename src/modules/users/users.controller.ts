@@ -6,8 +6,7 @@ import {
   ClassSerializerInterceptor,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@common/guards/roles.guard';
-import { Roles } from '@common/decorators/roles.decorator';
+import { SystemAdminGuard } from '@common/guards/system-admin.guard';
 import { UserRepository } from './repositories/user.repository';
 import { UserResponseDto } from './dto/user-response.dto';
 
@@ -17,8 +16,7 @@ export class UsersController {
   constructor(private readonly userRepository: UserRepository) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @UseGuards(JwtAuthGuard, SystemAdminGuard)
   async findAll(): Promise<UserResponseDto[]> {
     const users = await this.userRepository.findAll();
     return users.map((user) => new UserResponseDto(user));
