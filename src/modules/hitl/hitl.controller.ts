@@ -95,11 +95,12 @@ export class HitlController {
         lastMessage.senderType === 'client'
       ) {
         this.logger.log(
-          `Last message from client, triggering AI processing for conversation ${dto.conversationId}`,
+          `Last message from client, triggering AI processing for conversation ${dto.conversationId} (fromHitl=true, messageCount=${messages.length})`,
         );
 
         const phone = await this.phoneRepository.findById(conversation.phoneId);
         if (phone && conversation.client) {
+          // fromHitl=true activates entry_checker when there are >1 messages
           this.eventEmitter.emit('ai.incoming.message', {
             messageId: lastMessage.id,
             conversationId: conversation.id,
@@ -115,6 +116,7 @@ export class HitlController {
                   mimeType: lastMessage.mimeType,
                 }
               : null,
+            fromHitl: messages.length > 1,
           });
         }
       }
