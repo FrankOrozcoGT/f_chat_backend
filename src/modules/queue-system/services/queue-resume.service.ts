@@ -51,6 +51,7 @@ export class QueueResumeService {
       conversationId: queueRequest.conversationId,
       instanceName: queueRequest.instanceName,
       clientPhone,
+      tenantId: conversation.phone.tenantId,
       userId: queueRequest.userId,
       messageType: 'text',
       content: syntheticContent,
