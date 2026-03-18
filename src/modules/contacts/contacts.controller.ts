@@ -17,6 +17,12 @@ export class ContactsController {
 
   constructor(private readonly contactRepository: ContactRepository) {}
 
+  @Get('select')
+  @UseGuards(JwtAuthGuard)
+  async getSelect(@Req() req) {
+    return this.contactRepository.findAllSelect(req.user.tenantId);
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard)
   async search(@Req() req, @Query('search') search?: string) {

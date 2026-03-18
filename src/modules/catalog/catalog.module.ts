@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { InternalCatalogController } from './internal-catalog.controller';
+import { CatalogController } from './catalog.controller';
 import { ProductRepository } from './repositories/product.repository';
 import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
@@ -10,7 +11,7 @@ import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant
 
 @Module({
   imports: [PrismaModule],
-  controllers: [InternalCatalogController],
+  controllers: [InternalCatalogController, CatalogController],
   providers: [
     ProductRepository,
     DiscountRepository,

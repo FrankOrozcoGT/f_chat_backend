@@ -50,4 +50,28 @@ export class PromotionRepository {
       },
     });
   }
+
+  async updateById(
+    id: string,
+    data: { name?: string; description?: string; specialPrice?: number; productIds?: string[] },
+  ) {
+    const { productIds, ...fields } = data;
+    return this.prisma.promotion.update({
+      where: { id },
+      data: {
+        ...fields,
+        ...(productIds && {
+          promotionProducts: {
+            deleteMany: {},
+            create: productIds.map((productId) => ({ productId })),
+          },
+        }),
+      },
+      include: { promotionProducts: { include: { product: true } } },
+    });
+  }
+
+  async deleteById(id: string) {
+    return this.prisma.promotion.delete({ where: { id } });
+  }
 }
