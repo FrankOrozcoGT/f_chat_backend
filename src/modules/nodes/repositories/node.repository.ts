@@ -77,4 +77,30 @@ export class NodeRepository {
       include: { toNode: true },
     });
   }
+
+  async updateFlow(id: string, data: { name?: string; routerNodeId?: string }) {
+    return this.prisma.flow.update({ where: { id }, data });
+  }
+
+  async deleteFlow(id: string) {
+    return this.prisma.flow.delete({ where: { id } });
+  }
+
+  async findTransitionsByFlowId(flowId: string) {
+    return this.prisma.flowTransition.findMany({
+      where: { flowId },
+      include: { fromNode: true, toNode: true },
+    });
+  }
+
+  async createTransition(data: { flowId: string; fromNodeId: string; toNodeId: string; transitionCode: string }) {
+    return this.prisma.flowTransition.create({
+      data,
+      include: { fromNode: true, toNode: true },
+    });
+  }
+
+  async deleteTransition(id: string) {
+    return this.prisma.flowTransition.delete({ where: { id } });
+  }
 }

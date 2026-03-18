@@ -5,6 +5,7 @@ import { NodesModule } from '@modules/nodes/nodes.module';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { ContactLabelRepository } from './repositories/contact-label.repository';
 import { QueueRequestRepository } from './repositories/queue-request.repository';
+import { QueueSystemController } from './queue-system.controller';
 import { ContactLabelService } from './services/contact-label.service';
 import { QueueRequestService } from './services/queue-request.service';
 import { QueueResumeService } from './services/queue-resume.service';
@@ -17,6 +18,7 @@ import { QueueSchedulerService } from './services/queue-scheduler.service';
     EvolutionModule,
     forwardRef(() => NodesModule),
   ],
+  controllers: [QueueSystemController],
   providers: [
     ContactLabelRepository,
     QueueRequestRepository,
