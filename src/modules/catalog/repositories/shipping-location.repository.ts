@@ -29,4 +29,21 @@ export class ShippingLocationRepository {
       update: data,
     });
   }
+
+  async create(tenantId: string, data: { name: string; isFreeShipping: boolean; shippingCost: number }) {
+    return this.prisma.shippingLocation.create({
+      data: { tenantId, ...data },
+    });
+  }
+
+  async updateById(id: string, data: { name?: string; isFreeShipping?: boolean; shippingCost?: number }) {
+    return this.prisma.shippingLocation.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteById(id: string) {
+    return this.prisma.shippingLocation.delete({ where: { id } });
+  }
 }

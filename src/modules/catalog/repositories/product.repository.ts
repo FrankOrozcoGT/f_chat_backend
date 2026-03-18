@@ -45,4 +45,21 @@ export class ProductRepository {
       data: { basePrice },
     });
   }
+
+  async create(tenantId: string, data: { name: string; basePrice: number; description?: string }) {
+    return this.prisma.product.create({
+      data: { tenantId, ...data },
+    });
+  }
+
+  async updateById(id: string, data: { name?: string; basePrice?: number; description?: string }) {
+    return this.prisma.product.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteById(id: string) {
+    return this.prisma.product.delete({ where: { id } });
+  }
 }

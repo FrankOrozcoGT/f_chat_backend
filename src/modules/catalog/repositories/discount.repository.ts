@@ -49,4 +49,8 @@ export class DiscountRepository {
       },
     });
   }
+
+  async deleteById(id: string) {
+    return this.prisma.discount.delete({ where: { id } });
+  }
 }
