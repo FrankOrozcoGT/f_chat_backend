@@ -15,7 +15,7 @@ interface RegisteredFunction {
 }
 
 // Default postCode que siempre se agrega a todo nodo (solo seguridad)
-const DEFAULT_POST_CODES: string[] = ['reportHacking'];
+const DEFAULT_POST_CODES: string[] = ['reportHacking', 'exitFlow'];
 
 @Injectable()
 export class NodeFunctionRegistry implements OnModuleInit {
@@ -145,7 +145,7 @@ export class NodeFunctionRegistry implements OnModuleInit {
    * Parse postCode from DB (string[] JSON) and merge with defaults.
    * Deduplicates codes.
    */
-  mergePostCode(postCodeRaw: string | null): string[] {
+  mergePostCode(postCodeRaw: string | null, skipCodes: string[] = []): string[] {
     const codes = new Set<string>();
 
     if (postCodeRaw) {
@@ -162,7 +162,7 @@ export class NodeFunctionRegistry implements OnModuleInit {
     }
 
     for (const code of DEFAULT_POST_CODES) {
-      codes.add(code);
+      if (!skipCodes.includes(code)) codes.add(code);
     }
 
     return [...codes];
