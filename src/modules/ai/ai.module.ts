@@ -6,6 +6,8 @@ import { IntentRouterNode } from './langgraph/nodes/intent-router.node';
 import { CustomNode } from './langgraph/nodes/custom-node.node';
 import { OutputRouterNode } from './langgraph/nodes/output-router.node';
 import { FinalizeNode } from './langgraph/nodes/finalize.node';
+import { EntryCheckerNode } from './langgraph/nodes/entry-checker.node';
+import { FlowRouterNode } from './langgraph/nodes/flow-router.node';
 import { QwenSttClient } from './clients/qwen-stt.client';
 import { KimiClient } from './clients/kimi.client';
 import { QwenTtsClient } from './clients/qwen-tts.client';
@@ -37,6 +39,8 @@ import { RedisModule } from '@common/redis/redis.module';
     CustomNode,
     OutputRouterNode,
     FinalizeNode,
+    EntryCheckerNode,
+    FlowRouterNode,
     QwenSttClient,
     KimiClient,
     QwenTtsClient,

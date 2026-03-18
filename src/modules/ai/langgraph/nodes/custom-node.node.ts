@@ -85,6 +85,16 @@ export class CustomNode {
         activeNode = dbNode;
       }
 
+      // Validar que el nodo de DB tiene todos definidos — son obligatorios
+      const hasTodos = activeNode.todos &&
+        (Array.isArray(activeNode.todos) ? activeNode.todos.length > 0 : true);
+      if (!hasTodos) {
+        throw new Error(
+          `Node "${activeNode.name}" (${activeNode.id}) has no todos defined. ` +
+          `Todos are required for every DB node — define them in node-sql and re-run the SQL.`,
+        );
+      }
+
       // Load history — skip on internal transitions (iteration > 0)
       // because the new node gets context via flowSummary in systemPrompt
       let history: { role: string; content: string }[] = [];
@@ -198,12 +208,14 @@ export class CustomNode {
         lastIntent = result.intent;
         lastPreCodeContext = result.preCodeContext ?? null;
 
-        // exitFlow → let workflow route back to intent_router
-        if (terminationTool === 'exitFlow') {
+        // outOfPath → let workflow route to flow_router
+        if (terminationTool === 'outOfPath') {
           return {
             responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
             sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
-            nodeTransitions, routerAction: 'exitFlow', currentNodeId: null,
+            nodeTransitions, routerAction: 'outOfPath',
+            outOfPathReason: result.toolResult?.terminationArgs?.reason as string ?? '',
+            outOfPathSummary: result.toolResult?.terminationArgs?.summary as string ?? '',
           };
         }
 

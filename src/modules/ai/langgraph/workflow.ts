@@ -7,6 +7,8 @@ import { IntentRouterNode } from './nodes/intent-router.node';
 import { CustomNode } from './nodes/custom-node.node';
 import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
+import { EntryCheckerNode } from './nodes/entry-checker.node';
+import { FlowRouterNode } from './nodes/flow-router.node';
 import { IncomingMessageEvent } from '../ai-agent.service';
 export interface WorkflowResult {
   responseText: string;
@@ -26,8 +28,10 @@ export class AiWorkflow {
 
   constructor(
     private readonly inputRouterNode: InputRouterNode,
+    private readonly entryCheckerNode: EntryCheckerNode,
     private readonly intentRouterNode: IntentRouterNode,
     private readonly customNode: CustomNode,
+    private readonly flowRouterNode: FlowRouterNode,
     private readonly outputRouterNode: OutputRouterNode,
     private readonly finalizeNode: FinalizeNode,
     private readonly langSmithService: LangSmithService,
@@ -40,11 +44,17 @@ export class AiWorkflow {
       .addNode('input_router', (state: WorkflowStateType) =>
         this.inputRouterNode.execute(state),
       )
+      .addNode('entry_checker', (state: WorkflowStateType) =>
+        this.entryCheckerNode.execute(state),
+      )
       .addNode('intent_router', (state: WorkflowStateType) =>
         this.intentRouterNode.execute(state),
       )
       .addNode('custom_node', (state: WorkflowStateType) =>
         this.customNode.execute(state),
+      )
+      .addNode('flow_router', (state: WorkflowStateType) =>
+        this.flowRouterNode.execute(state),
       )
       .addNode('output_router', (state: WorkflowStateType) =>
         this.outputRouterNode.execute(state),
@@ -53,9 +63,18 @@ export class AiWorkflow {
         this.finalizeNode.execute(state),
       )
 
-      // START → input_router → intent_router (decides: router or custom_node)
+      // START → input_router → entry_checker → intent_router (or custom_node if entry_checker resolved it)
       .addEdge(START, 'input_router')
-      .addEdge('input_router', 'intent_router')
+      .addEdge('input_router', 'entry_checker')
+
+      // entry_checker → custom_node (if it resolved currentNodeId) OR intent_router
+      .addConditionalEdges('entry_checker', (state: WorkflowStateType) => {
+        if (state.error) return 'finalize';
+        // entry_checker set a currentNodeId → go directly to custom_node
+        if (state.currentNodeId && !state.fromHitl) return 'custom_node';
+        // No resolution → intent_router handles normally
+        return 'intent_router';
+      })
 
       // intent_router → custom_node (has currentNodeId) OR output_router (router handled it) OR finalize (error)
       .addConditionalEdges('intent_router', (state: WorkflowStateType) => {
@@ -69,9 +88,17 @@ export class AiWorkflow {
         return 'output_router';
       })
 
-      // custom_node → intent_router (exitFlow) OR output_router
+      // custom_node → flow_router (outOfPath) OR output_router
       .addConditionalEdges('custom_node', (state: WorkflowStateType) => {
         if (state.error) return 'finalize';
+        if (state.routerAction === 'outOfPath') return 'flow_router';
+        return 'output_router';
+      })
+
+      // flow_router → custom_node (flowRouted) OR intent_router (exitFlow) OR output_router
+      .addConditionalEdges('flow_router', (state: WorkflowStateType) => {
+        if (state.error) return 'finalize';
+        if (state.routerAction === 'flowRouted') return 'custom_node';
         if (state.routerAction === 'exitFlow') return 'intent_router';
         return 'output_router';
       })
@@ -99,6 +126,9 @@ export class AiWorkflow {
       sideEffects: [],
       totalCost: 0,
       isTest,
+      fromHitl: payload.fromHitl ?? false,
+      outOfPathReason: null,
+      outOfPathSummary: null,
       error: null,
       currentNodeId: null,
       flowId: null,

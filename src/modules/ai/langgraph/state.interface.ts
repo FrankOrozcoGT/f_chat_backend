@@ -26,7 +26,11 @@ export const WorkflowState = Annotation.Root({
   currentNodeId: Annotation<string | null>,
   flowId: Annotation<string | null>,
   nodeSessionId: Annotation<string | null>,
-  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | 'transitionToNode' | null>,
+  routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | 'flowRouted' | 'outOfPath' | null>,
+
+  // Set by custom_node when outOfPath is called — consumed by flow_router
+  outOfPathReason: Annotation<string | null>,
+  outOfPathSummary: Annotation<string | null>,
 
   // After LLM / custom_node
   responseText: Annotation<string>,
@@ -49,6 +53,9 @@ export const WorkflowState = Annotation.Root({
 
   // Session store (DB in prod, Redis in test)
   sessionStore: Annotation<NodeSessionStore>,
+
+  // Indicates transition from HITL to AI — triggers entry_checker
+  fromHitl: Annotation<boolean>,
 
   // Test mode
   isTest: Annotation<boolean>,
