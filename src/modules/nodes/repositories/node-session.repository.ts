@@ -74,6 +74,14 @@ export class NodeSessionRepository {
     });
   }
 
+  async updateCompletedTodos(id: string, todos: Record<string, boolean>) {
+    return this.prisma.nodeSession.update({
+      where: { id },
+      data: { completedTodos: todos as any },
+      include: { currentNode: true, flow: true },
+    });
+  }
+
   async pauseFlow(id: string, flowSummary: string) {
     return this.prisma.nodeSession.update({
       where: { id },
