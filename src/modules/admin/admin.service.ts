@@ -40,7 +40,7 @@ export class AdminService {
     let totalTTS = 0;
 
     // Maps para agregaciones
-    const byUserMap = new Map<
+    const byTenantMap = new Map<
       string,
       {
         tenantId: string;
@@ -69,12 +69,12 @@ export class AdminService {
       const tenantKey = tenant.id;
       const conversationId = apiCall.message.conversation.id;
 
-      if (byUserMap.has(tenantKey)) {
-        const tenantData = byUserMap.get(tenantKey)!;
+      if (byTenantMap.has(tenantKey)) {
+        const tenantData = byTenantMap.get(tenantKey)!;
         tenantData.total += cost;
         tenantData.conversationIds.add(conversationId);
       } else {
-        byUserMap.set(tenantKey, {
+        byTenantMap.set(tenantKey, {
           tenantId: tenant.id,
           tenantName: tenant.name,
           total: cost,
@@ -92,7 +92,7 @@ export class AdminService {
     }
 
     // Convertir maps a arrays, calcular promedios, y ordenar
-    const byUser = Array.from(byUserMap.values())
+    const byTenant = Array.from(byTenantMap.values())
       .map((tenantData) => {
         const totalConversations = tenantData.conversationIds.size;
         const avgCostPerConversation =
@@ -120,7 +120,7 @@ export class AdminService {
       totalLLM: parseFloat(totalLLM.toFixed(6)),
       totalTTS: parseFloat(totalTTS.toFixed(6)),
       total: parseFloat(total.toFixed(6)),
-      byUser,
+      byTenant,
       byDay,
     };
   }

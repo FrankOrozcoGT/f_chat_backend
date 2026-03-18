@@ -16,6 +16,6 @@ export class CostsResponseDto {
   totalLLM: number;
   totalTTS: number;
   total: number;
-  byUser: TenantCostDto[];
+  byTenant: TenantCostDto[];
   byDay: DailyCostDto[];
 }
