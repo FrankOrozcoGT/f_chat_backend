@@ -7,15 +7,15 @@ export class DbNodeSessionStore implements NodeSessionStore {
   constructor(private readonly repo: NodeSessionRepository) {}
 
   async findActiveByConversationId(conversationId: string): Promise<SessionData | null> {
-    return this.repo.findActiveByConversationId(conversationId) as Promise<SessionData | null>;
+    return this.repo.findActiveByConversationId(conversationId);
   }
 
   async findActiveOrWaitingByConversationId(conversationId: string): Promise<SessionData | null> {
-    return this.repo.findActiveOrWaitingByConversationId(conversationId) as Promise<SessionData | null>;
+    return this.repo.findActiveOrWaitingByConversationId(conversationId);
   }
 
   async findById(id: string): Promise<SessionData | null> {
-    return this.repo.findById(id) as Promise<SessionData | null>;
+    return this.repo.findById(id);
   }
 
   async findOrCreate(conversationId: string, flowId?: string): Promise<SessionData> {
@@ -28,6 +28,10 @@ export class DbNodeSessionStore implements NodeSessionStore {
 
   async updateStatus(id: string, status: import('@prisma/client').NodeSessionStatus): Promise<void> {
     await this.repo.updateStatus(id, status);
+  }
+
+  async updateCompletedTodos(id: string, todos: Record<string, boolean>): Promise<import('./node-session-store.interface').SessionData> {
+    return this.repo.updateCompletedTodos(id, todos) as any;
   }
 
   async pauseFlow(id: string, summary: string): Promise<void> {

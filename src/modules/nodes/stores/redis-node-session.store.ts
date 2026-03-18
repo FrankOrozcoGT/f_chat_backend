@@ -14,6 +14,7 @@ interface RedisSessionState {
   currentNodeId: string | null;
   detectedIntent: string | null;
   flowSummary: string | null;
+  completedTodos: Record<string, boolean> | null;
   status: NodeSessionStatus;
 }
 
@@ -56,6 +57,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       detectedIntent: state.detectedIntent,
       flowSummary: state.flowSummary,
       cachedNodeData: null,
+      completedTodos: state.completedTodos ?? null,
       status: state.status,
       currentNode: currentNode ?? null,
       flow: flow ?? null,
@@ -92,6 +94,7 @@ export class RedisNodeSessionStore implements NodeSessionStore {
       currentNodeId: null,
       detectedIntent: null,
       flowSummary: null,
+      completedTodos: null,
       status: 'active',
     };
     await this.save(state);
@@ -132,6 +135,16 @@ export class RedisNodeSessionStore implements NodeSessionStore {
 
   async setCachedNodeData(_id: string, _data: CachedNodeData): Promise<void> {
     // No-op in test mode — sessions are ephemeral
+  }
+
+  async updateCompletedTodos(id: string, todos: Record<string, boolean>): Promise<SessionData> {
+    const state = await this.redis.getJson<RedisSessionState>(this.idKey(id));
+    if (!state) {
+      throw new Error(`RedisNodeSessionStore.updateCompletedTodos: session ${id} not found`);
+    }
+    state.completedTodos = todos;
+    await this.save(state);
+    return this.hydrate(state);
   }
 
   async close(id: string): Promise<void> {
