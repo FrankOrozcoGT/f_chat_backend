@@ -34,4 +34,23 @@ export class ContactLabelRepository {
       include: { client: true },
     });
   }
+
+  async create(tenantId: string, data: { label: string; clientId?: string; groupJid?: string }) {
+    return this.prisma.contactLabel.create({
+      data: { tenantId, ...data },
+      include: { client: true },
+    });
+  }
+
+  async updateById(id: string, data: { label?: string; clientId?: string; groupJid?: string }) {
+    return this.prisma.contactLabel.update({
+      where: { id },
+      data,
+      include: { client: true },
+    });
+  }
+
+  async deleteById(id: string) {
+    return this.prisma.contactLabel.delete({ where: { id } });
+  }
 }
