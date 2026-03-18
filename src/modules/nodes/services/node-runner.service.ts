@@ -140,7 +140,6 @@ export class NodeRunnerService {
     transcription: string,
     imageUrl: string | null,
     history: { role: string; content: string }[],
-    skipDefaultCodes: string[] = [],
   ): Promise<NodeRunResult> {
     // 0. Parsear todos — solo se inyectan si el nodo los tiene definidos
     // La validación de que sean obligatorios se hace en custom-node (nodos de DB)
@@ -175,7 +174,7 @@ export class NodeRunnerService {
       : null;
 
     // 3. Resolver postCode (terminación)
-    const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode, skipDefaultCodes);
+    const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode);
     const resolvedPostCode = this.fnRegistry.resolvePostCode(postCodes);
 
     // 4. Verificar no haya duplicados entre tools y postCode

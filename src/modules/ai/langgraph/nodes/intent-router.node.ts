@@ -5,8 +5,9 @@ import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
+import { NodeFunctionRegistry } from '@modules/nodes/functions/node-function.registry';
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
-import { buildVirtualRouterNode } from '@modules/nodes/router-config';
+import { ROUTER_SYSTEM_PROMPT, ROUTER_PRE_CODE, ROUTER_POST_CODE } from '@modules/nodes/router-config';
 
 @Injectable()
 export class IntentRouterNode {
@@ -14,6 +15,7 @@ export class IntentRouterNode {
 
   constructor(
     private readonly nodeRunner: NodeRunnerService,
+    private readonly fnRegistry: NodeFunctionRegistry,
     private readonly langSmithService: LangSmithService,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
@@ -51,7 +53,7 @@ export class IntentRouterNode {
       };
     }
 
-    // 2. No currentNodeId → execute hardcoded router
+    // 2. No currentNodeId → execute router directly
     this.logger.log(`IntentRouter: no active node, executing hardcoded router`);
 
     // Load history
@@ -64,8 +66,6 @@ export class IntentRouterNode {
         content: m.content,
       }));
 
-    const virtualRouterNode = buildVirtualRouterNode();
-
     // Build NodeContext
     const ctx = new NodeContext();
     ctx.messageId = messageId;
@@ -75,32 +75,56 @@ export class IntentRouterNode {
     ctx.history = history;
     ctx.instanceName = instanceName;
     ctx.clientPhone = clientPhone;
-    ctx.node = virtualRouterNode;
     ctx.isTest = state.isTest ?? false;
     ctx.sessionStore = sessionStore;
 
-    // Ensure a session exists (create without flow if needed)
+    // Ensure a session exists
     const session = existingSession ?? await sessionStore.findOrCreate(conversationId);
     ctx.nodeSession = session;
-    if (session.flow) {
-      ctx.flow = session.flow;
-    }
+    if (session.flow) ctx.flow = session.flow;
 
     try {
+      // preCode: loadIntents
+      const systemPromptExtra = await this.fnRegistry.executePreCode(ROUTER_PRE_CODE, ctx);
+
+      // postCode: router termination tools (no DEFAULT_POST_CODES — router defines its own)
+      const resolvedPostCode = this.fnRegistry.resolvePostCode(ROUTER_POST_CODE);
+
       const traceMessages = [
         ...history,
         {
           role: 'user',
-          content: imageUrl
-            ? `${transcription} [imagen: ${imageUrl}]`
-            : transcription,
+          content: imageUrl ? `${transcription} [imagen: ${imageUrl}]` : transcription,
         },
       ];
 
       const result = await this.langSmithService.traceLLM(
-        () => this.nodeRunner.runNode(ctx, virtualRouterNode, transcription, imageUrl, history, ['exitFlow']),
+        () => this.nodeRunner.run({
+          node: { id: 'virtual-router', name: 'Router (hardcoded)', systemPrompt: ROUTER_SYSTEM_PROMPT } as any,
+          transcription,
+          imageUrl,
+          history,
+          systemPromptExtra,
+          toolDefinitions: resolvedPostCode.definitions,
+          toolHandlers: new Map(),
+          terminationNames: resolvedPostCode.terminationNames,
+          fnRegistry: this.fnRegistry,
+          ctx,
+        }),
         traceMessages,
       );
+
+      // Execute the termination handler (e.g. findFlowForIntent, responder, closeSession)
+      if (result.toolResult?.terminationTool) {
+        const toolName = result.toolResult.terminationTool;
+        const handler = resolvedPostCode.handlers.get(toolName);
+        if (handler) {
+          ctx.toolCallArgs = result.toolResult.terminationArgs ?? undefined;
+          ctx.llmResult = result.toolResult;
+          await handler.instance[handler.method](ctx);
+          ctx.toolCallArgs = undefined;
+        }
+      }
 
       const apiCall: CreateApiCallData = {
         messageId,
@@ -112,25 +136,16 @@ export class IntentRouterNode {
         latencyMs: result.latencyMs,
       };
 
-      // Increment credits
-      const actualCredits = this.limitsService.calculateCreditsFromLlm(
-        result.tokensInput,
-        result.tokensOutput,
-      );
+      const actualCredits = this.limitsService.calculateCreditsFromLlm(result.tokensInput, result.tokensOutput);
       await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
 
       // Determine router action from termination tool
       let routerAction: 'responder' | 'closeSession' | 'findFlowForIntent' | null = null;
-
       if (result.toolResult?.terminationTool) {
         const toolName = result.toolResult.terminationTool;
-        if (toolName === 'findFlowForIntent') {
-          routerAction = 'findFlowForIntent';
-        } else if (toolName === 'closeSession') {
-          routerAction = 'closeSession';
-        } else {
-          routerAction = 'responder';
-        }
+        if (toolName === 'findFlowForIntent') routerAction = 'findFlowForIntent';
+        else if (toolName === 'closeSession') routerAction = 'closeSession';
+        else routerAction = 'responder';
       }
 
       // Reload nodeSession to get updated currentNodeId (findFlowForIntent may have changed it)
@@ -140,10 +155,8 @@ export class IntentRouterNode {
         `IntentRouter: action=${routerAction}, intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens, updatedSession.currentNodeId=${updatedSession?.currentNodeId ?? 'null'}`,
       );
 
-      const preferredFormat: 'audio' | 'text' =
-        messageType === 'voice' || messageType === 'audio' ? 'audio' : 'text';
+      const preferredFormat: 'audio' | 'text' = messageType === 'voice' || messageType === 'audio' ? 'audio' : 'text';
 
-      // Register node transitions for test visibility
       const nodeTransitions = [...(state.nodeTransitions ?? [])];
       const newNodeId = updatedSession?.currentNodeId ?? null;
       if (routerAction === 'findFlowForIntent' && newNodeId) {

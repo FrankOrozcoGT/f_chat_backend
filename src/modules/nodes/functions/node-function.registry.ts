@@ -145,7 +145,7 @@ export class NodeFunctionRegistry implements OnModuleInit {
    * Parse postCode from DB (string[] JSON) and merge with defaults.
    * Deduplicates codes.
    */
-  mergePostCode(postCodeRaw: string | null, skipCodes: string[] = []): string[] {
+  mergePostCode(postCodeRaw: string | null): string[] {
     const codes = new Set<string>();
 
     if (postCodeRaw) {
@@ -162,7 +162,7 @@ export class NodeFunctionRegistry implements OnModuleInit {
     }
 
     for (const code of DEFAULT_POST_CODES) {
-      if (!skipCodes.includes(code)) codes.add(code);
+      codes.add(code);
     }
 
     return [...codes];
