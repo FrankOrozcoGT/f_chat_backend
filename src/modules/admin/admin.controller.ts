@@ -14,6 +14,7 @@ import { AdminService } from './admin.service';
 import { CostsRepository } from './repositories/costs.repository';
 import { ApiHealthRepository } from '@modules/health/repositories/api-health.repository';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
+import { TenantRepository } from '@modules/tenants/repositories/tenant.repository';
 import { CostsQueryDto } from './dto/costs-query.dto';
 import { CostsResponseDto } from './dto/costs-response.dto';
 import { UpdateUserLimitsDto } from './dto/update-user-limits.dto';
@@ -27,12 +28,18 @@ export class AdminController {
     private readonly costsRepository: CostsRepository,
     private readonly apiHealthRepository: ApiHealthRepository,
     private readonly tenantSettingsRepository: TenantSettingsRepository,
+    private readonly tenantRepository: TenantRepository,
   ) {}
 
   @Get('costs')
   async getCosts(@Query() query: CostsQueryDto): Promise<CostsResponseDto> {
     const apiCalls = await this.costsRepository.getApiCallsByPeriod(query.period);
     return this.adminService.aggregateCosts(apiCalls);
+  }
+
+  @Get('tenants')
+  async getAllTenants() {
+    return this.tenantRepository.findAllWithSettings();
   }
 
   @Get('health')

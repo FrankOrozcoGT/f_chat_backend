@@ -140,4 +140,20 @@ export class TenantRepository {
       data: { name },
     });
   }
+
+  async findAllWithSettings(): Promise<TenantWithSettings[]> {
+    return this.prisma.tenant.findMany({
+      include: {
+        settings: {
+          select: {
+            plan: true,
+            whatsappLimit: true,
+            creditsLimit: true,
+            creditsUsed: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 }
