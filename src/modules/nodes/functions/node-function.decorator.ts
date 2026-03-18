@@ -3,6 +3,14 @@ import { ToolDefinition } from '../../ai/clients/kimi.client';
 
 export const NODE_FUNCTION_METADATA = 'NODE_FUNCTION_METADATA';
 
+export const NodeFunctionType = {
+  TOOL: 'tool',
+  PRE_CODE: 'preCode',
+  POST_CODE: 'postCode',
+} as const;
+
+export type NodeFunctionType = typeof NodeFunctionType[keyof typeof NodeFunctionType];
+
 export interface NodeFunctionMeta {
   /** Identificador único de la función. Debe ser único en todo el registry. */
   code: string;

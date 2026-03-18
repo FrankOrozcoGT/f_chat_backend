@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
   Req,
@@ -12,8 +13,11 @@ import {
 } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
+import { IntentRepository } from './repositories/intent.repository';
+import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
 import { AiWorkflow } from '../ai/langgraph/workflow';
@@ -24,7 +28,17 @@ import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
 import { TestStepBackDto } from './dto/test-step-back.dto';
 import { TestStopDto } from './dto/test-stop.dto';
+import { CreateFlowDto } from './dto/create-flow.dto';
+import { UpdateFlowDto } from './dto/update-flow.dto';
+import { CreateTransitionDto } from './dto/create-transition.dto';
+import { CreateIntentDto } from './dto/create-intent.dto';
+import { UpdateIntentDto } from './dto/update-intent.dto';
 import { Prisma } from '@prisma/client';
+
+interface AuthUser {
+  id: string;
+  tenantId: string;
+}
 
 @Controller('api/nodes')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +46,8 @@ export class NodesController {
   constructor(
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
+    private readonly intentRepo: IntentRepository,
+    private readonly functionRegistry: NodeFunctionRegistry,
     private readonly testSessionService: TestSessionService,
     private readonly testQueueResultStore: TestQueueResultStore,
     private readonly workflow: AiWorkflow,
@@ -39,17 +55,80 @@ export class NodesController {
     private readonly redisService: RedisService,
   ) {}
 
+  // ─── Functions ───────────────────────────────────────────────────────────────
+
+  @Get('functions')
+  getFunctions() {
+    return this.functionRegistry.getAll();
+  }
+
+  // ─── Flows ───────────────────────────────────────────────────────────────────
+
   @Get('flows')
-  async getMyFlows(@Req() req) {
-    return this.nodeRepo.findAllFlowsByTenantId(req.user.tenantId);
+  getMyFlows(@CurrentUser() user: AuthUser) {
+    return this.nodeRepo.findAllFlowsByTenantId(user.tenantId);
   }
 
   @Get('flows/active-sessions')
-  async getActiveSessions(@Req() req) {
-    const flows = await this.nodeRepo.findAllFlowsByTenantId(req.user.tenantId);
+  async getActiveSessions(@CurrentUser() user: AuthUser) {
+    const flows = await this.nodeRepo.findAllFlowsByTenantId(user.tenantId);
     const flowIds = flows.map((f) => f.id);
     if (flowIds.length === 0) return {};
     return this.nodeSessionRepo.countActiveByNode(flowIds);
+  }
+
+  @Post('flows')
+  createFlow(@CurrentUser() user: AuthUser, @Body() dto: CreateFlowDto) {
+    return this.nodeRepo.createFlow({ tenantId: user.tenantId, ...dto });
+  }
+
+  @Put('flows/:id')
+  updateFlow(@Param('id') id: string, @Body() dto: UpdateFlowDto) {
+    return this.nodeRepo.updateFlow(id, dto);
+  }
+
+  @Delete('flows/:id')
+  deleteFlow(@Param('id') id: string) {
+    return this.nodeRepo.deleteFlow(id);
+  }
+
+  // ─── Transitions ─────────────────────────────────────────────────────────────
+
+  @Get('flows/:flowId/transitions')
+  getTransitions(@Param('flowId') flowId: string) {
+    return this.nodeRepo.findTransitionsByFlowId(flowId);
+  }
+
+  @Post('flows/:flowId/transitions')
+  createTransition(@Param('flowId') flowId: string, @Body() dto: CreateTransitionDto) {
+    return this.nodeRepo.createTransition({ flowId, ...dto });
+  }
+
+  @Delete('flows/:flowId/transitions/:id')
+  deleteTransition(@Param('id') id: string) {
+    return this.nodeRepo.deleteTransition(id);
+  }
+
+  // ─── Intents ─────────────────────────────────────────────────────────────────
+
+  @Get('intents')
+  getIntents(@CurrentUser() user: AuthUser) {
+    return this.intentRepo.findByTenantId(user.tenantId);
+  }
+
+  @Post('intents')
+  createIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateIntentDto) {
+    return this.intentRepo.create(user.tenantId, dto);
+  }
+
+  @Put('intents/:id')
+  updateIntent(@Param('id') id: string, @Body() dto: UpdateIntentDto) {
+    return this.intentRepo.updateById(id, dto);
+  }
+
+  @Delete('intents/:id')
+  deleteIntent(@Param('id') id: string) {
+    return this.intentRepo.deleteById(id);
   }
 
   @Get(':id')

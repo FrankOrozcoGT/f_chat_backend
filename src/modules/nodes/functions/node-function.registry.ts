@@ -3,6 +3,7 @@ import { DiscoveryService } from '@nestjs/core';
 import {
   NODE_FUNCTION_METADATA,
   NodeFunctionMeta,
+  NodeFunctionType,
 } from './node-function.decorator';
 import { NodeContext } from './node-function.context';
 import { ToolDefinition } from '../../ai/clients/kimi.client';
@@ -60,6 +61,17 @@ export class NodeFunctionRegistry implements OnModuleInit {
 
   has(code: string): boolean {
     return this.functions.has(code);
+  }
+
+  getAll(): (NodeFunctionMeta & { type: NodeFunctionType })[] {
+    return [...this.functions.values()].map((f) => ({
+      ...f.meta,
+      type: f.meta.toolDefinition
+        ? NodeFunctionType.TOOL
+        : f.meta.outputSchema
+          ? NodeFunctionType.POST_CODE
+          : NodeFunctionType.PRE_CODE,
+    }));
   }
 
   async execute(code: string, ctx: NodeContext): Promise<string> {
