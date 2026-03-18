@@ -18,6 +18,7 @@ export interface IncomingMessageEvent {
   mediaRelativePath: string | null;
   mediaMetadata: { fileName: string; mimeType: string } | null;
   isTest?: boolean;
+  fromHitl?: boolean;
 }
 
 @Injectable()
