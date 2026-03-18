@@ -27,6 +27,25 @@ export class IntentRepository {
     });
   }
 
+  async create(tenantId: string, data: { name: string; flowId?: string }) {
+    return this.prisma.intent.create({
+      data: { tenantId, ...data },
+      include: { flow: true },
+    });
+  }
+
+  async updateById(id: string, data: { name?: string; flowId?: string }) {
+    return this.prisma.intent.update({
+      where: { id },
+      data,
+      include: { flow: true },
+    });
+  }
+
+  async deleteById(id: string) {
+    return this.prisma.intent.delete({ where: { id } });
+  }
+
   async delete(tenantId: string, name: string) {
     return this.prisma.intent.delete({
       where: { tenantId_name: { tenantId, name } },
