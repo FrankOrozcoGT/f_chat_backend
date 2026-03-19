@@ -275,7 +275,7 @@ export class WebhookProcessorService {
           conversationId: conversation.id,
           instanceName,
           clientPhone,
-          userId: phone.tenantId,
+          tenantId: phone.tenantId,
           messageType: message.type,
           content: message.content,
           mediaRelativePath: mediaData?.relativePath || null,
