@@ -13,6 +13,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
 import { SessionLifecycleService } from '@modules/ai/services/session-lifecycle.service';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { ConversationAnalysisService } from '@modules/conversation-analysis/conversation-analysis.service';
 import { HitlService } from './hitl.service';
 import { TakeControlDto } from './dto/take-control.dto';
 import { ReturnToAiDto } from './dto/return-to-ai.dto';
@@ -28,6 +29,7 @@ export class HitlController {
     private readonly messageRepository: MessageRepository,
     private readonly phoneRepository: PhoneRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly analysisService: ConversationAnalysisService,
   ) {}
 
   @Post('take-control')
@@ -35,14 +37,9 @@ export class HitlController {
   async takeControl(@Body() dto: TakeControlDto, @Req() req) {
     const tenantId = req.user.tenantId;
 
-    const conversation =
-      await this.conversationRepository.findByIdWithRelations(
-        dto.conversationId,
-      );
+    const conversation = await this.conversationRepository.findByIdWithRelations(dto.conversationId);
     if (!conversation) {
-      throw new NotFoundException(
-        `Conversation ${dto.conversationId} not found`,
-      );
+      throw new NotFoundException(`Conversation ${dto.conversationId} not found`);
     }
 
     this.hitlService.validateCanTakeControl(conversation, tenantId);
@@ -54,10 +51,7 @@ export class HitlController {
       extras: { userName: req.user.name },
     });
 
-    this.logger.log(
-      `User ${req.user.id} took control of conversation ${dto.conversationId}`,
-    );
-
+    this.logger.log(`User ${req.user.id} took control of conversation ${dto.conversationId}`);
     return { message: 'Control taken successfully' };
   }
 
@@ -66,14 +60,9 @@ export class HitlController {
   async returnToAi(@Body() dto: ReturnToAiDto, @Req() req) {
     const tenantId = req.user.tenantId;
 
-    const conversation =
-      await this.conversationRepository.findByIdWithRelations(
-        dto.conversationId,
-      );
+    const conversation = await this.conversationRepository.findByIdWithRelations(dto.conversationId);
     if (!conversation) {
-      throw new NotFoundException(
-        `Conversation ${dto.conversationId} not found`,
-      );
+      throw new NotFoundException(`Conversation ${dto.conversationId} not found`);
     }
 
     this.hitlService.validateCanReturnToAi(conversation, tenantId);
@@ -83,24 +72,26 @@ export class HitlController {
       tenantId: req.user.tenantId,
     });
 
-    // Verificar si el último mensaje es del cliente para re-trigger AI
-    const messages = await this.messageRepository.findByConversationId(
-      dto.conversationId,
-    );
+    const messages = await this.messageRepository.findByConversationId(dto.conversationId);
     if (messages && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
 
-      if (
-        lastMessage.direction === 'incoming' &&
-        lastMessage.senderType === 'client'
-      ) {
+      if (lastMessage.direction === 'incoming' && lastMessage.senderType === 'client') {
         this.logger.log(
           `Last message from client, triggering AI processing for conversation ${dto.conversationId} (fromHitl=true, messageCount=${messages.length})`,
         );
 
         const phone = await this.phoneRepository.findById(conversation.phoneId);
         if (phone && conversation.client) {
-          // fromHitl=true activates entry_checker when there are >1 messages
+          let conversationSummary: string | null = conversation.summary ?? null;
+          try {
+            const result = await this.analysisService.runAnalysis(conversation, tenantId);
+            if (result.summary) conversationSummary = result.summary;
+            this.logger.log(`[return-to-ai] Analysis completed for conversation ${dto.conversationId}`);
+          } catch (err) {
+            this.logger.warn(`[return-to-ai] Analysis failed (non-blocking): ${err.message}`);
+          }
+
           this.eventEmitter.emit('ai.incoming.message', {
             messageId: lastMessage.id,
             conversationId: conversation.id,
@@ -111,21 +102,16 @@ export class HitlController {
             content: lastMessage.content,
             mediaRelativePath: lastMessage.mediaUrl || null,
             mediaMetadata: lastMessage.fileName
-              ? {
-                  fileName: lastMessage.fileName,
-                  mimeType: lastMessage.mimeType,
-                }
+              ? { fileName: lastMessage.fileName, mimeType: lastMessage.mimeType }
               : null,
             fromHitl: messages.length > 1,
+            conversationSummary,
           });
         }
       }
     }
 
-    this.logger.log(
-      `User ${req.user.id} returned conversation ${dto.conversationId} to AI`,
-    );
-
+    this.logger.log(`User ${req.user.id} returned conversation ${dto.conversationId} to AI`);
     return { message: 'Returned to AI successfully' };
   }
 }
