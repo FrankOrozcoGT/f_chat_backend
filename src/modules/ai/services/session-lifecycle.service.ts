@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SessionRepository } from '../repositories/session.repository';
 import { InternalApiClient } from '../clients/internal-api.client';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
+import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
 
 export interface SwitchToHitlParams {
   conversationId: string;
@@ -30,6 +31,7 @@ export class SessionLifecycleService {
     private readonly sessionRepository: SessionRepository,
     private readonly internalApi: InternalApiClient,
     private readonly websocketGateway: AppWebSocketGateway,
+    private readonly nodeSessionRepository: NodeSessionRepository,
   ) {}
 
   async switchToHitl(params: SwitchToHitlParams): Promise<void> {
@@ -137,7 +139,13 @@ export class SessionLifecycleService {
       await this.sessionRepository.close(activeSession.id, 'returned_to_ai', tenantId);
     }
 
-    // 3. Create new AI session
+    // 3. Close active nodeSession so intent_router starts fresh (no currentNodeId)
+    const activeNodeSession = await this.nodeSessionRepository.findActiveOrWaitingByConversationId(conversationId);
+    if (activeNodeSession) {
+      await this.nodeSessionRepository.close(activeNodeSession.id);
+    }
+
+    // 4. Create new AI session
     await this.sessionRepository.create(conversationId);
 
     // 4. Emit WS
