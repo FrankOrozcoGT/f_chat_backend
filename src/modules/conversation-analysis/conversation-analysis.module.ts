@@ -21,5 +21,6 @@ import { AnalysisNode } from './langgraph/nodes/analysis.node';
     AnalysisInputRouterNode,
     AnalysisNode,
   ],
+  exports: [AnalysisWorkflow, ConversationAnalysisService],
 })
 export class ConversationAnalysisModule {}

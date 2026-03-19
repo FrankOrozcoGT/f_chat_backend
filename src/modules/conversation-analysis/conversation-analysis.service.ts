@@ -1,4 +1,7 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
+import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { LimitsService } from '@common/services/limits.service';
+import { AnalysisWorkflow } from './langgraph/analysis-workflow';
 import {
   SubConversation,
   AnalysisMessage,
@@ -9,8 +12,118 @@ export interface ConversationSplit {
   messageIds: string[];
 }
 
+export interface ConversationForAnalysis {
+  id: string;
+  phoneId: string;
+  phone: { id: string; tenantId: string };
+  client: { id: string; phoneNumber: string; name: string | null } | null;
+}
+
+export interface AnalysisResult {
+  createdConversations: { id: string; summary: string; isActive: boolean; messageCount: number }[];
+  summary: string | null;
+  creditsUsed: number;
+  warnings: { messageId: string; type: string; message: string }[];
+}
+
 @Injectable()
 export class ConversationAnalysisService {
+  private readonly logger = new Logger(ConversationAnalysisService.name);
+
+  constructor(
+    private readonly internalApi: InternalApiClient,
+    private readonly limitsService: LimitsService,
+    private readonly analysisWorkflow: AnalysisWorkflow,
+  ) {}
+
+  async runAnalysis(
+    conversation: ConversationForAnalysis,
+    tenantId: string,
+  ): Promise<AnalysisResult> {
+    const settings = await this.internalApi.getTenantSettings(tenantId);
+    await this.limitsService.validateCredits(tenantId, 1);
+
+    const rawMessages = await this.internalApi.findLastNUnanalyzed(
+      conversation.id,
+      settings.messageLimit,
+    );
+
+    if (rawMessages.length === 0) {
+      return {
+        createdConversations: [],
+        summary: null,
+        creditsUsed: 0,
+        warnings: [{ messageId: '', type: 'no_messages', message: 'No hay mensajes nuevos por analizar' }],
+      };
+    }
+
+    const messages: AnalysisMessage[] = rawMessages.map((m) => ({
+      id: m.id,
+      type: m.type,
+      content: m.content,
+      direction: m.direction,
+      senderType: m.senderType,
+      transcription: m.transcription,
+      mediaUrl: m.mediaUrl,
+      createdAt: m.createdAt,
+    }));
+
+    const clientId = conversation.client?.id ?? null;
+
+    const result = await this.analysisWorkflow.execute({
+      conversationId: conversation.id,
+      tenantId,
+      phoneId: conversation.phoneId,
+      clientId,
+      messages,
+    });
+
+    if (!clientId) {
+      throw new Error(
+        `Cannot create sub-conversations: no clientId for conversation ${conversation.id}`,
+      );
+    }
+
+    const splits = this.buildSplits(result.subConversations, messages);
+    const orphanMessageIds = this.findOrphanPrefix(splits, messages);
+    const batchMessageIds = messages.map((m) => m.id);
+
+    const { createdConversations } = await this.internalApi.processAnalysisSplits({
+      conversationId: conversation.id,
+      phoneId: conversation.phoneId,
+      clientId,
+      batchMessageIds,
+      splits,
+      orphanMessageIds,
+    });
+
+    await this.internalApi.processAnalysisCatalog({
+      tenantId,
+      clientId,
+      products: result.products,
+      promotions: result.promotions,
+    });
+
+    if (result.realName && clientId) {
+      await this.internalApi.updateClientName(clientId, result.realName);
+    }
+
+    const summary = result.subConversations?.length > 0
+      ? result.subConversations.map((s) => s.summary).join('\n\n')
+      : null;
+
+    this.logger.log(
+      `Analysis completed for conversation ${conversation.id}: ${createdConversations.length} sub-conversations, cost=$${result.totalCost.toFixed(6)}`,
+    );
+
+    return {
+      createdConversations,
+      summary,
+      creditsUsed: result.totalCost,
+      warnings: result.warnings,
+    };
+  }
+
   validateOwnership(phoneTenantId: string, jwtTenantId: string): void {
     if (phoneTenantId !== jwtTenantId) {
       throw new ForbiddenException(
@@ -33,30 +146,20 @@ export class ConversationAnalysisService {
         );
       }
 
-      const messageIds = messages
-        .slice(firstIdx, lastIdx + 1)
-        .map((m) => m.id);
-
+      const messageIds = messages.slice(firstIdx, lastIdx + 1).map((m) => m.id);
       return { summary: sub.summary, messageIds };
     });
   }
 
-  /**
-   * Encuentra mensajes huérfanos al inicio del batch que no fueron cubiertos por ningún split.
-   * Ej: batch msgs [1,2,3,4,5,6...50], primer split empieza en msg 6 → retorna [1,2,3,4,5]
-   */
   findOrphanPrefix(
     splits: ConversationSplit[],
     messages: AnalysisMessage[],
   ): string[] {
     if (splits.length === 0) return [];
-
     const firstSplitMessageId = splits[0].messageIds[0];
     if (!firstSplitMessageId) return [];
-
     const firstSplitIdx = messages.findIndex((m) => m.id === firstSplitMessageId);
     if (firstSplitIdx <= 0) return [];
-
     return messages.slice(0, firstSplitIdx).map((m) => m.id);
   }
 
@@ -64,12 +167,8 @@ export class ConversationAnalysisService {
     newPrice: number,
     currentBasePrice: number | null,
   ): 'update_base' | 'create_discount' {
-    if (currentBasePrice === null) {
-      return 'update_base';
-    }
-    if (newPrice >= currentBasePrice) {
-      return 'update_base';
-    }
+    if (currentBasePrice === null) return 'update_base';
+    if (newPrice >= currentBasePrice) return 'update_base';
     return 'create_discount';
   }
 }
