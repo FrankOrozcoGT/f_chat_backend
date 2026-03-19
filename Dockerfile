@@ -10,6 +10,8 @@ RUN apk add --no-cache \
     g++ \
     openssl
 
+RUN npm install -g npm@11.12.0
+
 WORKDIR /app
 
 # Copiar package files
@@ -38,6 +40,8 @@ RUN apk add --no-cache \
     ffmpeg \
     openssl \
     dumb-init
+
+RUN npm install -g npm@11.12.0
 
 WORKDIR /app
 
