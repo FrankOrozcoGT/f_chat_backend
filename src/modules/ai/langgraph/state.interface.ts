@@ -57,6 +57,9 @@ export const WorkflowState = Annotation.Root({
   // Indicates transition from HITL to AI — triggers entry_checker
   fromHitl: Annotation<boolean>,
 
+  // Summary of the conversation (injected on fromHitl=true)
+  conversationSummary: Annotation<string | null>,
+
   // Test mode
   isTest: Annotation<boolean>,
   sideEffects: Annotation<TestSideEffect[]>({

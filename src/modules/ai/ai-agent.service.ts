@@ -19,6 +19,7 @@ export interface IncomingMessageEvent {
   mediaMetadata: { fileName: string; mimeType: string } | null;
   isTest?: boolean;
   fromHitl?: boolean;
+  conversationSummary?: string | null;
 }
 
 @Injectable()

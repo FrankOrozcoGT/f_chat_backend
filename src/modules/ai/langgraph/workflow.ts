@@ -127,6 +127,7 @@ export class AiWorkflow {
       totalCost: 0,
       isTest,
       fromHitl: payload.fromHitl ?? false,
+      conversationSummary: payload.conversationSummary ?? null,
       outOfPathReason: null,
       outOfPathSummary: null,
       error: null,
