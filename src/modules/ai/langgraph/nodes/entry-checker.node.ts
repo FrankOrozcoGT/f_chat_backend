@@ -94,7 +94,11 @@ export class EntryCheckerNode {
     const intentList = intents.map((i) => `- ${i.name}`).join('\n');
 
     // 4. Detect intent via LLM
-    const systemPrompt = `Eres un clasificador de intenciones. Analiza la conversación y determina si hay una intención clara del cliente.
+    const summarySection = state.conversationSummary
+      ? `\n\nCONTEXTO PREVIO DE LA CONVERSACIÓN:\n${state.conversationSummary}\n`
+      : '';
+
+    const systemPrompt = `Eres un clasificador de intenciones. Analiza la conversación y determina si hay una intención clara del cliente.${summarySection}
 
 Intenciones disponibles:
 ${intentList}
