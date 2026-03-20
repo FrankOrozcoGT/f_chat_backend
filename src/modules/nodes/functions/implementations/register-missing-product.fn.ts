@@ -42,8 +42,8 @@ export class RegisterMissingProductFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const productName = ctx.toolCallArgs?.productName as string;
-    const notes = ctx.toolCallArgs?.notes as string;
+    const productName = ctx.args?.productName as string;
+    const notes = ctx.args?.notes as string;
 
     if (!productName || !notes) {
       throw new Error(

@@ -38,7 +38,7 @@ export class UpdateTodosFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const updates = ctx.toolCallArgs?.updates as Record<string, boolean> | undefined;
+    const updates = ctx.args?.updates as Record<string, boolean> | undefined;
     if (!updates || typeof updates !== 'object') {
       throw new Error('updateTodos: "updates" es requerido y debe ser un objeto {todoId: boolean}');
     }

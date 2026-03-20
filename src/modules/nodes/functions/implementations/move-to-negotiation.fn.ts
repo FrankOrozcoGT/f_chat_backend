@@ -34,7 +34,7 @@ export class MoveToNegotiationFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.toolCallArgs?.reason as string;
+    const reason = ctx.args?.reason as string;
     if (!reason) {
       throw new Error('moveToNegotiation: "reason" es requerido');
     }

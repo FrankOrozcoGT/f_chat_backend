@@ -26,11 +26,8 @@ export class NodeContext {
   // LLM result (only available in postCode)
   llmResult?: ToolChatResult;
 
-  // Tool call args (only available when executing as a tool)
-  toolCallArgs?: Record<string, unknown>;
-
-  // PreCode args (only available when executing as preCode with { code, args } format)
-  preCodeArgs?: Record<string, unknown>;
+  // Args passed to the function (available in tools, postCode, and preCode with { code, args } format)
+  args?: Record<string, unknown>;
 
   // Session store (DB in prod, Redis in test)
   sessionStore: NodeSessionStore;

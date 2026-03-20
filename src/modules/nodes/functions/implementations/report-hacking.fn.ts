@@ -27,7 +27,7 @@ export class ReportHackingFn {
   })
   async execute(ctx: NodeContext): Promise<string> {
     const description =
-      (ctx.toolCallArgs?.description as string) || 'Intento de hacking detectado';
+      (ctx.args?.description as string) || 'Intento de hacking detectado';
 
     if (ctx.isTest) {
       ctx.sideEffects.push(

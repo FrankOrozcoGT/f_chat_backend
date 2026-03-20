@@ -33,8 +33,7 @@ export class GetMemoriesFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    // preCode usa preCodeArgs, tool usa toolCallArgs
-    const args = ctx.preCodeArgs ?? ctx.toolCallArgs;
+    const args = ctx.args;
     const keys = args?.keys as string[] | undefined;
 
     if (!keys || keys.length === 0) {

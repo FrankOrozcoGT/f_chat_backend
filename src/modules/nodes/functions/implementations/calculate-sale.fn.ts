@@ -47,12 +47,12 @@ export class CalculateSaleFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const items = ctx.toolCallArgs?.items as Array<{
+    const items = ctx.args?.items as Array<{
       productName: string;
       unitPrice: number;
       quantity: number;
     }>;
-    const location = ctx.toolCallArgs?.location as string;
+    const location = ctx.args?.location as string;
 
     if (!items || items.length === 0) {
       throw new Error('calculateSale: "items" es requerido y no puede estar vacío');

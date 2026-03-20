@@ -38,8 +38,8 @@ export class SalesRejectionFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.toolCallArgs?.reason as string;
-    const productName = ctx.toolCallArgs?.productName as string;
+    const reason = ctx.args?.reason as string;
+    const productName = ctx.args?.productName as string;
 
     if (!reason || !productName) {
       throw new Error('salesRejection: "reason" y "productName" son requeridos');

@@ -48,10 +48,10 @@ export class ForwardReceiptFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const clientName = ctx.toolCallArgs?.clientName as string;
-    const amount = ctx.toolCallArgs?.amount as string;
-    const orderSummary = ctx.toolCallArgs?.orderSummary as string | undefined;
-    const receiptData = ctx.toolCallArgs?.receiptData as string;
+    const clientName = ctx.args?.clientName as string;
+    const amount = ctx.args?.amount as string;
+    const orderSummary = ctx.args?.orderSummary as string | undefined;
+    const receiptData = ctx.args?.receiptData as string;
 
     if (!receiptData) {
       throw new Error(

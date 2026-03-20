@@ -42,9 +42,9 @@ export class SendToVerificationFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const clientName = ctx.toolCallArgs?.clientName as string;
-    const amount = ctx.toolCallArgs?.amount as string;
-    const receiptSummary = ctx.toolCallArgs?.receiptSummary as string | undefined;
+    const clientName = ctx.args?.clientName as string;
+    const amount = ctx.args?.amount as string;
+    const receiptSummary = ctx.args?.receiptSummary as string | undefined;
 
     if (!ctx.nodeSession) {
       throw new Error('sendToVerification: no hay nodeSession activa');

@@ -114,10 +114,10 @@ export class FlowRouterNode {
         const toolName = result.toolResult.terminationTool;
         const handler = resolvedPostCode.handlers.get(toolName);
         if (handler) {
-          ctx.toolCallArgs = result.toolResult.terminationArgs ?? undefined;
+          ctx.args = result.toolResult.terminationArgs ?? undefined;
           ctx.llmResult = result.toolResult;
           await handler.instance[handler.method](ctx);
-          ctx.toolCallArgs = undefined;
+          ctx.args = undefined;
         }
       }
 

@@ -42,8 +42,8 @@ export class TransitionToNodeFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const transitionCode = ctx.toolCallArgs?.transitionCode as string;
-    const summary = ctx.toolCallArgs?.summary as string | undefined;
+    const transitionCode = ctx.args?.transitionCode as string;
+    const summary = ctx.args?.summary as string | undefined;
 
     if (!transitionCode) {
       throw new Error('transitionToNode: "transitionCode" es requerido');

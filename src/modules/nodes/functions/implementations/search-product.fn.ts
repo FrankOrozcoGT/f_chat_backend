@@ -41,7 +41,7 @@ export class SearchProductFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const query = ctx.toolCallArgs?.query as string;
+    const query = ctx.args?.query as string;
     if (!query) {
       throw new Error('searchProduct: "query" es requerido pero no fue proporcionado');
     }

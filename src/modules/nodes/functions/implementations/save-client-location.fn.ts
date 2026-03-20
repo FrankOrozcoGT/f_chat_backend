@@ -33,7 +33,7 @@ export class SaveClientLocationFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const location = ctx.toolCallArgs?.location as string;
+    const location = ctx.args?.location as string;
     if (!location) {
       throw new Error('saveClientLocation: "location" es requerido pero no fue proporcionado');
     }

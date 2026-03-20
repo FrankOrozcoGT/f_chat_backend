@@ -33,7 +33,7 @@ export class CheckPromotionsFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const productName = ctx.toolCallArgs?.productName as string;
+    const productName = ctx.args?.productName as string;
     if (!productName) {
       throw new Error('checkPromotions: "productName" es requerido pero no fue proporcionado');
     }

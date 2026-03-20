@@ -30,11 +30,11 @@ export class FindFlowForIntentFn {
   async execute(ctx: NodeContext): Promise<string> {
     const { tenantId, conversationId, nodeSession } = ctx;
 
-    const intentName = ctx.toolCallArgs?.intent as string | undefined;
+    const intentName = ctx.args?.intent as string | undefined;
 
     if (!intentName) {
       throw new Error(
-        `findFlowForIntent: "intent" is required — got: ${JSON.stringify(ctx.toolCallArgs)}`,
+        `findFlowForIntent: "intent" is required — got: ${JSON.stringify(ctx.args)}`,
       );
     }
 

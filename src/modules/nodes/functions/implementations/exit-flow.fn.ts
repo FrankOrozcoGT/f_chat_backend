@@ -34,8 +34,8 @@ export class ExitFlowFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.toolCallArgs?.reason as string;
-    const summary = ctx.toolCallArgs?.summary as string;
+    const reason = ctx.args?.reason as string;
+    const summary = ctx.args?.summary as string;
 
     if (ctx.nodeSession) {
       await ctx.sessionStore.pauseFlow(ctx.nodeSession.id, summary);

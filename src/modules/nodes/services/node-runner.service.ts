@@ -93,9 +93,9 @@ export class NodeRunnerService {
         // Tool cíclica → ejecutar y devolver resultado a Kimi
         const handler = toolHandlers.get(name);
         if (handler) {
-          ctx.toolCallArgs = args;
+          ctx.args = args;
           const fnResult = await handler.instance[handler.method](ctx);
-          ctx.toolCallArgs = undefined;
+          ctx.args = undefined;
 
           this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
           return fnResult;
@@ -218,10 +218,10 @@ export class NodeRunnerService {
         const handler = resolvedPostCode.handlers.get(toolName);
         if (handler) {
           this.logger.log(`Running postCode: "${toolName}"`);
-          ctx.toolCallArgs = result.toolResult.terminationArgs ?? undefined;
+          ctx.args = result.toolResult.terminationArgs ?? undefined;
           ctx.llmResult = result.toolResult;
           await handler.instance[handler.method](ctx);
-          ctx.toolCallArgs = undefined;
+          ctx.args = undefined;
         }
       }
 

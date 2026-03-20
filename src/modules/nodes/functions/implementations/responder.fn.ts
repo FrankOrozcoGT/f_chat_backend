@@ -38,7 +38,7 @@ export class ResponderFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const mensaje = ctx.toolCallArgs?.mensaje as string;
+    const mensaje = ctx.args?.mensaje as string;
     if (!mensaje) {
       throw new Error('responder: "mensaje" es requerido pero no fue proporcionado');
     }

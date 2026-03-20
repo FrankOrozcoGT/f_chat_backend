@@ -130,9 +130,9 @@ export class NodeFunctionRegistry implements OnModuleInit {
 
     for (const entry of pipeline) {
       const code = typeof entry === 'string' ? entry : entry.code;
-      ctx.preCodeArgs = typeof entry === 'string' ? undefined : entry.args;
+      ctx.args = typeof entry === 'string' ? undefined : entry.args;
       const result = await this.execute(code, ctx);
-      ctx.preCodeArgs = undefined;
+      ctx.args = undefined;
       const meta = this.getMeta(code);
       outputs.push(
         `[${meta?.name || code}]: ${meta?.description || 'Sin descripción'}\n→ ${result}`,

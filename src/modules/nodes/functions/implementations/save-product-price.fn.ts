@@ -42,9 +42,9 @@ export class SaveProductPriceFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const name = ctx.toolCallArgs?.name as string;
-    const price = ctx.toolCallArgs?.price as number;
-    const description = ctx.toolCallArgs?.description as string | undefined;
+    const name = ctx.args?.name as string;
+    const price = ctx.args?.price as number;
+    const description = ctx.args?.description as string | undefined;
 
     if (!name || price == null) {
       throw new Error('saveProductPrice: "name" y "price" son requeridos');
