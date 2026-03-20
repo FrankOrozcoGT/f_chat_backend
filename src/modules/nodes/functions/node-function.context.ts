@@ -29,6 +29,9 @@ export class NodeContext {
   // Tool call args (only available when executing as a tool)
   toolCallArgs?: Record<string, unknown>;
 
+  // PreCode args (only available when executing as preCode with { code, args } format)
+  preCodeArgs?: Record<string, unknown>;
+
   // Session store (DB in prod, Redis in test)
   sessionStore: NodeSessionStore;
 

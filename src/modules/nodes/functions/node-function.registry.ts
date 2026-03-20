@@ -123,13 +123,16 @@ export class NodeFunctionRegistry implements OnModuleInit {
    * Returns formatted context string to append to system prompt.
    */
   async executePreCode(
-    pipeline: string[],
+    pipeline: (string | { code: string; args: Record<string, unknown> })[],
     ctx: NodeContext,
   ): Promise<string> {
     const outputs: string[] = [];
 
-    for (const code of pipeline) {
+    for (const entry of pipeline) {
+      const code = typeof entry === 'string' ? entry : entry.code;
+      ctx.preCodeArgs = typeof entry === 'string' ? undefined : entry.args;
       const result = await this.execute(code, ctx);
+      ctx.preCodeArgs = undefined;
       const meta = this.getMeta(code);
       outputs.push(
         `[${meta?.name || code}]: ${meta?.description || 'Sin descripción'}\n→ ${result}`,

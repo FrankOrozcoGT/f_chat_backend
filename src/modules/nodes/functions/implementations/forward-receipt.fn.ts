@@ -31,15 +31,15 @@ export class ForwardReceiptFn {
             },
             amount: {
               type: 'string',
-              description: 'Monto total esperado del pago (ej: "Q110.00")',
+              description: 'Monto total esperado del pago (ej: "Q<monto>")',
             },
             orderSummary: {
               type: 'string',
-              description: 'Resumen breve del pedido para contexto (ej: "3 cajas leche, envío zona 10")',
+              description: 'Resumen breve del pedido para contexto (ej: "<cantidad> <producto>, envío <lugar>")',
             },
             receiptData: {
               type: 'string',
-              description: 'Datos leídos visualmente del comprobante: monto real, banco, No. de referencia, cuenta destino, fecha (ej: "Monto: Q110.00, Banco: Banrural, Ref: 1120134041, Cuenta: 123456789, Fecha: 13/03/2026")',
+              description: 'Datos leídos visualmente del comprobante: monto real, banco, No. de referencia, cuenta destino, fecha (ej: "Monto: Q<monto>, Banco: <nombre banco>, Ref: <referencia>, Cuenta: <cuenta destino>, Fecha: <fecha>")',
             },
           },
           required: ['clientName', 'amount', 'receiptData'],

@@ -345,6 +345,18 @@ export class ConversationRepository {
     });
   }
 
+  async findAllGroupsSelect(tenantId: string) {
+    return this.prisma.conversation.findMany({
+      where: {
+        type: 'group',
+        groupJid: { not: null },
+        phone: { tenantId },
+      },
+      select: { id: true, groupJid: true, groupName: true },
+      orderBy: { groupName: 'asc' },
+    });
+  }
+
   async createWithParticipant(data: {
     phoneId: string;
     clientId: string;

@@ -29,6 +29,8 @@ import { ForwardReceiptFn } from './functions/implementations/forward-receipt.fn
 import { SendToVerificationFn } from './functions/implementations/send-to-verification.fn';
 import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
 import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
+import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
+import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
@@ -38,7 +40,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule)],
+  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule],
   controllers: [NodesController],
   providers: [
     NodeRepository,
@@ -68,6 +70,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     SendToVerificationFn,
     UpdateTodosFn,
     OutOfPathFn,
+    GetMemoriesFn,
     SecurityEventRepository,
     TemplateRepository,
     TestSessionService,

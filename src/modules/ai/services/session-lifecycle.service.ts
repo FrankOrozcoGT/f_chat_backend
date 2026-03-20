@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SessionRepository } from '../repositories/session.repository';
 import { InternalApiClient } from '../clients/internal-api.client';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
@@ -21,6 +22,7 @@ export interface SwitchToHitlParams {
 export interface ReturnToAiParams {
   conversationId: string;
   tenantId: string;
+  messages: { id: string; direction: string; type: string; content: string | null; mediaUrl?: string | null; fileName?: string | null; mimeType?: string | null }[];
 }
 
 @Injectable()
@@ -32,6 +34,7 @@ export class SessionLifecycleService {
     private readonly internalApi: InternalApiClient,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly nodeSessionRepository: NodeSessionRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async switchToHitl(params: SwitchToHitlParams): Promise<void> {
@@ -128,7 +131,7 @@ export class SessionLifecycleService {
   }
 
   async returnToAi(params: ReturnToAiParams): Promise<void> {
-    const { conversationId, tenantId } = params;
+    const { conversationId, tenantId, messages } = params;
 
     // 1. Update conversation mode to AI
     await this.internalApi.updateConversationMode(conversationId, 'AI');
@@ -148,15 +151,40 @@ export class SessionLifecycleService {
     // 4. Create new AI session
     await this.sessionRepository.create(conversationId);
 
-    // 4. Emit WS
+    // 5. Emit WS
     this.websocketGateway.emit(
       'conversation:returned',
-      {
-        conversationId,
-        timestamp: new Date().toISOString(),
-      },
+      { conversationId, timestamp: new Date().toISOString() },
       tenantId,
     );
+
+    // 6. Dispatch AI processing based on message state
+    const messageCount = messages.length;
+
+    const lastMessage = messages[messages.length - 1];
+
+    if (messageCount <= 1) {
+      if (lastMessage?.direction === 'incoming') {
+        // Single client message → trigger listener
+        this.eventEmitter.emit('ai.hitl.return', {
+          conversationId,
+          tenantId,
+          messageCount,
+          lastMessageDirection: lastMessage.direction,
+          lastMessage,
+        });
+      }
+      // Single outgoing message → do nothing, wait for client
+    } else {
+      // >1 messages → always trigger listener
+      this.eventEmitter.emit('ai.hitl.return', {
+        conversationId,
+        tenantId,
+        messageCount,
+        lastMessageDirection: lastMessage.direction,
+        lastMessage,
+      });
+    }
 
     this.logger.log(`returnToAi: ${conversationId}`);
   }

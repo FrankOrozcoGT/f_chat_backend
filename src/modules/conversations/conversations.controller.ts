@@ -88,6 +88,12 @@ export class ConversationsController {
     };
   }
 
+  @Get('groups/select')
+  @UseGuards(JwtAuthGuard)
+  async getGroupsSelect(@Req() req) {
+    return this.conversationRepository.findAllGroupsSelect(req.user.tenantId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getDetail(@Param('id') id: string, @Req() req) {

@@ -152,9 +152,10 @@ export class NodeRunnerService {
 
     // 1. preCode
     let systemPromptExtra = '';
-    const preCodePipeline = this.parseJsonArray(activeNode.preCode);
+    const preCodePipeline = this.parsePreCodeArray(activeNode.preCode);
     if (preCodePipeline.length > 0) {
-      this.logger.log(`Running preCode: [${preCodePipeline.join(', ')}]`);
+      const labels = preCodePipeline.map((e) => (typeof e === 'string' ? e : e.code));
+      this.logger.log(`Running preCode: [${labels.join(', ')}]`);
       systemPromptExtra = await this.fnRegistry.executePreCode(preCodePipeline, ctx);
     }
 
@@ -276,5 +277,16 @@ export class NodeRunnerService {
       }
     }
     return [];
+  }
+
+  private parsePreCodeArray(value: unknown): (string | { code: string; args: Record<string, unknown> })[] {
+    if (!value) return [];
+    const arr: unknown[] = Array.isArray(value)
+      ? value
+      : typeof value === 'string'
+        ? (() => { try { const p = JSON.parse(value); return Array.isArray(p) ? p : []; } catch { return []; } })()
+        : [];
+
+    return arr.filter((e) => typeof e === 'string' || (typeof e === 'object' && e !== null && 'code' in e)) as (string | { code: string; args: Record<string, unknown> })[];
   }
 }

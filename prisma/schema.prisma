@@ -42,6 +42,7 @@ model Tenant {
   contactLabels     ContactLabel[]
   templates         Template[]
   settings          TenantSettings?
+  memory            TenantMemory?
 }
 
 model TenantSettings {
@@ -373,6 +374,15 @@ model MediaFile {
   message         Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+}
+
+model TenantMemory {
+  id        String   @id @default(uuid())
+  tenantId  String   @unique
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model ApiHealth {

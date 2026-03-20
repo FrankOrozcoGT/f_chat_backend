@@ -21,7 +21,7 @@ export class ContactLabelRepository {
 
   async findByClientPhone(phoneNumber: string) {
     return this.prisma.contactLabel.findMany({
-      where: { client: { phoneNumber } },
+      where: { client: { phoneNumber }, groupJid: null },
       include: { client: true },
     });
   }
