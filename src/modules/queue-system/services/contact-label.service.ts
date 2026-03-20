@@ -5,6 +5,7 @@ export interface ResolvedContact {
   remoteJid: string;
   isGroup: boolean;
   clientId?: string;
+  clientPhone?: string; // populated when isGroup=true, the individual phone of the labeled contact
 }
 
 @Injectable()
@@ -18,7 +19,12 @@ export class ContactLabelService {
     }
 
     if (contactLabel.groupJid) {
-      return { remoteJid: contactLabel.groupJid, isGroup: true };
+      return {
+        remoteJid: contactLabel.groupJid,
+        isGroup: true,
+        clientPhone: contactLabel.client?.phoneNumber,
+        clientId: contactLabel.client?.id,
+      };
     }
 
     if (contactLabel.client) {

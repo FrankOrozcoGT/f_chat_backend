@@ -241,11 +241,11 @@ export class WebhookProcessorService {
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
-    // Si es mensaje entrante de grupo, verificar si hay un QueueRequest pendiente para ese grupo
+    // Si es mensaje entrante de grupo, verificar si hay un QueueRequest pendiente para ese grupo+sender
     if (!fromMe && isGroup) {
       const queueRequest = await this.queueRequestService.handleResponse(
         instanceName,
-        '',
+        senderPhone,
         message.content,
         remoteJid,
       );
@@ -254,9 +254,9 @@ export class WebhookProcessorService {
           queueRequestId: queueRequest.id,
           messageId: message.id,
         });
-        this.logger.log(`[queue] Response from group ${remoteJid} matched QueueRequest ${queueRequest.id}`);
+        this.logger.log(`[queue] Response from group ${remoteJid} sender ${senderPhone} matched QueueRequest ${queueRequest.id}`);
+        return;
       }
-      // No return — el mensaje de grupo igual se guarda y puede seguir su flujo normal
     }
 
     // Si es mensaje entrante individual, verificar si es contacto etiquetado (supervisor, etc.)

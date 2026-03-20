@@ -49,11 +49,12 @@ export class QueueRequestRepository {
     });
   }
 
-  async findPendingByGroup(groupJid: string) {
+  async findPendingByGroup(groupJid: string, senderPhone?: string) {
     return this.prisma.queueRequest.findFirst({
       where: {
         groupJid,
         status: 'sent',
+        ...(senderPhone ? { destinationPhone: senderPhone } : {}),
       },
       orderBy: { createdAt: 'asc' },
     });

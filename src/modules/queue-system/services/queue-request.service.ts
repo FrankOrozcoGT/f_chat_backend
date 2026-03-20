@@ -41,7 +41,7 @@ export class QueueRequestService {
       currentNodeId: params.currentNodeId,
       instanceName: params.instanceName,
       label,
-      destinationPhone: resolved.isGroup ? '' : resolved.remoteJid.replace('@s.whatsapp.net', ''),
+      destinationPhone: resolved.isGroup ? (resolved.clientPhone ?? '') : resolved.remoteJid.replace('@s.whatsapp.net', ''),
       groupJid: resolved.isGroup ? resolved.remoteJid : null,
       outgoingMessage: message,
       imageUrl: params.imageUrl ?? null,
@@ -61,7 +61,7 @@ export class QueueRequestService {
   async handleResponse(instanceName: string, senderPhone: string, responseMessage: string, groupJid?: string) {
     // Find the pending sent request — by groupJid if from a group, otherwise by individual phone
     const queueRequest = groupJid
-      ? await this.queueRequestRepo.findPendingByGroup(groupJid)
+      ? await this.queueRequestRepo.findPendingByGroup(groupJid, senderPhone || undefined)
       : await this.queueRequestRepo.findPendingByDestination(senderPhone);
     if (!queueRequest) return null;
 
