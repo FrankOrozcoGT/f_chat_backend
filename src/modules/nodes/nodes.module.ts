@@ -31,6 +31,7 @@ import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
 import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
 import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
 import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
+import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
@@ -40,7 +41,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule],
+  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
   controllers: [NodesController],
   providers: [
     NodeRepository,

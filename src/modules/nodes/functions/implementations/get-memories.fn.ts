@@ -42,8 +42,6 @@ export class GetMemoriesFn {
 
     if (ctx.isTest) {
       ctx.sideEffects.push({ action: 'getMemories', args: { keys } });
-      this.logger.log(`getMemories [TEST]: keys=${keys.join(', ')}`);
-      return JSON.stringify(Object.fromEntries(keys.map((k) => [k, `[mock value for "${k}"]`])));
     }
 
     const result = await this.tenantMemoryRepo.getKeys(ctx.tenantId, keys);
@@ -53,7 +51,7 @@ export class GetMemoriesFn {
       this.logger.warn(`getMemories: keys not found for tenant=${ctx.tenantId}: ${missing.join(', ')}`);
     }
 
-    this.logger.log(`getMemories: retrieved keys=[${Object.keys(result).join(', ')}] for tenant=${ctx.tenantId}`);
+    this.logger.log(`getMemories${ctx.isTest ? ' [TEST]' : ''}: retrieved keys=[${Object.keys(result).join(', ')}] for tenant=${ctx.tenantId}`);
     return JSON.stringify(result);
   }
 }

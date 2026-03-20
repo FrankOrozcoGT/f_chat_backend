@@ -123,6 +123,7 @@ export class CustomNode {
       ctx.instanceName = instanceName;
       ctx.clientPhone = clientPhone;
       ctx.imageUrl = imageUrl;
+      ctx.mediaRelativePath = state.mediaRelativePath ?? null;
       ctx.node = activeNode;
       ctx.isTest = state.isTest ?? false;
       ctx.sessionStore = sessionStore;

@@ -17,6 +17,7 @@ export class NodeContext {
   instanceName: string;
   clientPhone: string;
   imageUrl: string | null = null;
+  mediaRelativePath: string | null = null;
 
   // Node data
   node: Node;

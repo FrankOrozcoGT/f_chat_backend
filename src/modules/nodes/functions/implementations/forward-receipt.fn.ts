@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
+import { FileStorageService } from '@common/file-storage/file-storage.service';
 
 @Injectable()
 export class ForwardReceiptFn {
@@ -9,6 +10,7 @@ export class ForwardReceiptFn {
 
   constructor(
     private readonly queueRequestService: QueueRequestService,
+    private readonly fileStorageService: FileStorageService,
   ) {}
 
   @NodeFunction({
@@ -59,7 +61,7 @@ export class ForwardReceiptFn {
       );
     }
 
-    if (!ctx.imageUrl) {
+    if (!ctx.mediaRelativePath) {
       throw new Error(
         'forwardReceipt: no hay imagen en el mensaje actual. El cliente debe enviar una imagen del comprobante.',
       );
@@ -69,6 +71,7 @@ export class ForwardReceiptFn {
       throw new Error('forwardReceipt: no hay nodeSession activa');
     }
 
+    const imageUrl = this.fileStorageService.buildDockerAccessibleUrl(ctx.mediaRelativePath);
     const caption = [`Comprobante de ${clientName}`, `Total venta: ${amount}`, receiptData].join('\n');
 
     await this.queueRequestService.enqueue({
@@ -79,7 +82,7 @@ export class ForwardReceiptFn {
       instanceName: ctx.instanceName,
       label: 'supervisor',
       message: caption,
-      imageUrl: ctx.imageUrl,
+      imageUrl,
       isTest: ctx.isTest,
       toolName: 'forwardReceipt',
       toolContext: { clientName, amount, orderSummary },

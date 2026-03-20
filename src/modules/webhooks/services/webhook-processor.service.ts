@@ -241,6 +241,24 @@ export class WebhookProcessorService {
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
+    // Si es mensaje entrante de grupo, verificar si hay un QueueRequest pendiente para ese grupo
+    if (!fromMe && isGroup) {
+      const queueRequest = await this.queueRequestService.handleResponse(
+        instanceName,
+        '',
+        message.content,
+        remoteJid,
+      );
+      if (queueRequest) {
+        this.eventEmitter.emit('queue.response.received', {
+          queueRequestId: queueRequest.id,
+          messageId: message.id,
+        });
+        this.logger.log(`[queue] Response from group ${remoteJid} matched QueueRequest ${queueRequest.id}`);
+      }
+      // No return — el mensaje de grupo igual se guarda y puede seguir su flujo normal
+    }
+
     // Si es mensaje entrante individual, verificar si es contacto etiquetado (supervisor, etc.)
     if (!fromMe && !isGroup && clientPhone) {
       const isLabeled = await this.contactLabelService.isLabeledContact(clientPhone);
