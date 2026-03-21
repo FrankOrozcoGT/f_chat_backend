@@ -7,7 +7,7 @@ import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.
 
 export interface SwitchToHitlParams {
   conversationId: string;
-  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover' | 'hacking';
+  reason: 'api_error' | 'credits_exhausted' | 'client_request' | 'manual_takeover' | 'hacking' | 'config_error';
   tenantId: string;
   clientPhone?: string;
   extras?: {

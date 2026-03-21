@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiName } from '@prisma/client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
@@ -183,7 +184,7 @@ export class IntentRouterNode {
     } catch (error) {
       this.logger.error(`IntentRouter failed: ${error.message}`);
       return {
-        error: { step: 'intent_router', apiName: 'kimi_llm', message: error.message },
+        error: { apiName: ApiName.kimi_llm, message: error.message },
       };
     }
   }

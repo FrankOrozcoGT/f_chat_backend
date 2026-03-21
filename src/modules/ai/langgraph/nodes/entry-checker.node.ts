@@ -67,6 +67,7 @@ export class EntryCheckerNode {
 
     // 1. Get message history to determine count
     const messages = await this.internalApi.getMessageHistory(conversationId, 50);
+    this.logger.log(`EntryChecker: conversationId=${conversationId} messagesFromHistory=${messages.length}`);
 
     if (messages.length <= 1) {
       this.logger.log(`EntryChecker: ≤1 messages, skipping → intent_router`);

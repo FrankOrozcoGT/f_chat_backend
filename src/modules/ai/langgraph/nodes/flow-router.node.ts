@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiName } from '@prisma/client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { WorkflowStateType } from '../state.interface';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
@@ -152,7 +153,7 @@ export class FlowRouterNode {
     } catch (error) {
       this.logger.error(`FlowRouter failed: ${error.message}`);
       return {
-        error: { step: 'flow_router', apiName: 'kimi_llm', message: error.message },
+        error: { apiName: ApiName.kimi_llm, message: error.message },
       };
     }
   }
