@@ -4,6 +4,7 @@ import { SessionLifecycleService } from '../../services/session-lifecycle.servic
 import { InternalApiClient } from '../../clients/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { TestSideEffect } from '../../../nodes/functions/node-function.context';
+import { QUEUE_RESUME_MESSAGE_PREFIX } from '../../../queue-system/services/queue-resume.service';
 
 @Injectable()
 export class FinalizeNode {
@@ -33,22 +34,24 @@ export class FinalizeNode {
 
     // Si hubo error en un node anterior → notificar al cliente y activar HITL
     if (error) {
+      const isApiError = 'apiName' in error;
       if (isTest) {
-        sideEffects.push({ action: 'switchToHitl', args: { reason: 'api_error', apiName: error.apiName, errorMessage: error.message } });
-        this.logger.warn(`FinalizeNode [TEST]: API error (${error.apiName}) → HITL registered`);
+        sideEffects.push({ action: 'switchToHitl', args: { reason: isApiError ? 'api_error' : 'config_error', ...(isApiError && { apiName: error.apiName }), errorMessage: error.message } });
+        this.logger.warn(`FinalizeNode [TEST]: ${isApiError ? 'API' : 'Config'} error${isApiError ? ` (${error.apiName})` : ''} → HITL registered`);
       } else {
         await this.sessionLifecycle.switchToHitl({
           conversationId,
-          reason: 'api_error',
+          reason: isApiError ? 'api_error' : 'config_error',
           tenantId,
           clientPhone,
-          extras: { apiName: error.apiName, errorMessage: error.message },
+          extras: isApiError ? { apiName: error.apiName, errorMessage: error.message } : undefined,
         });
-        this.logger.warn(`FinalizeNode: API error (${error.apiName}) → HITL activated for ${conversationId}`);
+        this.logger.warn(`FinalizeNode: ${isApiError ? 'API' : 'Config'} error${isApiError ? ` (${error.apiName})` : ''} → HITL activated for ${conversationId}`);
       }
 
-      if (!isTest && apiCalls.length > 0) {
-        await this.aiRepository.saveApiCalls(apiCalls);
+      const saveable = apiCalls.filter((c) => !c.messageId.startsWith(QUEUE_RESUME_MESSAGE_PREFIX));
+      if (!isTest && saveable.length > 0) {
+        await this.aiRepository.saveApiCalls(saveable);
       }
 
       return {
@@ -57,8 +60,9 @@ export class FinalizeNode {
     }
 
     // Guardar API calls (skip en test mode)
-    if (!isTest && apiCalls.length > 0) {
-      await this.aiRepository.saveApiCalls(apiCalls);
+    const saveable = apiCalls.filter((c) => !c.messageId.startsWith(QUEUE_RESUME_MESSAGE_PREFIX));
+    if (!isTest && saveable.length > 0) {
+      await this.aiRepository.saveApiCalls(saveable);
     }
 
     // Verificar créditos

@@ -4,6 +4,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
 import { PrismaService } from '@common/prisma/prisma.service';
 
+export const QUEUE_RESUME_MESSAGE_PREFIX = 'queue-resume-';
+
 @Injectable()
 export class QueueResumeService {
   private readonly logger = new Logger(QueueResumeService.name);
@@ -38,25 +40,20 @@ export class QueueResumeService {
 
     const clientPhone = conversation.participants[0]?.client?.phoneNumber ?? null;
 
-    // Emit synthetic ai.incoming.message with the queue response as content
-    // The content includes the queue context so the AI knows this is a response
-    const syntheticContent = `[RESPUESTA DE COLA - ${queueRequest.label}]: ${queueRequest.responseMessage}`;
-
-    const resolvedMessageId = queueRequest.isTest
-      ? `test-msg-queue-${queueRequest.id}`
-      : payload.messageId;
+    const queueContext = `Respuesta del supervisor (${queueRequest.label}): ${queueRequest.responseMessage}`;
 
     this.eventEmitter.emit('ai.incoming.message', {
-      messageId: resolvedMessageId,
+      messageId: `${QUEUE_RESUME_MESSAGE_PREFIX}${queueRequest.id}`,
       conversationId: queueRequest.conversationId,
       instanceName: queueRequest.instanceName,
       clientPhone,
       tenantId: conversation.phone.tenantId,
       userId: queueRequest.userId,
       messageType: 'text',
-      content: syntheticContent,
+      content: queueRequest.responseMessage,
       mediaRelativePath: null,
       mediaMetadata: null,
+      queueContext,
       isTest: queueRequest.isTest,
     });
 
