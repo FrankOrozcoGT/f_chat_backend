@@ -26,6 +26,7 @@ import { ContactsModule } from '@modules/contacts/contacts.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 import { TenantsModule } from '@modules/tenants/tenants.module';
 import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
+import { DashboardModule } from '@modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module'
     ContactsModule,
     QueueSystemModule,
     TenantMemoryModule,
+    DashboardModule,
     WebhooksModule,
   ],
 })
