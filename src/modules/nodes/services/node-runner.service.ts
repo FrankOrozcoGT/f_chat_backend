@@ -94,11 +94,17 @@ export class NodeRunnerService {
         const handler = toolHandlers.get(name);
         if (handler) {
           ctx.args = args;
-          const fnResult = await handler.instance[handler.method](ctx);
-          ctx.args = undefined;
-
-          this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
-          return fnResult;
+          try {
+            const fnResult = await handler.instance[handler.method](ctx);
+            ctx.args = undefined;
+            this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
+            return fnResult;
+          } catch (toolError) {
+            ctx.args = undefined;
+            const errorMsg = `ERROR: ${toolError.message}`;
+            this.logger.warn(`Tool "${name}" error returned to LLM: ${toolError.message}`);
+            return errorMsg;
+          }
         }
         this.logger.warn(`Unknown tool called: "${name}"`);
         return `Tool "${name}" no reconocida.`;
@@ -228,19 +234,6 @@ export class NodeRunnerService {
       return { ...result, preCodeContext: systemPromptExtra || undefined };
     } catch (error) {
       this.logger.error(`Node "${activeNode.name}" failed: ${error.message}`);
-
-      if (!ctx.isTest && activeNode.onError === 'hitl') {
-        await this.sessionLifecycle.switchToHitl({
-          conversationId: ctx.conversationId,
-          reason: 'api_error',
-          tenantId: ctx.tenantId,
-          extras: {
-            apiName: 'node',
-            errorMessage: `[${activeNode.name}] ${error.message}`,
-          },
-        });
-      }
-
       throw error;
     }
   }

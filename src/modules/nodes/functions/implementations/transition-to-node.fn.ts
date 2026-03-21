@@ -84,12 +84,8 @@ export class TransitionToNodeFn {
       );
       await this.sessionLifecycle.switchToHitl({
         conversationId: ctx.conversationId,
-        reason: 'api_error',
+        reason: 'config_error',
         tenantId: ctx.tenantId,
-        extras: {
-          apiName: 'node:invalid_transition',
-          errorMessage: `Transición "${transitionCode}" no configurada desde nodo ${currentNodeId}`,
-        },
       });
       return 'hitl_invalid_transition';
     }
@@ -108,12 +104,8 @@ export class TransitionToNodeFn {
       );
       await this.sessionLifecycle.switchToHitl({
         conversationId: ctx.conversationId,
-        reason: 'api_error',
+        reason: 'config_error',
         tenantId: ctx.tenantId,
-        extras: {
-          apiName: 'node:wrong_transition_origin',
-          errorMessage: `Transición "${transitionCode}" no pertenece al nodo actual ${currentNodeId}`,
-        },
       });
       return 'hitl_wrong_transition_origin';
     }

@@ -55,6 +55,10 @@ export class ForwardReceiptFn {
     const orderSummary = ctx.args?.orderSummary as string | undefined;
     const receiptData = ctx.args?.receiptData as string;
 
+    this.logger.log(
+      `forwardReceipt: args=${JSON.stringify(ctx.args)} mediaRelativePath=${ctx.mediaRelativePath} hasImageUrl=${!!ctx.imageUrl} nodeSession=${ctx.nodeSession?.id} conversationId=${ctx.conversationId}`,
+    );
+
     if (!receiptData) {
       throw new Error(
         'forwardReceipt: falta receiptData. Debes leer visualmente el comprobante y extraer: monto real, banco, No. de referencia, cuenta destino y fecha.',

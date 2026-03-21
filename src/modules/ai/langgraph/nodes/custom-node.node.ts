@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageType } from '@prisma/client';
+import { ApiName, MessageType } from '@prisma/client';
+import { KimiApiError } from '../../clients/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '../../clients/internal-api.client';
@@ -35,6 +36,7 @@ export class CustomNode {
       clientPhone,
       nodeSessionId,
       sessionStore,
+      queueContext,
       error: previousError,
     } = state;
 
@@ -100,13 +102,20 @@ export class CustomNode {
       let history: { role: string; content: string }[] = [];
       if (iteration === 0) {
         const messages = await this.internalApi.getMessageHistory(conversationId, 31);
-        const previousMessages = messages.slice(0, -1);
+        const previousMessages = messages.filter((m) => m.id !== messageId);
         history = previousMessages
-          .filter((m) => m.content)
+          .filter((m) => m.content || m.mediaRelativePath)
           .map((m) => ({
             role: m.direction === 'incoming' ? 'user' : 'assistant',
-            content: m.content,
+            content: m.mediaRelativePath
+              ? `${m.content} [messageId:${m.id}]`
+              : m.content,
           }));
+
+        if (queueContext) {
+          history.push({ role: 'assistant', content: 'He enviado el comprobante al supervisor para verificación, esperando respuesta...' });
+          history.push({ role: 'system', content: queueContext });
+        }
       }
 
       this.logger.log(
@@ -255,7 +264,9 @@ export class CustomNode {
       } catch (error) {
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
-          error: { step: 'custom_node', apiName: 'kimi_llm', message: error.message },
+          error: error instanceof KimiApiError
+            ? { apiName: ApiName.kimi_llm, message: error.message }
+            : { message: error.message },
         };
       }
     }

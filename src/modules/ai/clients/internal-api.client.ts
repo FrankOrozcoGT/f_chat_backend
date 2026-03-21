@@ -115,11 +115,15 @@ export class InternalApiClient {
   async getMessageHistory(
     conversationId: string,
     take = 31,
-  ): Promise<{ content: string; direction: string }[]> {
+  ): Promise<{ id: string; content: string; direction: string; mediaRelativePath: string | null }[]> {
     return this.request(
       'GET',
       `/messages/history/${conversationId}?take=${take}`,
     );
+  }
+
+  async getMessageById(messageId: string): Promise<{ id: string; mediaUrl: string | null } | null> {
+    return this.request('GET', `/messages/${messageId}`);
   }
 
   // --- Conversations (extended) ---
