@@ -36,6 +36,7 @@
     "@nestjs/websockets": "^11.1.13",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "@types/sharp": "^0.31.1",
     "axios": "^1.13.5",
     "bullmq": "^5.70.1",
     "class-transformer": "^0.5.1",
@@ -53,6 +54,7 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.4",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
     "ws": "^8.19.0"
   },
