@@ -85,7 +85,14 @@ export class AnalysisNode {
       }
       return {
         realName: parsed.realName ?? null,
-        subConversations: parsed.subConversations,
+        subConversations: parsed.subConversations.map((s: any) => ({
+          summary: s.summary,
+          firstMessageId: s.firstMessageId,
+          lastMessageId: s.lastMessageId,
+          intent: s.intent ?? null,
+          flowSummary: s.flowSummary ?? null,
+          flowDiagram: s.flowDiagram ?? null,
+        })),
         products: parsed.products ?? [],
         promotions: parsed.promotions ?? [],
       };
