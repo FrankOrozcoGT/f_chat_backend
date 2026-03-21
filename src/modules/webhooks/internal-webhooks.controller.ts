@@ -12,6 +12,7 @@ import { InternalGuard } from '@common/guards/internal.guard';
 import { MessageRepository } from './repositories/message.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { ConversationAnalysisRepository } from '@modules/conversation-analysis/repositories/conversation-analysis.repository';
 
 @Controller('internal/messages')
 @UseGuards(InternalGuard)
@@ -20,6 +21,7 @@ export class InternalWebhooksController {
     private readonly messageRepository: MessageRepository,
     private readonly clientRepository: ClientRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
   ) {}
 
   @Post('send-transaction')
@@ -62,8 +64,10 @@ export class InternalWebhooksController {
     );
     const lastN = messages.slice(-limit);
     return lastN.map((m) => ({
+      id: m.id,
       content: m.content,
       direction: m.direction,
+      mediaRelativePath: m.mediaUrl ?? null,
     }));
   }
 
@@ -128,7 +132,7 @@ export class InternalWebhooksController {
       phoneId: string;
       clientId: string;
       batchMessageIds: string[];
-      splits: Array<{ summary: string; messageIds: string[] }>;
+      splits: Array<{ summary: string; messageIds: string[]; intent?: string | null; flowDiagram?: string | null; flowSummary?: string | null }>;
       orphanMessageIds: string[];
     },
   ) {
@@ -178,28 +182,38 @@ export class InternalWebhooksController {
 
     // 3. Crear sub-conversaciones de la IA
     for (const split of splits) {
+      let subConvId: string;
+      let messageCount: number;
+
       if (split.messageIds.length > 0) {
         const result = await this.archiveMessages(
           phoneId, clientId, split.messageIds, split.summary,
         );
-        createdConversations.push({
-          id: result.subConversationId,
-          summary: split.summary,
-          isActive: false,
-          messageCount: result.messageCount,
-        });
+        subConvId = result.subConversationId;
+        messageCount = result.messageCount;
       } else {
-        // Split sin mensajes: solo crear la sub-conversación
         const subConv = await this.conversationRepository.createWithParticipant({
           phoneId, clientId, summary: split.summary, isActive: false,
         });
-        createdConversations.push({
-          id: subConv.id,
-          summary: split.summary,
-          isActive: false,
-          messageCount: 0,
+        subConvId = subConv.id;
+        messageCount = 0;
+      }
+
+      if (split.intent || split.flowDiagram || split.flowSummary) {
+        await this.conversationAnalysisRepo.upsert({
+          conversationId: subConvId,
+          intent: split.intent ?? null,
+          flowDiagram: split.flowDiagram ?? null,
+          flowSummary: split.flowSummary ?? null,
         });
       }
+
+      createdConversations.push({
+        id: subConvId,
+        summary: split.summary,
+        isActive: false,
+        messageCount,
+      });
     }
 
     return { createdConversations };

@@ -10,6 +10,9 @@ import {
 export interface ConversationSplit {
   summary: string;
   messageIds: string[];
+  intent: string | null;
+  flowDiagram: string | null;
+  flowSummary: string | null;
 }
 
 export interface ConversationForAnalysis {
@@ -24,6 +27,8 @@ export interface AnalysisResult {
   summary: string | null;
   creditsUsed: number;
   warnings: { messageId: string; type: string; message: string }[];
+  remainingCount: number | null;
+  lastMessageTranscription: string | null;
 }
 
 @Injectable()
@@ -54,6 +59,8 @@ export class ConversationAnalysisService {
         summary: null,
         creditsUsed: 0,
         warnings: [{ messageId: '', type: 'no_messages', message: 'No hay mensajes nuevos por analizar' }],
+        remainingCount: null,
+        lastMessageTranscription: null,
       };
     }
 
@@ -88,6 +95,12 @@ export class ConversationAnalysisService {
     const orphanMessageIds = this.findOrphanPrefix(splits, messages);
     const batchMessageIds = messages.map((m) => m.id);
 
+    const classifiedIds = new Set([
+      ...orphanMessageIds,
+      ...splits.flatMap((s) => s.messageIds),
+    ]);
+    const remainingInActive = batchMessageIds.filter((id) => !classifiedIds.has(id));
+
     const { createdConversations } = await this.internalApi.processAnalysisSplits({
       conversationId: conversation.id,
       phoneId: conversation.phoneId,
@@ -116,11 +129,15 @@ export class ConversationAnalysisService {
       `Analysis completed for conversation ${conversation.id}: ${createdConversations.length} sub-conversations, cost=$${result.totalCost.toFixed(6)}`,
     );
 
+    const lastBatchMessage = result.processedMessages[result.processedMessages.length - 1] ?? null;
+
     return {
       createdConversations,
       summary,
       creditsUsed: result.totalCost,
       warnings: result.warnings,
+      remainingCount: remainingInActive.length,
+      lastMessageTranscription: lastBatchMessage?.transcription ?? null,
     };
   }
 
@@ -147,7 +164,13 @@ export class ConversationAnalysisService {
       }
 
       const messageIds = messages.slice(firstIdx, lastIdx + 1).map((m) => m.id);
-      return { summary: sub.summary, messageIds };
+      return {
+        summary: sub.summary,
+        messageIds,
+        intent: sub.intent ?? null,
+        flowDiagram: sub.flowDiagram ?? null,
+        flowSummary: sub.flowSummary ?? null,
+      };
     });
   }
 

@@ -175,9 +175,20 @@ model Conversation {
   nodeSessions       NodeSession[]
   participants       ConversationParticipant[]
   stats              ConversationStats?
+  analysis           ConversationAnalysis?
 
   @@index([phoneId])
   @@index([lastMessageAt])
+}
+
+model ConversationAnalysis {
+  id             String       @id @default(uuid())
+  conversationId String       @unique
+  intent         String?
+  flowDiagram    String?
+  flowSummary    String?
+  analyzedAt     DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model ConversationStats {
@@ -517,7 +528,6 @@ enum ApiName {
   qwen_stt
   kimi_llm
   qwen_tts
-  node
 }
 
 enum HealthStatus {
