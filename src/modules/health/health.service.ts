@@ -57,9 +57,6 @@ export class HealthService {
       };
     } catch (error) {
       const responseTimeMs = Date.now() - startTime;
-      this.logger.error(
-        `[HealthService] ${apiName} ping failed: ${error.message} (${responseTimeMs}ms)`,
-      );
 
       return {
         isUp: false,

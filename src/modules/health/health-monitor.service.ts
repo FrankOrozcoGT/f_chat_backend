@@ -22,7 +22,6 @@ export class HealthMonitorService {
     name: 'check-apis-health',
   })
   async checkAPIs() {
-    this.logger.log('[Cron] Health check started');
 
     try {
       // Obtener solo APIs que están siendo monitoreadas (monitoringActive=true)
@@ -43,7 +42,6 @@ export class HealthMonitorService {
       for (const apiHealth of apisToMonitor) {
         const { apiName } = apiHealth;
 
-        this.logger.log(`[Cron] Checking ${apiName}...`);
 
         // Ping a la API
         const pingResult = await this.healthService.pingAPI(apiName);
@@ -76,7 +74,6 @@ export class HealthMonitorService {
         }
       }
 
-      this.logger.log('[Cron] Health check completed');
     } catch (error) {
       this.logger.error(
         `[Cron] Health check failed: ${error.message}`,

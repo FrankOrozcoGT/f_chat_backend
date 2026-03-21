@@ -21,6 +21,7 @@ import { WebSocketModule } from '@common/websocket/websocket.module';
 import { LimitsModule } from '@common/services/limits.module';
 import { NodesModule } from '../nodes/nodes.module';
 import { RedisModule } from '@common/redis/redis.module';
+import { ImageModule } from '@common/image/image.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RedisModule } from '@common/redis/redis.module';
     WebSocketModule,
     LimitsModule,
     RedisModule,
+    ImageModule,
     forwardRef(() => NodesModule),
   ],
   providers: [

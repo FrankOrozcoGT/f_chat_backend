@@ -49,7 +49,7 @@ export class WebhookProcessorService {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
     const isGroup = remoteJid.endsWith('@g.us');
 
-    this.logger.log(`[messages.upsert] FULL_EVENT remoteJid=${remoteJid} fromMe=${fromMe} data=${JSON.stringify(webhookData?.data)}`);
+    this.logger.log(`[messages.upsert] remoteJid=${remoteJid} fromMe=${fromMe} type=${Object.keys(webhookData?.data?.message || {})[0] ?? 'unknown'}`);
 
     // Ignorar tipos de mensaje no procesables
     const rawMessage = webhookData?.data?.message || {};
@@ -177,7 +177,7 @@ export class WebhookProcessorService {
     const hasMedia = this.webhooksService.hasMedia(webhookData);
 
     this.logger.log(
-      `[media] hasMedia=${hasMedia} isGroup=${isGroup} messageKey=${JSON.stringify(messageKey)} rawMessage=${JSON.stringify(webhookData?.data?.message)}`,
+      `[media] hasMedia=${hasMedia} isGroup=${isGroup} messageKey=${JSON.stringify(messageKey)}`,
     );
 
     if (hasMedia && messageKey) {

@@ -119,9 +119,6 @@ export class WebhooksController {
         break;
 
       default:
-        this.logger.log(
-          `[${new Date().toISOString()}] [Webhook] Unhandled event: ${event} - data: ${JSON.stringify(webhookData?.data).substring(0, 200)}`,
-        );
         break;
     }
 
@@ -270,7 +267,6 @@ export class WebhooksController {
         return;
     }
 
-    this.logger.log(`Mapped status '${status}' to '${mappedStatus}'`);
 
     try {
       const updatedMessage = await this.messageRepository.updateStatusByKeyId(
@@ -338,7 +334,7 @@ export class WebhooksController {
 
       if (updated.count > 0) {
         this.logger.log(
-          `[contacts.update] Updated profilePicUrl for ${phoneNumber}`,
+          `[contacts.update] Updated profilePicUrl for ${phoneNumber.substring(0, 6)}...`,
         );
       }
     }

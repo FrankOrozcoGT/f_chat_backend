@@ -7,6 +7,14 @@ import { join } from 'path';
 const PROMPTS_DIR = join(__dirname, '..', 'prompts');
 const CHAT_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'chat-system.md');
 
+export class KimiApiError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'KimiApiError';
+    if (cause) this.cause = cause;
+  }
+}
+
 type ChatMessage = {
   role: string;
   content:
@@ -156,7 +164,7 @@ export class KimiClient {
       if (!response.ok) {
         const errorBody = await response.text();
         const errorHeaders = Object.fromEntries(response.headers.entries());
-        throw new Error(
+        throw new KimiApiError(
           `Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
         );
       }
@@ -233,12 +241,12 @@ export class KimiClient {
         });
       } catch (error) {
         this.logger.error(`chatWithTools fetch failed at iter=${i}:`, error);
-        throw error;
+        throw new KimiApiError(error.message, error.cause);
       }
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`Kimi API error ${response.status}: ${errorBody}`);
+        throw new KimiApiError(`Kimi API error ${response.status}: ${errorBody}`);
       }
 
       const data = await response.json();
