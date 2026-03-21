@@ -15,11 +15,13 @@ export interface IncomingMessageEvent {
   tenantId: string;
   messageType: MessageType;
   content: string | null;
+  transcription?: string | null;
   mediaRelativePath: string | null;
   mediaMetadata: { fileName: string; mimeType: string } | null;
   isTest?: boolean;
   fromHitl?: boolean;
   conversationSummary?: string | null;
+  queueContext?: string | null;
 }
 
 @Injectable()

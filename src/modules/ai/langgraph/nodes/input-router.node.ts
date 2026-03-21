@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageType } from '@prisma/client';
+import { ApiName, MessageType } from '@prisma/client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { QwenSttClient } from '../../clients/qwen-stt.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
@@ -12,6 +12,7 @@ import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { RedisService } from '@common/redis/redis.service';
 import { DbNodeSessionStore } from '@modules/nodes/stores/db-node-session.store';
 import { RedisNodeSessionStore } from '@modules/nodes/stores/redis-node-session.store';
+import { ImageService } from '@common/image/image.service';
 
 @Injectable()
 export class InputRouterNode {
@@ -26,6 +27,7 @@ export class InputRouterNode {
     private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly nodeRepo: NodeRepository,
     private readonly redisService: RedisService,
+    private readonly imageService: ImageService,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -49,14 +51,12 @@ export class InputRouterNode {
       messageType === MessageType.voice ||
       messageType === MessageType.audio
     ) {
-      // Reusar transcripción existente si ya fue procesada
-      const existingMessage = await this.internalApi.getMessage(messageId);
-      if (existingMessage?.transcription) {
+      // Reusar transcripción si ya viene en el state (ej: del análisis previo en hitl.return)
+      if (state.transcription) {
         this.logger.log(
-          `InputRouter: audio → reusing existing transcription: "${existingMessage.transcription.substring(0, 80)}"`,
+          `InputRouter: audio → reusing transcription from state: "${state.transcription.substring(0, 80)}"`,
         );
         return {
-          transcription: existingMessage.transcription,
           sessionStore,
           apiCalls,
           totalCost: 0,
@@ -75,11 +75,7 @@ export class InputRouterNode {
         await this.internalApi.getConversation(conversationId);
       if (!conversation) {
         return {
-          error: {
-            step: 'input_router',
-            apiName: 'qwen_stt',
-            message: 'Conversation not found',
-          },
+          error: { message: 'Conversation not found' },
           sessionStore,
           apiCalls,
           totalCost: 0,
@@ -124,8 +120,7 @@ export class InputRouterNode {
         this.logger.error(`InputRouter: STT failed: ${error.message}`);
         return {
           error: {
-            step: 'input_router',
-            apiName: 'qwen_stt',
+            apiName: ApiName.qwen_stt,
             message: error.message,
           },
           sessionStore,
@@ -151,13 +146,13 @@ export class InputRouterNode {
       let imageUrl: string | null = null;
 
       if (mediaRelativePath) {
-        const imageBuffer =
-          await this.fileStorageService.readFile(mediaRelativePath.replace(/^\//, ''));
-        const mimeType = mediaMetadata?.mimeType || 'image/jpeg';
+        const rawBuffer = await this.fileStorageService.readFile(mediaRelativePath.replace(/^\//, ''));
+        const originalMimeType = mediaMetadata?.mimeType || 'image/jpeg';
+        const { buffer: imageBuffer, mimeType } = await this.imageService.compressForLlm(rawBuffer, originalMimeType);
         const base64 = imageBuffer.toString('base64');
         imageUrl = `data:${mimeType};base64,${base64}`;
         this.logger.log(
-          `InputRouter: image → base64 data URI (${Math.round(base64.length / 1024)}KB), caption="${caption.substring(0, 80)}"`,
+          `InputRouter: image → ${Math.round(base64.length / 1024)}KB, caption="${caption.substring(0, 80)}"`,
         );
       }
 

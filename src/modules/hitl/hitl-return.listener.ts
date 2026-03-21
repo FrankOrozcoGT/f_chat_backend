@@ -20,6 +20,7 @@ export interface HitlReturnEvent {
     direction: string;
     type: string;
     content: string | null;
+    transcription?: string | null;
     mediaUrl?: string | null;
     fileName?: string | null;
     mimeType?: string | null;
@@ -54,16 +55,28 @@ export class HitlReturnListener {
       const conversation = await this.internalApi.getConversationFull(conversationId);
 
       // 1. Run analysis only if ≥5 messages
+      let analysisRemainingCount: number | null = null;
       if (messageCount >= 5 && conversation.client) {
         try {
-          await this.analysisService.runAnalysis(
+          const analysisResult = await this.analysisService.runAnalysis(
             { id: conversation.id, phoneId: conversation.phoneId, phone: conversation.phone, client: conversation.client },
             tenantId,
           );
-          this.logger.log(`[hitl.return] Analysis completed for ${conversationId}`);
+          analysisRemainingCount = analysisResult.remainingCount;
+          if (analysisResult.lastMessageTranscription) {
+            lastMessage.transcription = analysisResult.lastMessageTranscription;
+          }
+          this.logger.log(`[hitl.return] Analysis completed for ${conversationId}, remainingCount=${analysisRemainingCount}`);
         } catch (err) {
-          this.logger.warn(`[hitl.return] Analysis failed (non-blocking): ${err.message}`);
+          this.logger.error(`[hitl.return] Analysis failed: ${err.message}`);
+          throw err;
         }
+      }
+
+      // If analysis ran and left 0 messages → wait for client
+      if (analysisRemainingCount === 0) {
+        this.logger.log(`[hitl.return] Analysis moved all messages → waiting for client`);
+        return;
       }
 
       // 2. Detect intent with LLM
@@ -159,6 +172,7 @@ Responde ÚNICAMENTE con el nombre exacto de la intención si la detectas claram
       tenantId,
       messageType: lastMessage.type,
       content: lastMessage.content ?? null,
+      transcription: lastMessage.transcription ?? null,
       mediaRelativePath: lastMessage.mediaUrl ?? null,
       mediaMetadata: lastMessage.fileName
         ? { fileName: lastMessage.fileName, mimeType: lastMessage.mimeType }
