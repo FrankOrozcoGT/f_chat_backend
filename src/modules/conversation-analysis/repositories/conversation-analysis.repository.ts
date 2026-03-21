@@ -10,6 +10,8 @@ export class ConversationAnalysisRepository {
     intent: string | null;
     flowDiagram: string | null;
     flowSummary: string | null;
+    isInternal?: boolean;
+    internalPurpose?: string | null;
   }) {
     return this.prisma.conversationAnalysis.upsert({
       where: { conversationId: data.conversationId },
@@ -18,11 +20,15 @@ export class ConversationAnalysisRepository {
         intent: data.intent,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
+        isInternal: data.isInternal ?? false,
+        internalPurpose: data.internalPurpose ?? null,
       },
       update: {
         intent: data.intent,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
+        isInternal: data.isInternal ?? false,
+        internalPurpose: data.internalPurpose ?? null,
         analyzedAt: new Date(),
       },
     });

@@ -57,6 +57,8 @@ export class AnalysisWorkflow {
       subConversations: [],
       products: [],
       promotions: [],
+      isInternal: false,
+      internalPurpose: null,
     };
 
     const result = await this.graph.invoke(initialState);

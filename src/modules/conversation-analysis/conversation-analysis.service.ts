@@ -29,6 +29,8 @@ export interface AnalysisResult {
   warnings: { messageId: string; type: string; message: string }[];
   remainingCount: number | null;
   lastMessageTranscription: string | null;
+  isInternal: boolean;
+  internalPurpose: string | null;
 }
 
 @Injectable()
@@ -44,13 +46,18 @@ export class ConversationAnalysisService {
   async runAnalysis(
     conversation: ConversationForAnalysis,
     tenantId: string,
+    messageLimit?: number,
   ): Promise<AnalysisResult> {
-    const settings = await this.internalApi.getTenantSettings(tenantId);
+    let limit = messageLimit;
+    if (!limit) {
+      const settings = await this.internalApi.getTenantSettings(tenantId);
+      limit = settings.messageLimit;
+    }
     await this.limitsService.validateCredits(tenantId, 1);
 
     const rawMessages = await this.internalApi.findLastNUnanalyzed(
       conversation.id,
-      settings.messageLimit,
+      limit,
     );
 
     if (rawMessages.length === 0) {
@@ -61,6 +68,8 @@ export class ConversationAnalysisService {
         warnings: [{ messageId: '', type: 'no_messages', message: 'No hay mensajes nuevos por analizar' }],
         remainingCount: null,
         lastMessageTranscription: null,
+        isInternal: false,
+        internalPurpose: null,
       };
     }
 
@@ -138,6 +147,8 @@ export class ConversationAnalysisService {
       warnings: result.warnings,
       remainingCount: remainingInActive.length,
       lastMessageTranscription: lastBatchMessage?.transcription ?? null,
+      isInternal: result.isInternal ?? false,
+      internalPurpose: result.internalPurpose ?? null,
     };
   }
 
