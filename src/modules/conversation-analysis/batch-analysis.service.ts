@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
+import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 
 @Injectable()
 export class BatchAnalysisService {
@@ -11,6 +12,7 @@ export class BatchAnalysisService {
     private readonly prisma: PrismaService,
     private readonly analysisService: ConversationAnalysisService,
     private readonly clientLabelRepo: ClientLabelRepository,
+    private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
   ) {}
 
   async runBatch(
@@ -37,6 +39,12 @@ export class BatchAnalysisService {
         }
 
         analyzed++;
+
+        await this.conversationAnalysisRepo.upsertInternal({
+          conversationId: conversation.id,
+          isInternal: result.isInternal,
+          internalPurpose: result.internalPurpose,
+        });
 
         if (result.isInternal) {
           internalsDetected++;

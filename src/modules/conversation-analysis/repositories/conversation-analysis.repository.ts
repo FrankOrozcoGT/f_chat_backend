@@ -34,6 +34,29 @@ export class ConversationAnalysisRepository {
     });
   }
 
+  async upsertInternal(data: {
+    conversationId: string;
+    isInternal: boolean;
+    internalPurpose: string | null;
+  }) {
+    return this.prisma.conversationAnalysis.upsert({
+      where: { conversationId: data.conversationId },
+      create: {
+        conversationId: data.conversationId,
+        intent: null,
+        flowDiagram: null,
+        flowSummary: null,
+        isInternal: data.isInternal,
+        internalPurpose: data.internalPurpose,
+      },
+      update: {
+        isInternal: data.isInternal,
+        internalPurpose: data.internalPurpose,
+        analyzedAt: new Date(),
+      },
+    });
+  }
+
   async findByConversationId(conversationId: string) {
     return this.prisma.conversationAnalysis.findUnique({
       where: { conversationId },

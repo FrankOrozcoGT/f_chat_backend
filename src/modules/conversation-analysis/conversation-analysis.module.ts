@@ -10,6 +10,7 @@ import { AnalysisNode } from './langgraph/nodes/analysis.node';
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
+import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ClientLabelRepository } from './repositories/client-label.repository';
     AnalysisNode,
     BatchAnalysisService,
     ClientLabelRepository,
+    ConversationAnalysisRepository,
   ],
   exports: [AnalysisWorkflow, ConversationAnalysisService],
 })
