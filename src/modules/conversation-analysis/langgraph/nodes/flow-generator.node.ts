@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { KimiClient } from '@modules/ai/clients/kimi.client';
+import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
 
 export interface FlowGeneratorInput {
   intentName: string;
@@ -12,7 +13,7 @@ export interface FlowGeneratorInput {
 export interface GeneratedNode {
   name: string;
   systemPrompt: string;
-  todos: string[];
+  todos: TodoDefinition[];
   tools: string[];
 }
 
@@ -50,13 +51,29 @@ const AVAILABLE_TOOLS = [
 const SYSTEM_PROMPT = `Eres un experto en diseño de flujos conversacionales para chatbots de WhatsApp.
 Tu tarea es analizar conversaciones reales de una intención específica y generar un flow borrador con nodos y transiciones.
 
-REGLAS:
+CONCEPTOS CLAVE:
 - Cada nodo representa un estado/etapa de la conversación
 - El primer nodo (índice 0) es el nodo inicial (punto de entrada al flow)
-- systemPrompt: instrucciones claras para el agente IA en ese nodo
-- todos: checklist de cosas que el nodo DEBE completar antes de transicionar (strings cortos)
-- tools: códigos de herramientas del listado disponible que ese nodo necesita
-- transitions: condiciones de transición entre nodos con transitionCode descriptivo (snake_case)
+- systemPrompt: instrucciones del agente IA para ese nodo — qué hace, cómo responde, cuándo transicionar
+- tools: herramientas disponibles para ese nodo (del listado de HERRAMIENTAS DISPONIBLES)
+- todos: LA PARTE MÁS IMPORTANTE — son las tareas concretas que el nodo DEBE completar, en orden.
+  Cada todo describe exactamente qué debe hacer el agente, qué tools usar y en qué condiciones.
+  Sin todos bien definidos el nodo no sabe qué hacer.
+
+ESTRUCTURA DE UN TODO:
+{
+  "id": "snake_case único dentro del nodo",
+  "name": "nombre corto legible",
+  "description": "instrucciones detalladas: qué hacer paso a paso, cuándo usar cada tool, casos especiales, condiciones de salida",
+  "functions": ["toolsQueUsaEsteTodo"]
+}
+
+REGLAS:
+- Cada nodo debe tener al menos 2-4 todos que cubran su flujo completo
+- Los todos deben estar ordenados secuencialmente (el agente los ejecuta en orden)
+- En description explica los casos borde: qué hacer si el cliente no confirma, si el producto no existe, si quiere cambiar algo
+- tools del nodo = unión de todas las functions de sus todos
+- transitions: condiciones de salida del nodo con transitionCode en snake_case
 - NO uses herramientas que no estén en el listado disponible
 
 HERRAMIENTAS DISPONIBLES:
@@ -67,16 +84,29 @@ Responde SOLO con JSON válido en este formato:
   "nodes": [
     {
       "name": "nombre del nodo",
-      "systemPrompt": "instrucciones para el agente IA",
-      "todos": ["tarea 1", "tarea 2"],
-      "tools": ["toolCode1", "toolCode2"]
+      "systemPrompt": "instrucciones completas para el agente IA en este nodo",
+      "todos": [
+        {
+          "id": "primer_paso",
+          "name": "Nombre corto del paso",
+          "description": "Descripción detallada de qué hacer, cómo, cuándo, casos borde",
+          "functions": ["toolCode1"]
+        },
+        {
+          "id": "segundo_paso",
+          "name": "Nombre corto del paso",
+          "description": "Descripción detallada",
+          "functions": ["toolCode2", "toolCode3"]
+        }
+      ],
+      "tools": ["toolCode1", "toolCode2", "toolCode3"]
     }
   ],
   "transitions": [
     {
       "fromNodeIndex": 0,
       "toNodeIndex": 1,
-      "transitionCode": "codigo_transicion"
+      "transitionCode": "codigo_transicion_snake_case"
     }
   ]
 }`;
@@ -168,11 +198,25 @@ export class FlowGeneratorNode {
       if (!n.name || !n.systemPrompt) {
         throw new Error(`FlowGeneratorNode: node[${i}] missing name or systemPrompt`);
       }
+      if (!Array.isArray(n.todos) || n.todos.length === 0) {
+        throw new Error(`FlowGeneratorNode: node[${i}] "${n.name}" missing todos — todos son obligatorios`);
+      }
+      const todos: TodoDefinition[] = n.todos.map((t: any, j: number) => {
+        if (!t.id || !t.name || !t.description) {
+          throw new Error(`FlowGeneratorNode: node[${i}].todos[${j}] missing id, name or description`);
+        }
+        return {
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          functions: (t.functions ?? []).filter((f: string) => AVAILABLE_TOOLS.includes(f)),
+        };
+      });
       const tools: string[] = (n.tools ?? []).filter((t: string) => AVAILABLE_TOOLS.includes(t));
       return {
         name: n.name,
         systemPrompt: n.systemPrompt,
-        todos: n.todos ?? [],
+        todos,
         tools,
       };
     });

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, $Enums } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
 
 @Injectable()
 export class NodeRepository {
@@ -104,10 +105,69 @@ export class NodeRepository {
     return this.prisma.flowTransition.delete({ where: { id } });
   }
 
+  async setFlowStatus(id: string, status: $Enums.FlowStatus) {
+    return this.prisma.flow.update({ where: { id }, data: { status } });
+  }
+
+  async replaceFlowNodes(
+    flowId: string,
+    nodes: { name: string; systemPrompt: string; todos?: TodoDefinition[]; tools?: any[] }[],
+    transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[],
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      // Eliminar transiciones y FlowNodes actuales (los nodos huérfanos se limpian aparte)
+      await tx.flowTransition.deleteMany({ where: { flowId } });
+      await tx.flowNode.deleteMany({ where: { flowId } });
+
+      // Crear nuevos nodos
+      const createdNodes = await Promise.all(
+        nodes.map((n) =>
+          tx.node.create({
+            data: {
+              name: n.name,
+              systemPrompt: n.systemPrompt,
+              todos: (n.todos ?? []) as any,
+              tools: (n.tools ?? []) as any,
+            },
+          }),
+        ),
+      );
+
+      // Actualizar routerNodeId al primer nodo nuevo
+      await tx.flow.update({
+        where: { id: flowId },
+        data: { routerNodeId: createdNodes[0].id },
+      });
+
+      // Vincular nodos al flow
+      await Promise.all(
+        createdNodes.map((node) =>
+          tx.flowNode.create({ data: { flowId, nodeId: node.id } }),
+        ),
+      );
+
+      // Crear transiciones
+      await Promise.all(
+        transitions.map((t) =>
+          tx.flowTransition.create({
+            data: {
+              flowId,
+              fromNodeId: createdNodes[t.fromNodeIndex].id,
+              toNodeId: createdNodes[t.toNodeIndex].id,
+              transitionCode: t.transitionCode,
+            },
+          }),
+        ),
+      );
+
+      return { flow: flowId, nodes: createdNodes };
+    });
+  }
+
   async createFlowWithNodes(data: {
     name: string;
     tenantId: string;
-    nodes: { name: string; systemPrompt: string; todos?: string[]; tools?: string[] }[];
+    nodes: { name: string; systemPrompt: string; todos?: TodoDefinition[]; tools?: string[] }[];
     transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[];
   }) {
     return this.prisma.$transaction(async (tx) => {
@@ -118,8 +178,8 @@ export class NodeRepository {
             data: {
               name: n.name,
               systemPrompt: n.systemPrompt,
-              todos: n.todos ?? [],
-              tools: n.tools ?? [],
+              todos: (n.todos ?? []) as any,
+              tools: (n.tools ?? []) as any,
             },
           }),
         ),
