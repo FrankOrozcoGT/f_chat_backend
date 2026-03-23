@@ -34,7 +34,7 @@ export class BatchAnalysisController {
   async runBatch(
     @Body() dto: RunBatchDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number }> {
+  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number; intents: { intent: string; count: number }[] }> {
     return this.batchAnalysisService.runBatch(
       user.tenantId,
       dto.channelCount,
@@ -46,7 +46,7 @@ export class BatchAnalysisController {
   @HttpCode(200)
   async generateFlows(
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ flowsGenerated: number }> {
+  ): Promise<{ flowsGenerated: number; flows: any[] }> {
     return this.batchAnalysisService.generateDraftFlows(user.tenantId);
   }
 }

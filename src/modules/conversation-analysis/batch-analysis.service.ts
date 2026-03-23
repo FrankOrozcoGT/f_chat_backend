@@ -27,7 +27,7 @@ export class BatchAnalysisService {
     tenantId: string,
     channelCount: number,
     messageLimit: number,
-  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number }> {
+  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number; intents: { intent: string; count: number }[] }> {
     const conversations = await this.getActiveConversations(tenantId, channelCount);
 
     let analyzed = 0;
@@ -73,10 +73,14 @@ export class BatchAnalysisService {
       }
     }
 
-    return { analyzed, internalsDetected, totalCostUsd };
+    const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
+    const grouped = this.groupByIntent(analyses);
+    const intents = Array.from(grouped.entries()).map(([intent, items]) => ({ intent, count: items.length }));
+
+    return { analyzed, internalsDetected, totalCostUsd, intents };
   }
 
-  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number }> {
+  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
     const grouped = this.groupByIntent(analyses);
 
@@ -93,6 +97,7 @@ export class BatchAnalysisService {
     });
 
     let flowsGenerated = 0;
+    const flows: any[] = [];
 
     for (const [intentName, intentAnalyses] of grouped.entries()) {
       try {
@@ -114,7 +119,7 @@ export class BatchAnalysisService {
           existingIntents: activeIntents.map((i) => ({ name: i.name })),
         });
 
-        const { flow } = await this.nodeRepo.createFlowWithNodes({
+        const { flow, nodes } = await this.nodeRepo.createFlowWithNodes({
           name: `[Borrador] ${intentName}`,
           tenantId,
           nodes: generated.nodes,
@@ -127,13 +132,14 @@ export class BatchAnalysisService {
         await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flow.id);
 
         flowsGenerated++;
+        flows.push({ id: flow.id, name: flow.name, nodes });
         this.logger.log(`Generated draft flow for intent "${intentName}": flowId=${flow.id}`);
       } catch (error) {
         this.logger.error(`Failed to generate flow for intent "${intentName}": ${error.message}`);
       }
     }
 
-    return { flowsGenerated };
+    return { flowsGenerated, flows };
   }
 
   private groupByIntent(
