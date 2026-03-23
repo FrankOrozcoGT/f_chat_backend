@@ -62,4 +62,26 @@ export class ConversationAnalysisRepository {
       where: { conversationId },
     });
   }
+
+  async findAllByTenantId(tenantId: string) {
+    return this.prisma.conversationAnalysis.findMany({
+      where: {
+        conversation: { phone: { tenantId } },
+        intent: { not: null },
+        OR: [
+          { flowSummary: { not: null } },
+          { flowDiagram: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+        conversationId: true,
+        intent: true,
+        flowDiagram: true,
+        flowSummary: true,
+        isInternal: true,
+        internalPurpose: true,
+      },
+    });
+  }
 }
