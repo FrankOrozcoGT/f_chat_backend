@@ -34,7 +34,7 @@ export class BatchAnalysisController {
   async runBatch(
     @Body() dto: RunBatchDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ analyzed: number; internalsDetected: number }> {
+  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number }> {
     return this.batchAnalysisService.runBatch(
       user.tenantId,
       dto.channelCount,

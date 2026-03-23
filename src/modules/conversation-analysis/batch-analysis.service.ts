@@ -19,11 +19,12 @@ export class BatchAnalysisService {
     tenantId: string,
     channelCount: number,
     messageLimit: number,
-  ): Promise<{ analyzed: number; internalsDetected: number }> {
+  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number }> {
     const conversations = await this.getActiveConversations(tenantId, channelCount);
 
     let analyzed = 0;
     let internalsDetected = 0;
+    let totalCostUsd = 0;
 
     for (const conversation of conversations) {
       try {
@@ -39,6 +40,7 @@ export class BatchAnalysisService {
         }
 
         analyzed++;
+        totalCostUsd += result.creditsUsed;
 
         await this.conversationAnalysisRepo.upsertInternal({
           conversationId: conversation.id,
@@ -63,7 +65,7 @@ export class BatchAnalysisService {
       }
     }
 
-    return { analyzed, internalsDetected };
+    return { analyzed, internalsDetected, totalCostUsd };
   }
 
   private async getActiveConversations(tenantId: string, channelCount: number) {
