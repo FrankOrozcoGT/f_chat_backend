@@ -52,3 +52,6 @@ lerna-debug.log*
 
 # Node SQL configs (personal, no tracked)
 /node-sql/
+
+# DB Backups
+/backups/

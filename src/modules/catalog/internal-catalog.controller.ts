@@ -252,8 +252,8 @@ export class InternalCatalogController {
         product.name,
         {
           basePrice: existing
-            ? Math.max(existing.basePrice, product.price)
-            : product.price,
+            ? Math.max(existing.basePrice, product.price ?? 0)
+            : (product.price ?? 0),
           description: product.description,
         },
       );

@@ -7,6 +7,10 @@ import { ConversationAnalysisService } from './conversation-analysis.service';
 import { AnalysisWorkflow } from './langgraph/analysis-workflow';
 import { AnalysisInputRouterNode } from './langgraph/nodes/input-router.node';
 import { AnalysisNode } from './langgraph/nodes/analysis.node';
+import { BatchAnalysisController } from './batch-analysis.controller';
+import { BatchAnalysisService } from './batch-analysis.service';
+import { ClientLabelRepository } from './repositories/client-label.repository';
+import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 
 @Module({
   imports: [
@@ -14,12 +18,15 @@ import { AnalysisNode } from './langgraph/nodes/analysis.node';
     LimitsModule,
     FileStorageModule,
   ],
-  controllers: [ConversationAnalysisController],
+  controllers: [ConversationAnalysisController, BatchAnalysisController],
   providers: [
     ConversationAnalysisService,
     AnalysisWorkflow,
     AnalysisInputRouterNode,
     AnalysisNode,
+    BatchAnalysisService,
+    ClientLabelRepository,
+    ConversationAnalysisRepository,
   ],
   exports: [AnalysisWorkflow, ConversationAnalysisService],
 })

@@ -54,12 +54,26 @@ flowchart TD
 - Si en la conversación se menciona el nombre real del cliente (no el nombre de WhatsApp), extráelo en `realName`
 - Si no se menciona, usa `null`
 
+## Canal Interno
+
+Algunos canales de WhatsApp son internos: grupos o conversaciones donde nuestro propio teléfono (el negocio) es el participante principal, no un cliente externo. Pueden ser canales de coordinación interna, logística, proveedores, equipo, etc.
+
+Detecta si este canal es interno:
+- `isInternal: true` — si los mensajes muestran que es una conversación interna (el negocio hablando con sí mismo, coordinación de equipo, logística interna, proveedores)
+- `isInternal: false` — si es una conversación normal negocio-cliente externo
+
+Si `isInternal` es `true`, genera `internalPurpose`: una descripción breve del propósito del canal (ej: "Coordinación de entregas con mensajero", "Grupo de equipo de ventas", "Canal de proveedor de cartuchos").
+
+Si `isInternal` es `false`, usa `internalPurpose: null`.
+
 ## Output
 
 Responde SOLO con JSON válido, sin markdown ni texto adicional:
 
 {
   "realName": "Nombre real del cliente o null",
+  "isInternal": false,
+  "internalPurpose": null,
   "subConversations": [
     {
       "summary": "Breve resumen de la sub-conversación",

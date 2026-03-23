@@ -62,6 +62,8 @@ export class AnalysisNode {
       subConversations: parsed.subConversations,
       products: parsed.products,
       promotions: parsed.promotions,
+      isInternal: parsed.isInternal,
+      internalPurpose: parsed.internalPurpose,
       totalCost: totalCost + result.costUsd,
     };
   }
@@ -95,6 +97,8 @@ export class AnalysisNode {
         })),
         products: parsed.products ?? [],
         promotions: parsed.promotions ?? [],
+        isInternal: parsed.isInternal ?? false,
+        internalPurpose: parsed.internalPurpose ?? null,
       };
     } catch (error) {
       this.logger.error(

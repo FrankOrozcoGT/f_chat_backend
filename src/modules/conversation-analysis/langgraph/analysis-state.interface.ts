@@ -38,6 +38,8 @@ export interface AnalysisLlmOutput {
   subConversations: SubConversation[];
   products: AnalysisProduct[];
   promotions: AnalysisPromotion[];
+  isInternal: boolean;
+  internalPurpose: string | null;
 }
 
 export interface AnalysisWarning {
@@ -64,6 +66,8 @@ export const AnalysisState = Annotation.Root({
   subConversations: Annotation<SubConversation[]>,
   products: Annotation<AnalysisProduct[]>,
   promotions: Annotation<AnalysisPromotion[]>,
+  isInternal: Annotation<boolean>,
+  internalPurpose: Annotation<string | null>,
 });
 
 export type AnalysisStateType = typeof AnalysisState.State;
