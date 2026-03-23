@@ -41,4 +41,12 @@ export class BatchAnalysisController {
       dto.messageLimit,
     );
   }
+
+  @Post('generate-flows')
+  @HttpCode(200)
+  async generateFlows(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ flowsGenerated: number }> {
+    return this.batchAnalysisService.generateDraftFlows(user.tenantId);
+  }
 }
