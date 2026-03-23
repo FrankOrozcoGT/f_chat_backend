@@ -43,7 +43,7 @@ export class AnalysisNode {
         { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      4000,
+      8000,
     );
 
     const llmCredits = this.limitsService.calculateCreditsFromTokens(
