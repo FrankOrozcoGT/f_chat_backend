@@ -33,6 +33,7 @@ import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
 import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
+import { FlowVersionRepository } from './repositories/flow-version.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
@@ -73,10 +74,11 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     OutOfPathFn,
     GetMemoriesFn,
     SecurityEventRepository,
+    FlowVersionRepository,
     TemplateRepository,
     TestSessionService,
     TestQueueResultStore,
   ],
-  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry, TestQueueResultStore],
+  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry, TestQueueResultStore, FlowVersionRepository],
 })
 export class NodesModule {}

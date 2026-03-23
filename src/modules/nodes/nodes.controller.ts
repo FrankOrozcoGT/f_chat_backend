@@ -17,6 +17,7 @@ import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { IntentRepository } from './repositories/intent.repository';
+import { FlowVersionRepository, FlowSnapshot } from './repositories/flow-version.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
@@ -53,6 +54,7 @@ export class NodesController {
     private readonly workflow: AiWorkflow,
     private readonly phoneRepo: PhoneRepository,
     private readonly redisService: RedisService,
+    private readonly flowVersionRepo: FlowVersionRepository,
   ) {}
 
   // ─── Functions ───────────────────────────────────────────────────────────────
@@ -90,6 +92,90 @@ export class NodesController {
   @Delete('flows/:id')
   deleteFlow(@Param('id') id: string) {
     return this.nodeRepo.deleteFlow(id);
+  }
+
+  // ─── Flow Versions ───────────────────────────────────────────────────────────
+
+  @Get('flows/:flowId/versions')
+  getFlowVersions(@Param('flowId') flowId: string) {
+    return this.flowVersionRepo.findByFlowId(flowId);
+  }
+
+  @Post('flows/:flowId/promote')
+  async promoteFlow(@Param('flowId') flowId: string) {
+    const flow = await this.nodeRepo.findFlowWithNodes(flowId);
+    if (!flow) throw new NotFoundException('Flow not found');
+    if (flow.status !== 'draft') throw new BadRequestException('Only draft flows can be promoted');
+
+    // Buscar si hay un flow activo del mismo tenant con el mismo intent
+    const allFlows = await this.nodeRepo.findAllFlowsByTenantId(flow.tenantId);
+    const currentActive = allFlows.find((f) => f.status === 'active' && f.id !== flowId);
+
+    if (currentActive) {
+      // Archivar snapshot del activo actual
+      const snapshot: FlowSnapshot = {
+        nodes: currentActive.nodes.map((fn) => ({
+          id: fn.node.id,
+          name: fn.node.name,
+          systemPrompt: fn.node.systemPrompt,
+          todos: fn.node.todos,
+          tools: fn.node.tools,
+        })),
+        transitions: currentActive.transitions.map((t) => ({
+          fromNodeId: t.fromNodeId,
+          toNodeId: t.toNodeId,
+          transitionCode: t.transitionCode,
+        })),
+      };
+      const hash = require('crypto').createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+      await this.flowVersionRepo.saveVersion(currentActive.id, snapshot, hash);
+      await this.nodeRepo.setFlowStatus(currentActive.id, 'archived');
+    }
+
+    await this.nodeRepo.setFlowStatus(flowId, 'active');
+    return { promoted: true, flowId };
+  }
+
+  @Post('flows/:flowId/restore/:versionId')
+  async restoreFlowVersion(
+    @Param('flowId') flowId: string,
+    @Param('versionId') versionId: string,
+  ) {
+    const version = await this.flowVersionRepo.findById(versionId);
+    if (!version) throw new NotFoundException('Version not found');
+    if (version.flowId !== flowId) throw new BadRequestException('Version does not belong to this flow');
+
+    // Guardar snapshot actual antes de restaurar
+    const current = await this.nodeRepo.findFlowWithNodes(flowId);
+    if (current) {
+      const currentSnapshot: FlowSnapshot = {
+        nodes: current.nodes.map((fn) => ({
+          id: fn.node.id,
+          name: fn.node.name,
+          systemPrompt: fn.node.systemPrompt,
+          todos: fn.node.todos,
+          tools: fn.node.tools,
+        })),
+        transitions: current.transitions.map((t) => ({
+          fromNodeId: t.fromNodeId,
+          toNodeId: t.toNodeId,
+          transitionCode: t.transitionCode,
+        })),
+      };
+      const hash = require('crypto').createHash('sha256').update(JSON.stringify(currentSnapshot)).digest('hex');
+      await this.flowVersionRepo.saveVersion(flowId, currentSnapshot, hash);
+    }
+
+    // Restaurar snapshot
+    const snap = version.nodesSnapshot as unknown as FlowSnapshot;
+    const transitions = snap.transitions.map((t, i) => ({
+      fromNodeIndex: snap.nodes.findIndex((n) => n.id === t.fromNodeId),
+      toNodeIndex: snap.nodes.findIndex((n) => n.id === t.toNodeId),
+      transitionCode: t.transitionCode,
+    }));
+    await this.nodeRepo.replaceFlowNodes(flowId, snap.nodes, transitions);
+
+    return { restored: true, flowId, versionId };
   }
 
   // ─── Transitions ─────────────────────────────────────────────────────────────
