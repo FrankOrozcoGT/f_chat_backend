@@ -284,7 +284,7 @@ export class InternalCatalogController {
         productIds.push(product.id);
       }
 
-      const createdPromo = await this.promotionRepository.create({
+      const createdPromo = await this.promotionRepository.upsertByName({
         tenantId,
         name: promo.name,
         description: promo.description,
