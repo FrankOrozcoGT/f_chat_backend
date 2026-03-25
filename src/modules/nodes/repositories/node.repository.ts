@@ -219,4 +219,14 @@ export class NodeRepository {
       return { flow, nodes: createdNodes };
     });
   }
+
+  async createDraftFlow(data: { name: string; tenantId: string }) {
+    return this.prisma.flow.create({
+      data: {
+        name: data.name,
+        tenantId: data.tenantId,
+        status: 'draft',
+      },
+    });
+  }
 }

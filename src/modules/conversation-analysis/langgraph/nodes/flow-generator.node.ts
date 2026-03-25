@@ -1,32 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { join } from 'path';
 import { KimiClient } from '@modules/ai/clients/kimi.client';
 import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
+import { loadPrompt } from '@common/utils/load-prompt';
 
-export interface FlowGeneratorInput {
-  intentName: string;
-  conversationFlows: { flowSummary: string | null; flowDiagram: string | null }[];
-  internalChannels: { label: string; internalPurpose: string | null }[];
-  existingFlows: { name: string; nodes: { node: { name: string; systemPrompt: string } }[] }[];
-  existingIntents: { name: string }[];
-}
-
-export interface GeneratedNode {
-  name: string;
-  systemPrompt: string;
-  todos: TodoDefinition[];
-  tools: string[];
-}
-
-export interface GeneratedTransition {
-  fromNodeIndex: number;
-  toNodeIndex: number;
-  transitionCode: string;
-}
-
-export interface FlowGeneratorOutput {
-  nodes: GeneratedNode[];
-  transitions: GeneratedTransition[];
-}
+const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
 
 const AVAILABLE_TOOLS = [
   'getMemories',
@@ -48,68 +26,46 @@ const AVAILABLE_TOOLS = [
   'closeSession',
 ];
 
-const SYSTEM_PROMPT = `Eres un experto en diseño de flujos conversacionales para chatbots de WhatsApp.
-Tu tarea es analizar conversaciones reales de una intención específica y generar un flow borrador con nodos y transiciones.
+const SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'flow-generator-system.md').replace(
+  '{{AVAILABLE_TOOLS}}',
+  AVAILABLE_TOOLS.join(', '),
+);
 
-CONCEPTOS CLAVE:
-- Cada nodo representa un estado/etapa de la conversación
-- El primer nodo (índice 0) es el nodo inicial (punto de entrada al flow)
-- systemPrompt: instrucciones del agente IA para ese nodo — qué hace, cómo responde, cuándo transicionar
-- tools: herramientas disponibles para ese nodo (del listado de HERRAMIENTAS DISPONIBLES)
-- todos: LA PARTE MÁS IMPORTANTE — son las tareas concretas que el nodo DEBE completar, en orden.
-  Cada todo describe exactamente qué debe hacer el agente, qué tools usar y en qué condiciones.
-  Sin todos bien definidos el nodo no sabe qué hacer.
-
-ESTRUCTURA DE UN TODO:
-{
-  "id": "snake_case único dentro del nodo",
-  "name": "nombre corto legible",
-  "description": "instrucciones detalladas: qué hacer paso a paso, cuándo usar cada tool, casos especiales, condiciones de salida",
-  "functions": ["toolsQueUsaEsteTodo"]
+export interface GeneratedNode {
+  name: string;
+  systemPrompt: string;
+  todos: TodoDefinition[];
+  tools: string[];
 }
 
-REGLAS:
-- Cada nodo debe tener al menos 2-4 todos que cubran su flujo completo
-- Los todos deben estar ordenados secuencialmente (el agente los ejecuta en orden)
-- En description explica los casos borde: qué hacer si el cliente no confirma, si el producto no existe, si quiere cambiar algo
-- tools del nodo = unión de todas las functions de sus todos
-- transitions: condiciones de salida del nodo con transitionCode en snake_case
-- NO uses herramientas que no estén en el listado disponible
+export interface GeneratedTransition {
+  fromNodeIndex: number;
+  toNodeIndex: number;
+  transitionCode: string;
+}
 
-HERRAMIENTAS DISPONIBLES:
-${AVAILABLE_TOOLS.join(', ')}
+export type RepresentativeCase = { flowSummary: string; flowDiagram: string };
 
-Responde SOLO con JSON válido en este formato:
-{
-  "nodes": [
-    {
-      "name": "nombre del nodo",
-      "systemPrompt": "instrucciones completas para el agente IA en este nodo",
-      "todos": [
-        {
-          "id": "primer_paso",
-          "name": "Nombre corto del paso",
-          "description": "Descripción detallada de qué hacer, cómo, cuándo, casos borde",
-          "functions": ["toolCode1"]
-        },
-        {
-          "id": "segundo_paso",
-          "name": "Nombre corto del paso",
-          "description": "Descripción detallada",
-          "functions": ["toolCode2", "toolCode3"]
-        }
-      ],
-      "tools": ["toolCode1", "toolCode2", "toolCode3"]
-    }
-  ],
-  "transitions": [
-    {
-      "fromNodeIndex": 0,
-      "toNodeIndex": 1,
-      "transitionCode": "codigo_transicion_snake_case"
-    }
-  ]
-}`;
+export interface ProposedTool {
+  name: string;
+  description: string;
+}
+
+export interface FlowGeneratorOutput {
+  nodes: GeneratedNode[];
+  transitions: GeneratedTransition[];
+  selectedCases: RepresentativeCase[];
+  proposedTools: ProposedTool[];
+}
+
+export interface FlowGeneratorInput {
+  intentName: string;
+  conversationFlows: { flowSummary: string | null; flowDiagram: string | null }[];
+  internalChannels: { label: string; internalPurpose: string | null }[];
+  existingFlows: { name: string; nodes: { node: { name: string; systemPrompt: string } }[] }[];
+  existingIntents: { name: string }[];
+  currentCases?: RepresentativeCase[];
+}
 
 @Injectable()
 export class FlowGeneratorNode {
@@ -142,7 +98,14 @@ export class FlowGeneratorNode {
 
     parts.push(`## Intención a modelar: "${input.intentName}"`);
 
-    parts.push(`\n## Conversaciones reales de esta intención (${input.conversationFlows.length}):`);
+    if (input.currentCases) {
+      parts.push(`\n## Diseño actual del flow (generado con análisis anteriores — refínalo):`);
+      parts.push(JSON.stringify(input.currentCases, null, 2));
+      parts.push(`\n## Nuevos diagramas a incorporar (${input.conversationFlows.length}):`);
+    } else {
+      parts.push(`\n## Diagramas y resúmenes de flujos reales (${input.conversationFlows.length}):`);
+    }
+
     input.conversationFlows.forEach((c, i) => {
       parts.push(`\n### Conversación ${i + 1}`);
       if (c.flowSummary) parts.push(`**Resumen:** ${c.flowSummary}`);
@@ -168,7 +131,11 @@ export class FlowGeneratorNode {
       parts.push(`\n## Intenciones activas existentes: ${input.existingIntents.map((i) => i.name).join(', ')}`);
     }
 
-    parts.push(`\nGenera el flow borrador para la intención "${input.intentName}".`);
+    if (input.currentCases) {
+      parts.push(`\nRefina el diseño del flow incorporando los nuevos diagramas. El flow resultante debe ser capaz de manejar todos los escenarios vistos hasta ahora.`);
+    } else {
+      parts.push(`\nGenera el flow borrador para la intención "${input.intentName}".`);
+    }
 
     return parts.join('\n');
   }
@@ -213,12 +180,7 @@ export class FlowGeneratorNode {
         };
       });
       const tools: string[] = (n.tools ?? []).filter((t: string) => AVAILABLE_TOOLS.includes(t));
-      return {
-        name: n.name,
-        systemPrompt: n.systemPrompt,
-        todos,
-        tools,
-      };
+      return { name: n.name, systemPrompt: n.systemPrompt, todos, tools };
     });
 
     const transitions: GeneratedTransition[] = parsed.transitions.map((t: any, i: number) => {
@@ -235,6 +197,21 @@ export class FlowGeneratorNode {
       };
     });
 
-    return { nodes, transitions };
+    if (!Array.isArray(parsed.selectedCases)) {
+      throw new Error('FlowGeneratorNode: response missing selectedCases array');
+    }
+
+    const selectedCases: RepresentativeCase[] = parsed.selectedCases.map((c: any, i: number) => {
+      if (!c.flowSummary || !c.flowDiagram) {
+        throw new Error(`FlowGeneratorNode: selectedCases[${i}] missing flowSummary or flowDiagram`);
+      }
+      return { flowSummary: c.flowSummary, flowDiagram: c.flowDiagram };
+    });
+
+    const proposedTools: ProposedTool[] = Array.isArray(parsed.proposedTools)
+      ? parsed.proposedTools.filter((t: any) => t.name && t.description).map((t: any) => ({ name: t.name, description: t.description }))
+      : [];
+
+    return { nodes, transitions, selectedCases, proposedTools };
   }
 }

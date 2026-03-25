@@ -260,20 +260,36 @@ model Message {
 model Flow {
   id           String           @id @default(uuid())
   name         String
-  routerNodeId String
+  routerNodeId String?
   tenantId     String
   status       FlowStatus       @default(active)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
-  routerNode   Node             @relation("FlowRouter", fields: [routerNodeId], references: [id])
+  routerNode   Node?            @relation("FlowRouter", fields: [routerNodeId], references: [id])
   nodes        FlowNode[]
   nodeSessions NodeSession[]
   intents      Intent[]
   transitions  FlowTransition[]
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   analysisFlows ConversationAnalysisFlow[]
+  versions      FlowVersion[]
 
   @@index([tenantId])
+}
+
+model FlowVersion {
+  id             String   @id @default(uuid())
+  flowId         String
+  version        Int
+  nodesSnapshot  Json
+  contentHash    String
+  proposedTools  Json?
+  isPromoted     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  flow           Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, version])
+  @@index([flowId])
 }
 
 model Node {
@@ -565,6 +581,7 @@ enum AnalysisMode {
 enum FlowStatus {
   active
   draft
+  archived
 }
 
 enum LabelStatus {

@@ -9,6 +9,7 @@ import { AnalysisWorkflow } from './langgraph/analysis-workflow';
 import { AnalysisInputRouterNode } from './langgraph/nodes/input-router.node';
 import { AnalysisNode } from './langgraph/nodes/analysis.node';
 import { FlowGeneratorNode } from './langgraph/nodes/flow-generator.node';
+import { IntentClassifierNode } from './langgraph/nodes/intent-classifier.node';
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
@@ -29,6 +30,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
     AnalysisInputRouterNode,
     AnalysisNode,
     FlowGeneratorNode,
+    IntentClassifierNode,
     BatchAnalysisService,
     ClientLabelRepository,
     ConversationAnalysisRepository,

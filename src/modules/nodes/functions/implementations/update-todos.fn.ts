@@ -7,6 +7,7 @@ export interface TodoDefinition {
   name: string;
   description?: string;
   functions?: string[];
+  transitions?: string[];
 }
 
 @Injectable()

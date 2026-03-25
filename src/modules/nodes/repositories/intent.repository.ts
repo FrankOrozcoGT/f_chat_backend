@@ -52,6 +52,12 @@ export class IntentRepository {
     });
   }
 
+  async findByFlowId(flowId: string) {
+    return this.prisma.intent.findFirst({
+      where: { flowId },
+    });
+  }
+
   async findActiveByTenantId(tenantId: string) {
     return this.prisma.intent.findMany({
       where: { tenantId, isActive: true, flowId: { not: null } },

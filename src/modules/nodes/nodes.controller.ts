@@ -11,13 +11,14 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { MessageType } from '@prisma/client';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { IntentRepository } from './repositories/intent.repository';
-import { FlowVersionRepository, FlowSnapshot } from './repositories/flow-version.repository';
+import { FlowVersionRepository, FlowSnapshot, DraftFlowSnapshot } from './repositories/flow-version.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
@@ -103,37 +104,14 @@ export class NodesController {
 
   @Post('flows/:flowId/promote')
   async promoteFlow(@Param('flowId') flowId: string) {
-    const flow = await this.nodeRepo.findFlowWithNodes(flowId);
-    if (!flow) throw new NotFoundException('Flow not found');
-    if (flow.status !== 'draft') throw new BadRequestException('Only draft flows can be promoted');
+    // Toma el último snapshot del historial y lo aplica al flow
+    const versions = await this.flowVersionRepo.findByFlowId(flowId);
+    if (versions.length === 0) throw new BadRequestException('No versions in history to promote');
 
-    // Buscar si hay un flow activo del mismo tenant con el mismo intent
-    const allFlows = await this.nodeRepo.findAllFlowsByTenantId(flow.tenantId);
-    const currentActive = allFlows.find((f) => f.status === 'active' && f.id !== flowId);
-
-    if (currentActive) {
-      // Archivar snapshot del activo actual
-      const snapshot: FlowSnapshot = {
-        nodes: currentActive.nodes.map((fn) => ({
-          id: fn.node.id,
-          name: fn.node.name,
-          systemPrompt: fn.node.systemPrompt,
-          todos: fn.node.todos,
-          tools: fn.node.tools,
-        })),
-        transitions: currentActive.transitions.map((t) => ({
-          fromNodeId: t.fromNodeId,
-          toNodeId: t.toNodeId,
-          transitionCode: t.transitionCode,
-        })),
-      };
-      const hash = require('crypto').createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
-      await this.flowVersionRepo.saveVersion(currentActive.id, snapshot, hash);
-      await this.nodeRepo.setFlowStatus(currentActive.id, 'archived');
-    }
-
-    await this.nodeRepo.setFlowStatus(flowId, 'active');
-    return { promoted: true, flowId };
+    const latest = versions[0]; // findByFlowId retorna desc por version
+    await this.applySnapshot(flowId, latest.nodesSnapshot as unknown as FlowSnapshot);
+    await this.flowVersionRepo.markAsPromoted(latest.id);
+    return { promoted: true, flowId, versionId: latest.id };
   }
 
   @Post('flows/:flowId/restore/:versionId')
@@ -145,37 +123,33 @@ export class NodesController {
     if (!version) throw new NotFoundException('Version not found');
     if (version.flowId !== flowId) throw new BadRequestException('Version does not belong to this flow');
 
-    // Guardar snapshot actual antes de restaurar
-    const current = await this.nodeRepo.findFlowWithNodes(flowId);
-    if (current) {
-      const currentSnapshot: FlowSnapshot = {
-        nodes: current.nodes.map((fn) => ({
-          id: fn.node.id,
-          name: fn.node.name,
-          systemPrompt: fn.node.systemPrompt,
-          todos: fn.node.todos,
-          tools: fn.node.tools,
-        })),
-        transitions: current.transitions.map((t) => ({
-          fromNodeId: t.fromNodeId,
-          toNodeId: t.toNodeId,
-          transitionCode: t.transitionCode,
-        })),
-      };
-      const hash = require('crypto').createHash('sha256').update(JSON.stringify(currentSnapshot)).digest('hex');
-      await this.flowVersionRepo.saveVersion(flowId, currentSnapshot, hash);
-    }
-
-    // Restaurar snapshot
-    const snap = version.nodesSnapshot as unknown as FlowSnapshot;
-    const transitions = snap.transitions.map((t, i) => ({
-      fromNodeIndex: snap.nodes.findIndex((n) => n.id === t.fromNodeId),
-      toNodeIndex: snap.nodes.findIndex((n) => n.id === t.toNodeId),
-      transitionCode: t.transitionCode,
-    }));
-    await this.nodeRepo.replaceFlowNodes(flowId, snap.nodes, transitions);
-
+    await this.applySnapshot(flowId, version.nodesSnapshot as unknown as FlowSnapshot);
     return { restored: true, flowId, versionId };
+  }
+
+  private async applySnapshot(flowId: string, snap: FlowSnapshot | DraftFlowSnapshot): Promise<void> {
+    const firstNode = (snap.nodes[0] ?? {}) as any;
+    const isDraft = !('id' in firstNode) || firstNode.id === '';
+
+    if (isDraft) {
+      const draft = snap as DraftFlowSnapshot;
+      await this.nodeRepo.replaceFlowNodes(
+        flowId,
+        draft.nodes.map((n) => ({ id: '', ...n })),
+        draft.transitions,
+      );
+    } else {
+      const promoted = snap as FlowSnapshot;
+      const transitions = promoted.transitions.map((t) => {
+        const fromNodeIndex = promoted.nodes.findIndex((n) => n.id === t.fromNodeId);
+        const toNodeIndex = promoted.nodes.findIndex((n) => n.id === t.toNodeId);
+        if (fromNodeIndex === -1 || toNodeIndex === -1) {
+          throw new BadRequestException(`Snapshot has invalid transition: ${t.transitionCode}`);
+        }
+        return { fromNodeIndex, toNodeIndex, transitionCode: t.transitionCode };
+      });
+      await this.nodeRepo.replaceFlowNodes(flowId, promoted.nodes, transitions);
+    }
   }
 
   // ─── Transitions ─────────────────────────────────────────────────────────────

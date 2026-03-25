@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, HttpCode } from '@nestjs/common';
 import { IsInt, Min } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
@@ -6,6 +6,7 @@ import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { TenantRole } from '@prisma/client';
 import { BatchAnalysisService } from './batch-analysis.service';
+import { FlowIntentRepository } from './repositories/flow-intent.repository';
 
 class RunBatchDto {
   @IsInt()
@@ -27,7 +28,10 @@ interface AuthenticatedUser {
 @UseGuards(JwtAuthGuard, TenantRolesGuard)
 @TenantRoles(TenantRole.owner, TenantRole.tecnico)
 export class BatchAnalysisController {
-  constructor(private readonly batchAnalysisService: BatchAnalysisService) {}
+  constructor(
+    private readonly batchAnalysisService: BatchAnalysisService,
+    private readonly flowIntentRepo: FlowIntentRepository,
+  ) {}
 
   @Post()
   @HttpCode(200)
@@ -48,5 +52,20 @@ export class BatchAnalysisController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ flowsGenerated: number; flows: any[] }> {
     return this.batchAnalysisService.generateDraftFlows(user.tenantId);
+  }
+
+  @Get('flows/:flowId/analyses')
+  async getFlowAnalyses(@Param('flowId') flowId: string) {
+    const records = await this.flowIntentRepo.findByFlowId(flowId);
+    return records.map((r) => ({
+      analysisId: r.analysis.id,
+      conversationId: r.analysis.conversationId,
+      intent: r.analysis.intent,
+      flowSummary: r.analysis.flowSummary,
+      flowDiagram: r.analysis.flowDiagram,
+      isInternal: r.analysis.isInternal,
+      internalPurpose: r.analysis.internalPurpose,
+      analyzedAt: r.analysis.analyzedAt,
+    }));
   }
 }

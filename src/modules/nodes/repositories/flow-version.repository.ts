@@ -6,11 +6,23 @@ export interface FlowSnapshot {
   transitions: { fromNodeId: string; toNodeId: string; transitionCode: string }[];
 }
 
+// Snapshot generado por IA antes de promote — los nodos no tienen IDs aún
+export interface DraftFlowSnapshot {
+  nodes: { name: string; systemPrompt: string; todos: any; tools: any }[];
+  transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[];
+  selectedCases?: { flowSummary: string; flowDiagram: string }[];
+}
+
 @Injectable()
 export class FlowVersionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async saveVersion(flowId: string, snapshot: FlowSnapshot, contentHash: string): Promise<{ skipped: boolean }> {
+  async saveVersion(
+    flowId: string,
+    snapshot: FlowSnapshot | DraftFlowSnapshot,
+    contentHash: string,
+    proposedTools?: { name: string; description: string }[],
+  ): Promise<{ skipped: boolean }> {
     const last = await this.prisma.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: 'desc' },
@@ -29,6 +41,7 @@ export class FlowVersionRepository {
         version: nextVersion,
         nodesSnapshot: snapshot as any,
         contentHash,
+        proposedTools: proposedTools ? (proposedTools as any) : undefined,
       },
     });
 
@@ -42,7 +55,40 @@ export class FlowVersionRepository {
     });
   }
 
+  async findLatestByFlowId(flowId: string) {
+    return this.prisma.flowVersion.findFirst({
+      where: { flowId },
+      orderBy: { version: 'desc' },
+    });
+  }
+
   async findById(id: string) {
     return this.prisma.flowVersion.findUnique({ where: { id } });
+  }
+
+  async findPromotedByFlowId(flowId: string) {
+    return this.prisma.flowVersion.findFirst({
+      where: { flowId, isPromoted: true },
+      orderBy: { version: 'desc' },
+    });
+  }
+
+  async markAsPromoted(versionId: string): Promise<void> {
+    const version = await this.prisma.flowVersion.findUnique({
+      where: { id: versionId },
+      select: { flowId: true },
+    });
+    if (!version) throw new Error(`FlowVersion ${versionId} not found`);
+
+    await this.prisma.$transaction([
+      this.prisma.flowVersion.updateMany({
+        where: { flowId: version.flowId },
+        data: { isPromoted: false },
+      }),
+      this.prisma.flowVersion.update({
+        where: { id: versionId },
+        data: { isPromoted: true },
+      }),
+    ]);
   }
 }
