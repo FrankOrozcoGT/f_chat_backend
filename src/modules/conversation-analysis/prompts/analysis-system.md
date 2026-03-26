@@ -56,11 +56,9 @@ flowchart TD
 
 ## Canal Interno
 
-Algunos canales de WhatsApp son internos: grupos o conversaciones donde nuestro propio teléfono (el negocio) es el participante principal, no un cliente externo. Pueden ser canales de coordinación interna, logística, proveedores, equipo, etc.
-
-Detecta si este canal es interno:
-- `isInternal: true` — si los mensajes muestran que es una conversación interna (el negocio hablando con sí mismo, coordinación de equipo, logística interna, proveedores)
-- `isInternal: false` — si es una conversación normal negocio-cliente externo
+Detecta si este canal es interno o externo según quién está del otro lado:
+- `isInternal: true` — si la persona del otro lado NO es un cliente final. Ejemplos: jefe o dueño coordinando operaciones, empleado del equipo, mensajero o logística, proveedor, cualquier persona que opera o apoya el negocio. La clave: el propósito del canal es **operar el negocio**.
+- `isInternal: false` — si la persona del otro lado es un cliente externo — sin importar si compra, consulta, pide soporte, solicita presupuesto, hace reclamos, o cualquier otra interacción donde el negocio le está **atendiendo como cliente**.
 
 Si `isInternal` es `true`, genera `internalPurpose`: una descripción breve del propósito del canal (ej: "Coordinación de entregas con mensajero", "Grupo de equipo de ventas", "Canal de proveedor de cartuchos").
 

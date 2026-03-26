@@ -81,7 +81,7 @@ export class FlowGeneratorNode {
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      4000,
+      8000,
     );
 
     const parsed = this.parseResponse(result.response);

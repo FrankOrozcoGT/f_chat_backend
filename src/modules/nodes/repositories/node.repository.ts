@@ -34,14 +34,18 @@ export class NodeRepository {
   }
 
   async findAllFlowsByTenantId(tenantId: string) {
-    return this.prisma.flow.findMany({
+    const flows = await this.prisma.flow.findMany({
       where: { tenantId },
       include: {
         routerNode: true,
         nodes: { include: { node: true } },
         transitions: { include: { fromNode: true, toNode: true } },
+        _count: { select: { analysisFlows: true } },
       },
     });
+    return flows
+      .map((f) => ({ ...f, analysisCount: f._count.analysisFlows }))
+      .sort((a, b) => b.analysisCount - a.analysisCount);
   }
 
   async createNode(data: Prisma.NodeCreateInput) {

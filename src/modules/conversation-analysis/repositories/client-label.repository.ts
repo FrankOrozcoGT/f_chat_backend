@@ -28,4 +28,19 @@ export class ClientLabelRepository {
       },
     });
   }
+
+  async findInternalByClientOrGroup(data: {
+    tenantId: string;
+    clientId: string | null;
+    groupJid: string | null;
+  }): Promise<{ label: string } | null> {
+    if (!data.clientId && !data.groupJid) return null;
+    const conditions: any[] = [];
+    if (data.clientId) conditions.push({ clientId: data.clientId });
+    if (data.groupJid) conditions.push({ groupJid: data.groupJid });
+    return this.prisma.contactLabel.findFirst({
+      where: { tenantId: data.tenantId, status: { in: ['draft', 'active'] }, OR: conditions },
+      select: { label: true },
+    });
+  }
 }

@@ -57,6 +57,20 @@ export class ConversationAnalysisRepository {
     });
   }
 
+  async markAllAsInternalByClient(clientId: string, internalPurpose: string) {
+    await this.prisma.conversationAnalysis.updateMany({
+      where: { conversation: { participants: { some: { clientId } } } },
+      data: { isInternal: true, internalPurpose },
+    });
+  }
+
+  async markAllAsInternalByGroup(groupJid: string, internalPurpose: string) {
+    await this.prisma.conversationAnalysis.updateMany({
+      where: { conversation: { groupJid } },
+      data: { isInternal: true, internalPurpose },
+    });
+  }
+
   async findByConversationId(conversationId: string) {
     return this.prisma.conversationAnalysis.findUnique({
       where: { conversationId },
@@ -67,6 +81,7 @@ export class ConversationAnalysisRepository {
     return this.prisma.conversationAnalysis.findMany({
       where: {
         conversation: { phone: { tenantId } },
+        isInternal: false,
         intent: { not: null },
         OR: [
           { flowSummary: { not: null } },

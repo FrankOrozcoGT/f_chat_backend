@@ -32,15 +32,32 @@ export class BatchAnalysisService {
     tenantId: string,
     channelCount: number,
     messageLimit: number,
-  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number; intents: { intent: string; count: number }[] }> {
+  ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number; intents: { intent: string; count: number }[]; internals: { conversationId: string; clientId: string | null; groupJid: string | null; internalPurpose: string | null }[] }> {
     const conversations = await this.getActiveConversations(tenantId, channelCount);
 
     let analyzed = 0;
     let internalsDetected = 0;
     let totalCostUsd = 0;
+    const internals: { conversationId: string; clientId: string | null; groupJid: string | null; internalPurpose: string | null }[] = [];
 
     for (const conversation of conversations) {
       try {
+        const clientId = conversation.client?.id ?? null;
+        const groupJid = conversation.groupJid ?? null;
+
+        // Si ya está marcado como interno, skip la IA y marcar directo
+        const existingInternal = await this.clientLabelRepo.findInternalByClientOrGroup({
+          tenantId,
+          clientId,
+          groupJid,
+        });
+
+        if (existingInternal) {
+          internalsDetected++;
+          this.logger.log(`Skipping AI for internal conversation ${conversation.id} (already marked)`);
+          continue;
+        }
+
         const result = await this.analysisService.runAnalysis(
           conversation,
           tenantId,
@@ -63,13 +80,17 @@ export class BatchAnalysisService {
 
         if (result.isInternal) {
           internalsDetected++;
-          const client = conversation.client;
           await this.clientLabelRepo.upsertDraftLabel({
             tenantId,
-            clientId: client?.id ?? null,
-            groupJid: conversation.groupJid ?? null,
+            clientId,
+            groupJid,
             internalPurpose: result.internalPurpose ?? '',
           });
+
+          const purpose = result.internalPurpose ?? '';
+          if (clientId) await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, purpose);
+          if (groupJid) await this.conversationAnalysisRepo.markAllAsInternalByGroup(groupJid, purpose);
+          internals.push({ conversationId: conversation.id, clientId, groupJid, internalPurpose: result.internalPurpose ?? null });
         }
       } catch (error) {
         this.logger.error(
@@ -82,7 +103,7 @@ export class BatchAnalysisService {
     const grouped = this.groupByIntent(analyses);
     const intents = Array.from(grouped.entries()).map(([intent, items]) => ({ intent, count: items.length }));
 
-    return { analyzed, internalsDetected, totalCostUsd, intents };
+    return { analyzed, internalsDetected, totalCostUsd, intents, internals };
   }
 
   async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[] }> {
@@ -126,18 +147,14 @@ export class BatchAnalysisService {
 
         const existingIntent = await this.intentRepo.findByTenantIdAndName(tenantId, intentName);
 
-        if (existingIntent?.flowId) {
-          // 2.3 — intent existente: refinar snapshot base
+        const baseVersion = existingIntent?.flowId
+          ? (await this.flowVersionRepo.findPromotedByFlowId(existingIntent.flowId)) ??
+            (await this.flowVersionRepo.findLatestByFlowId(existingIntent.flowId))
+          : null;
+
+        if (existingIntent?.flowId && baseVersion) {
+          // 2.3 — intent existente con snapshot: refinar
           const flowId = existingIntent.flowId;
-
-          const baseVersion =
-            (await this.flowVersionRepo.findPromotedByFlowId(flowId)) ??
-            (await this.flowVersionRepo.findLatestByFlowId(flowId));
-
-          if (!baseVersion) {
-            throw new Error(`Intent "${intentName}" tiene flow ${flowId} pero no tiene ningún snapshot en historial`);
-          }
-
           const baseSnapshot = baseVersion.nodesSnapshot as any;
           const initialCases: import('./langgraph/nodes/flow-generator.node').RepresentativeCase[] =
             Array.isArray(baseSnapshot?.selectedCases) ? baseSnapshot.selectedCases : [];
