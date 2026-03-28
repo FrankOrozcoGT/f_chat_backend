@@ -280,15 +280,18 @@ model Flow {
 }
 
 model FlowVersion {
-  id             String   @id @default(uuid())
-  flowId         String
-  version        Int
-  nodesSnapshot  Json
-  contentHash    String
-  proposedTools  Json?
-  isPromoted     Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  flow           Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  flowId           String
+  version          Int
+  nodesSnapshot    Json
+  contentHash      String
+  proposedTools    Json?
+  isPromoted       Boolean  @default(false)
+  consolidatedDiagram   String?
+  diagramApproved  Boolean  @default(false)
+  diagramModified  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  flow             Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@unique([flowId, version])
   @@index([flowId])

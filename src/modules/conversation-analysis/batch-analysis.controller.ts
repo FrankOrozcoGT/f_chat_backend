@@ -10,6 +10,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
+import { FlowVersionRepository } from '@modules/nodes/repositories/flow-version.repository';
 
 class RunBatchDto {
   @IsInt()
@@ -19,6 +20,11 @@ class RunBatchDto {
   @IsInt()
   @Min(1)
   messageLimit: number;
+}
+
+class UpdateDiagramDto {
+  @IsString()
+  diagram: string;
 }
 
 class ReviewInternalDto {
@@ -46,6 +52,7 @@ export class BatchAnalysisController {
     private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
     private readonly clientLabelRepo: ClientLabelRepository,
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
+    private readonly flowVersionRepo: FlowVersionRepository,
   ) {}
 
   @Post()
@@ -59,6 +66,44 @@ export class BatchAnalysisController {
       dto.channelCount,
       dto.messageLimit,
     );
+  }
+
+  @Post('generate-diagrams')
+  @HttpCode(200)
+  async generateDiagrams(@CurrentUser() user: AuthenticatedUser) {
+    return this.batchAnalysisService.generateDiagrams(user.tenantId);
+  }
+
+  @Get('flows/:flowId/diagram')
+  async getFlowDiagram(@Param('flowId') flowId: string) {
+    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
+    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
+    return {
+      flowId,
+      versionId: version.id,
+      version: version.version,
+      consolidatedDiagram: version.consolidatedDiagram,
+      diagramApproved: version.diagramApproved,
+      diagramModified: version.diagramModified,
+    };
+  }
+
+  @Patch('flows/:flowId/diagram')
+  async updateFlowDiagram(
+    @Param('flowId') flowId: string,
+    @Body() dto: UpdateDiagramDto,
+  ) {
+    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
+    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
+    await this.flowVersionRepo.updateDiagram(version.id, dto.diagram);
+    return { flowId, versionId: version.id, diagramModified: true };
+  }
+
+  @Post('flows/:flowId/approve-diagram')
+  @HttpCode(200)
+  async approveDiagram(@Param('flowId') flowId: string) {
+    await this.flowVersionRepo.approveDiagram(flowId);
+    return { flowId, diagramApproved: true };
   }
 
   @Post('generate-flows')

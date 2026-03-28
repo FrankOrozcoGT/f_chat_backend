@@ -73,6 +73,62 @@ export class FlowVersionRepository {
     });
   }
 
+  async findLatestWithDiagram(flowId: string) {
+    return this.prisma.flowVersion.findFirst({
+      where: { flowId },
+      orderBy: { version: 'desc' },
+      select: { id: true, consolidatedDiagram: true, diagramApproved: true, diagramModified: true, version: true },
+    });
+  }
+
+  async saveConsolidatedDiagram(flowId: string, diagram: string): Promise<void> {
+    const latest = await this.prisma.flowVersion.findFirst({
+      where: { flowId },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+
+    if (latest) {
+      await this.prisma.flowVersion.update({
+        where: { id: latest.id },
+        data: { consolidatedDiagram: diagram, diagramApproved: false, diagramModified: false },
+      });
+    } else {
+      await this.prisma.flowVersion.create({
+        data: {
+          flowId,
+          version: 1,
+          nodesSnapshot: {},
+          contentHash: '',
+          consolidatedDiagram: diagram,
+          diagramApproved: false,
+          diagramModified: false,
+        },
+      });
+    }
+  }
+
+  async updateDiagram(versionId: string, diagram: string): Promise<void> {
+    await this.prisma.flowVersion.update({
+      where: { id: versionId },
+      data: { consolidatedDiagram: diagram, diagramModified: true },
+    });
+  }
+
+  async approveDiagram(flowId: string): Promise<void> {
+    const latest = await this.prisma.flowVersion.findFirst({
+      where: { flowId },
+      orderBy: { version: 'desc' },
+      select: { id: true, consolidatedDiagram: true },
+    });
+    if (!latest) throw new Error(`No FlowVersion found for flowId ${flowId}`);
+    if (!latest.consolidatedDiagram) throw new Error(`FlowVersion for flow ${flowId} has no consolidatedDiagram to approve`);
+    await this.prisma.flowVersion.update({
+      where: { id: latest.id },
+      data: { diagramApproved: true },
+    });
+  }
+
   async markAsPromoted(versionId: string): Promise<void> {
     const version = await this.prisma.flowVersion.findUnique({
       where: { id: versionId },
