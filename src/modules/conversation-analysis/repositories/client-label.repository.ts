@@ -10,13 +10,13 @@ export class ClientLabelRepository {
     clientId: string | null;
     groupJid: string | null;
     internalPurpose: string;
+    channelName: string;
   }) {
-    const label = 'interno';
     return this.prisma.contactLabel.upsert({
-      where: { tenantId_label: { tenantId: data.tenantId, label } },
+      where: { tenantId_label: { tenantId: data.tenantId, label: data.channelName } },
       create: {
         tenantId: data.tenantId,
-        label,
+        label: data.channelName,
         clientId: data.clientId,
         groupJid: data.groupJid,
         status: 'draft',

@@ -31,6 +31,7 @@ export interface AnalysisResult {
   lastMessageTranscription: string | null;
   isInternal: boolean;
   internalPurpose: string | null;
+  channelName: string | null;
 }
 
 @Injectable()
@@ -70,6 +71,7 @@ export class ConversationAnalysisService {
         lastMessageTranscription: null,
         isInternal: false,
         internalPurpose: null,
+        channelName: null,
       };
     }
 
@@ -147,8 +149,9 @@ export class ConversationAnalysisService {
       warnings: result.warnings,
       remainingCount: remainingInActive.length,
       lastMessageTranscription: lastBatchMessage?.transcription ?? null,
-      isInternal: result.isInternal ?? false,
-      internalPurpose: result.internalPurpose ?? null,
+      isInternal: result.isInternal,
+      internalPurpose: result.internalPurpose,
+      channelName: result.channelName,
     };
   }
 

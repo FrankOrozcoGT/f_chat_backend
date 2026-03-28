@@ -7,10 +7,40 @@ export class InternalChannelReviewRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByTenantId(tenantId: string) {
-    return this.prisma.internalChannelReview.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-    });
+    type ReviewRow = {
+      id: string; tenantId: string; clientId: string | null; groupJid: string | null;
+      internalPurpose: string | null; status: string; modifiedPurpose: string | null;
+      reviewedAt: Date | null; createdAt: Date; updatedAt: Date;
+      conversationIds: string[];
+    };
+
+    const rows = await this.prisma.$queryRaw<(Omit<ReviewRow, 'conversationIds'> & { conversationIds: string })[]>`
+      SELECT
+        r.*,
+        COALESCE(
+          array_agg(c.id) FILTER (WHERE c.id IS NOT NULL),
+          '{}'
+        )::text[] AS "conversationIds"
+      FROM "InternalChannelReview" r
+      LEFT JOIN "Conversation" c ON c."phoneId" IN (
+        SELECT id FROM "Phone" WHERE "tenantId" = ${tenantId}
+      ) AND (
+        (r."groupJid" IS NOT NULL AND c."groupJid" = r."groupJid")
+        OR
+        (r."clientId" IS NOT NULL AND EXISTS (
+          SELECT 1 FROM "ConversationParticipant" cp
+          WHERE cp."conversationId" = c.id AND cp."clientId" = r."clientId"
+        ))
+      )
+      WHERE r."tenantId" = ${tenantId}
+      GROUP BY r.id
+      ORDER BY r."createdAt" DESC
+    `;
+
+    return rows.map((r) => ({
+      ...r,
+      conversationIds: Array.isArray(r.conversationIds) ? r.conversationIds : [],
+    }));
   }
 
   async findPendingByTenantId(tenantId: string) {
@@ -44,6 +74,7 @@ export class InternalChannelReviewRepository {
     clientId: string | null;
     groupJid: string | null;
     internalPurpose: string | null;
+    channelName: string | null;
   }) {
     const conditions: any[] = [];
     if (data.clientId) conditions.push({ clientId: data.clientId });
@@ -60,6 +91,7 @@ export class InternalChannelReviewRepository {
         where: { id: existing.id },
         data: {
           internalPurpose: data.internalPurpose,
+          channelName: data.channelName,
           status: 'pending',
           reviewedAt: null,
           modifiedPurpose: null,
@@ -73,6 +105,7 @@ export class InternalChannelReviewRepository {
         clientId: data.clientId,
         groupJid: data.groupJid,
         internalPurpose: data.internalPurpose,
+        channelName: data.channelName,
         status: 'pending',
       },
     });

@@ -64,6 +64,7 @@ export class AnalysisNode {
       promotions: parsed.promotions,
       isInternal: parsed.isInternal,
       internalPurpose: parsed.internalPurpose,
+      channelName: parsed.channelName,
       totalCost: totalCost + result.costUsd,
     };
   }
@@ -85,6 +86,9 @@ export class AnalysisNode {
       if (!parsed.subConversations || !Array.isArray(parsed.subConversations)) {
         throw new Error('Response missing subConversations array');
       }
+      if (typeof parsed.isInternal !== 'boolean') {
+        throw new Error('LLM response missing required field: isInternal');
+      }
       return {
         realName: parsed.realName ?? null,
         subConversations: parsed.subConversations.map((s: any) => ({
@@ -97,8 +101,9 @@ export class AnalysisNode {
         })),
         products: parsed.products ?? [],
         promotions: parsed.promotions ?? [],
-        isInternal: parsed.isInternal ?? false,
+        isInternal: parsed.isInternal,
         internalPurpose: parsed.internalPurpose ?? null,
+        channelName: parsed.channelName ?? null,
       };
     } catch (error) {
       this.logger.error(

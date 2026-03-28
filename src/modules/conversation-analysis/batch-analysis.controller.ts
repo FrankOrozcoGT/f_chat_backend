@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
 import { IsInt, Min, IsIn, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
@@ -86,12 +86,19 @@ export class BatchAnalysisController {
     });
 
     if (dto.status === 'approved') {
-      const purpose = dto.modifiedPurpose ?? updated.internalPurpose ?? '';
+      if (!updated.channelName) {
+        throw new BadRequestException(`Cannot approve internal channel ${id}: channelName is missing`);
+      }
+      const purpose = dto.modifiedPurpose ?? updated.internalPurpose;
+      if (!purpose) {
+        throw new BadRequestException(`Cannot approve internal channel ${id}: internalPurpose is missing`);
+      }
       await this.clientLabelRepo.upsertDraftLabel({
         tenantId: user.tenantId,
         clientId: updated.clientId ?? null,
         groupJid: updated.groupJid ?? null,
         internalPurpose: purpose,
+        channelName: updated.channelName,
       });
       if (updated.clientId) {
         await this.conversationAnalysisRepo.markAllAsInternalByClient(updated.clientId, purpose);

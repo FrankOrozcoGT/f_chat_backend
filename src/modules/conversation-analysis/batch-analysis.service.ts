@@ -86,9 +86,10 @@ export class BatchAnalysisService {
             tenantId,
             clientId,
             groupJid,
-            internalPurpose: result.internalPurpose ?? null,
+            internalPurpose: result.internalPurpose,
+            channelName: result.channelName,
           });
-          internals.push({ conversationId: conversation.id, clientId, groupJid, internalPurpose: result.internalPurpose ?? null });
+          internals.push({ conversationId: conversation.id, clientId, groupJid, internalPurpose: result.internalPurpose });
         }
       } catch (error) {
         this.logger.error(

@@ -40,6 +40,7 @@ export interface AnalysisLlmOutput {
   promotions: AnalysisPromotion[];
   isInternal: boolean;
   internalPurpose: string | null;
+  channelName: string | null;
 }
 
 export interface AnalysisWarning {
@@ -68,6 +69,7 @@ export const AnalysisState = Annotation.Root({
   promotions: Annotation<AnalysisPromotion[]>,
   isInternal: Annotation<boolean>,
   internalPurpose: Annotation<string | null>,
+  channelName: Annotation<string | null>,
 });
 
 export type AnalysisStateType = typeof AnalysisState.State;
