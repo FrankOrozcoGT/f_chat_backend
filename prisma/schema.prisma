@@ -709,6 +709,7 @@ model InternalChannelReview {
   clientId         String?
   groupJid         String?
   internalPurpose  String?
+  channelName      String?
   status           InternalReviewStatus @default(pending)
   modifiedPurpose  String?
   reviewedAt       DateTime?
