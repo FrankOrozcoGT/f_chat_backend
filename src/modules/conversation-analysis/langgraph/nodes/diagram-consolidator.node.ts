@@ -6,14 +6,27 @@ import { loadPrompt } from '@common/utils/load-prompt';
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
 const SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'diagram-consolidator-system.md');
 
+export interface ConversationFlow {
+  conversationId: string;
+  flowSummary: string | null;
+  flowDiagram: string | null;
+}
+
+export interface NodeMappingEntry {
+  conversationId: string;
+  nodeId: string;
+}
+
 export interface DiagramConsolidatorInput {
   intentName: string;
-  conversationFlows: { flowSummary: string | null; flowDiagram: string | null }[];
+  conversationFlows: ConversationFlow[];
   currentDiagram?: string | null;
+  currentNodeMapping?: Record<string, NodeMappingEntry[]> | null;
 }
 
 export interface DiagramConsolidatorOutput {
   diagram: string;
+  nodeMapping: Record<string, NodeMappingEntry[]>;
   costUsd: number;
 }
 
@@ -26,26 +39,30 @@ export class DiagramConsolidatorNode {
   async consolidate(input: DiagramConsolidatorInput): Promise<DiagramConsolidatorOutput> {
     const flowsText = input.conversationFlows
       .filter((f) => f.flowSummary || f.flowDiagram)
-      .map((f, i) => {
-        const parts: string[] = [`### Flujo ${i + 1}`];
+      .map((f) => {
+        const parts: string[] = [`### Conversación ${f.conversationId}`];
         if (f.flowSummary) parts.push(`Resumen: ${f.flowSummary}`);
         if (f.flowDiagram) parts.push(`Diagrama:\n${f.flowDiagram}`);
         return parts.join('\n');
       })
       .join('\n\n');
 
-    const currentDiagramSection = input.currentDiagram
-      ? `\n\n## Diagrama base actual (refinar):\n${input.currentDiagram}`
-      : '';
+    let currentSection = '';
+    if (input.currentDiagram) {
+      currentSection = `\n\n## Diagrama base actual (refinar):\n${input.currentDiagram}`;
+      if (input.currentNodeMapping) {
+        currentSection += `\n\nNodeMapping actual:\n${JSON.stringify(input.currentNodeMapping)}`;
+      }
+    }
 
-    const userPrompt = `Intención: **${input.intentName}**${currentDiagramSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
+    const userPrompt = `Intención: **${input.intentName}**${currentSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
 
     const result = await this.kimiClient.rawChat(
       [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      4000,
+      8000,
     );
 
     const parsed = this.parseResponse(result.response);
@@ -54,10 +71,10 @@ export class DiagramConsolidatorNode {
       `DiagramConsolidator [${input.intentName}]: ${input.conversationFlows.length} flows consolidated, cost=$${result.costUsd.toFixed(6)}`,
     );
 
-    return { diagram: parsed.diagram, costUsd: result.costUsd };
+    return { diagram: parsed.diagram, nodeMapping: parsed.nodeMapping, costUsd: result.costUsd };
   }
 
-  private parseResponse(response: string): { diagram: string } {
+  private parseResponse(response: string): { diagram: string; nodeMapping: Record<string, NodeMappingEntry[]> } {
     let cleaned = response.trim();
     if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
     else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
@@ -68,6 +85,9 @@ export class DiagramConsolidatorNode {
     if (!parsed.diagram || typeof parsed.diagram !== 'string') {
       throw new Error('DiagramConsolidator: LLM response missing diagram field');
     }
-    return { diagram: parsed.diagram };
+    if (!parsed.nodeMapping || typeof parsed.nodeMapping !== 'object') {
+      throw new Error('DiagramConsolidator: LLM response missing nodeMapping field');
+    }
+    return { diagram: parsed.diagram, nodeMapping: parsed.nodeMapping };
   }
 }

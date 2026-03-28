@@ -288,6 +288,7 @@ model FlowVersion {
   proposedTools    Json?
   isPromoted       Boolean  @default(false)
   consolidatedDiagram   String?
+  nodeMapping      Json?
   diagramApproved  Boolean  @default(false)
   diagramModified  Boolean  @default(false)
   createdAt        DateTime @default(now())

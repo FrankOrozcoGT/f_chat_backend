@@ -139,6 +139,7 @@ export class BatchAnalysisService {
         }
 
         const conversationFlows = intentAnalyses.map((a) => ({
+          conversationId: a.conversationId,
           flowSummary: a.flowSummary,
           flowDiagram: a.flowDiagram,
         }));
@@ -150,6 +151,7 @@ export class BatchAnalysisService {
         // Si ya existe diagrama consolidado → refinar desde ahí, todo en batches de 10
         const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
         let currentDiagram: string | null = existingVersion?.consolidatedDiagram ?? null;
+        let currentNodeMapping: Record<string, any[]> | null = (existingVersion as any)?.nodeMapping ?? null;
         const isRefinement = !!currentDiagram;
 
         let remaining: typeof conversationFlows;
@@ -163,8 +165,10 @@ export class BatchAnalysisService {
               intentName,
               conversationFlows: firstBatch,
               currentDiagram: null,
+              currentNodeMapping: null,
             });
             currentDiagram = result.diagram;
+            currentNodeMapping = result.nodeMapping;
             costUsd += result.costUsd;
             this.logger.log(`generateDiagrams [${intentName}]: initial batch (${firstBatch.length} flows)`);
           }
@@ -176,15 +180,17 @@ export class BatchAnalysisService {
             intentName,
             conversationFlows: batch,
             currentDiagram,
+            currentNodeMapping,
           });
           currentDiagram = result.diagram;
+          currentNodeMapping = result.nodeMapping;
           costUsd += result.costUsd;
           this.logger.log(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
         }
 
         if (!currentDiagram) throw new UnprocessableEntityException(`Intent "${intentName}": no conversation flows to consolidate`);
 
-        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram);
+        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
         totalCostUsd += costUsd;
         diagramsGenerated++;
         flows.push({ flowId, intentName });
@@ -332,7 +338,7 @@ export class BatchAnalysisService {
   }
 
   private groupByIntent(
-    analyses: { id: string; intent: string | null; flowSummary: string | null; flowDiagram: string | null }[],
+    analyses: { id: string; conversationId: string; intent: string | null; flowSummary: string | null; flowDiagram: string | null }[],
     normalizationMap?: Map<string, string>,
   ): Map<string, typeof analyses> {
     const map = new Map<string, typeof analyses>();
