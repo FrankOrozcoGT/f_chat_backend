@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
+import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { FlowGeneratorNode, FlowGeneratorOutput } from './langgraph/nodes/flow-generator.node';
@@ -19,6 +20,7 @@ export class BatchAnalysisService {
     private readonly prisma: PrismaService,
     private readonly analysisService: ConversationAnalysisService,
     private readonly clientLabelRepo: ClientLabelRepository,
+    private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
     private readonly flowIntentRepo: FlowIntentRepository,
     private readonly flowGeneratorNode: FlowGeneratorNode,
@@ -45,16 +47,16 @@ export class BatchAnalysisService {
         const clientId = conversation.client?.id ?? null;
         const groupJid = conversation.groupJid ?? null;
 
-        // Si ya está marcado como interno, skip la IA y marcar directo
-        const existingInternal = await this.clientLabelRepo.findInternalByClientOrGroup({
+        // Si ya existe una review no-rechazada, skip la IA
+        const existingReview = await this.internalChannelReviewRepo.findNonRejectedByClientOrGroup({
           tenantId,
           clientId,
           groupJid,
         });
 
-        if (existingInternal) {
+        if (existingReview) {
           internalsDetected++;
-          this.logger.log(`Skipping AI for internal conversation ${conversation.id} (already marked)`);
+          this.logger.log(`Skipping AI for internal conversation ${conversation.id} (review status: ${existingReview.status})`);
           continue;
         }
 
@@ -80,16 +82,12 @@ export class BatchAnalysisService {
 
         if (result.isInternal) {
           internalsDetected++;
-          await this.clientLabelRepo.upsertDraftLabel({
+          await this.internalChannelReviewRepo.upsert({
             tenantId,
             clientId,
             groupJid,
-            internalPurpose: result.internalPurpose ?? '',
+            internalPurpose: result.internalPurpose ?? null,
           });
-
-          const purpose = result.internalPurpose ?? '';
-          if (clientId) await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, purpose);
-          if (groupJid) await this.conversationAnalysisRepo.markAllAsInternalByGroup(groupJid, purpose);
           internals.push({ conversationId: conversation.id, clientId, groupJid, internalPurpose: result.internalPurpose ?? null });
         }
       } catch (error) {

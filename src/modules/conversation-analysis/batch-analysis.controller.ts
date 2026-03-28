@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Param, Body, UseGuards, HttpCode } from '@nestjs/common';
-import { IsInt, Min } from 'class-validator';
+import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode } from '@nestjs/common';
+import { IsInt, Min, IsIn, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
@@ -7,6 +7,9 @@ import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { TenantRole } from '@prisma/client';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
+import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
+import { ClientLabelRepository } from './repositories/client-label.repository';
+import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 
 class RunBatchDto {
   @IsInt()
@@ -16,6 +19,15 @@ class RunBatchDto {
   @IsInt()
   @Min(1)
   messageLimit: number;
+}
+
+class ReviewInternalDto {
+  @IsIn(['approved', 'rejected'])
+  status: 'approved' | 'rejected';
+
+  @IsOptional()
+  @IsString()
+  modifiedPurpose?: string | null;
 }
 
 interface AuthenticatedUser {
@@ -31,6 +43,9 @@ export class BatchAnalysisController {
   constructor(
     private readonly batchAnalysisService: BatchAnalysisService,
     private readonly flowIntentRepo: FlowIntentRepository,
+    private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
+    private readonly clientLabelRepo: ClientLabelRepository,
+    private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
   ) {}
 
   @Post()
@@ -52,6 +67,41 @@ export class BatchAnalysisController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ flowsGenerated: number; flows: any[] }> {
     return this.batchAnalysisService.generateDraftFlows(user.tenantId);
+  }
+
+  @Get('internals')
+  async getInternalReviews(@CurrentUser() user: AuthenticatedUser) {
+    return this.internalChannelReviewRepo.findByTenantId(user.tenantId);
+  }
+
+  @Patch('internals/:id')
+  async reviewInternal(
+    @Param('id') id: string,
+    @Body() dto: ReviewInternalDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const updated = await this.internalChannelReviewRepo.review(id, {
+      status: dto.status,
+      modifiedPurpose: dto.modifiedPurpose,
+    });
+
+    if (dto.status === 'approved') {
+      const purpose = dto.modifiedPurpose ?? updated.internalPurpose ?? '';
+      await this.clientLabelRepo.upsertDraftLabel({
+        tenantId: user.tenantId,
+        clientId: updated.clientId ?? null,
+        groupJid: updated.groupJid ?? null,
+        internalPurpose: purpose,
+      });
+      if (updated.clientId) {
+        await this.conversationAnalysisRepo.markAllAsInternalByClient(updated.clientId, purpose);
+      }
+      if (updated.groupJid) {
+        await this.conversationAnalysisRepo.markAllAsInternalByGroup(updated.groupJid, purpose);
+      }
+    }
+
+    return updated;
   }
 
   @Get('flows/:flowId/analyses')

@@ -39,8 +39,9 @@ model Tenant {
   products          Product[]
   promotions        Promotion[]
   shippingLocations ShippingLocation[]
-  contactLabels     ContactLabel[]
-  templates         Template[]
+  contactLabels          ContactLabel[]
+  internalChannelReviews InternalChannelReview[]
+  templates              Template[]
   settings          TenantSettings?
   memory            TenantMemory?
 }
@@ -137,7 +138,8 @@ model Client {
   participations     ConversationParticipant[]
   discounts          Discount[]
   promotionDiscounts PromotionDiscount[]
-  contactLabels      ContactLabel[]
+  contactLabels          ContactLabel[]
+  internalChannelReviews InternalChannelReview[]
 
   @@index([phoneNumber])
 }
@@ -589,6 +591,12 @@ enum LabelStatus {
   draft
 }
 
+enum InternalReviewStatus {
+  pending
+  approved
+  rejected
+}
+
 
 model ShippingLocation {
   id             String   @id @default(uuid())
@@ -692,6 +700,24 @@ model ContactLabel {
   client    Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, label])
+  @@index([tenantId])
+}
+
+model InternalChannelReview {
+  id               String               @id @default(uuid())
+  tenantId         String
+  clientId         String?
+  groupJid         String?
+  internalPurpose  String?
+  status           InternalReviewStatus @default(pending)
+  modifiedPurpose  String?
+  reviewedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client           Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clientId, groupJid])
   @@index([tenantId])
 }
 
