@@ -45,8 +45,8 @@ Para cada sub-conversación, genera:
 
 ## Canal Interno
 
-Detecta si este canal es interno o externo analizando quién solicita y quién recibe:
-- `isInternal: true` — si el negocio es quien solicita, contrata o paga a la otra persona. La otra persona opera o apoya el negocio: empleado, mensajero, proveedor, jefe, equipo interno.
+Detecta si este canal es interno o externo:
+- `isInternal: true` — la otra persona opera, apoya o representa al negocio: empleado, vendedor, técnico, mensajero, proveedor, jefe, socio. Señales: tiene acceso a información interna (precios, clientes, inventario), coordina operaciones del negocio, o el negocio le solicita/contrata/paga.
 - `isInternal: false` — si la persona del otro lado es un cliente externo — sin importar si compra, consulta, pide soporte, solicita presupuesto, hace reclamos, o cualquier otra interacción donde el negocio le está **atendiendo como cliente**.
 
 Si `isInternal` es `true`, genera:
