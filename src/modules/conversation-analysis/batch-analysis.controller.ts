@@ -110,6 +110,12 @@ export class BatchAnalysisController {
     return { flowId, versionId: version.id, diagramModified: true };
   }
 
+  @Post('flows/:flowId/regenerate-diagram')
+  @HttpCode(200)
+  async regenerateDiagram(@Param('flowId') flowId: string) {
+    return this.batchAnalysisService.regenerateDiagram(flowId);
+  }
+
   @Post('flows/:flowId/approve-diagram')
   @HttpCode(200)
   async approveDiagram(@Param('flowId') flowId: string) {

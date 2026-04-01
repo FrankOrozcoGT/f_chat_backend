@@ -209,6 +209,71 @@ export class BatchAnalysisService {
     return { diagramsGenerated, totalCostUsd, flows, errors };
   }
 
+  async regenerateDiagram(flowId: string): Promise<{ flowId: string; intentName: string; costUsd: number }> {
+    const intent = await this.prisma.flow.findUnique({
+      where: { id: flowId },
+      select: { id: true, intents: { select: { name: true } } },
+    });
+    if (!intent) throw new Error(`Flow ${flowId} not found`);
+    const intentName = intent.intents[0]?.name;
+    if (!intentName) throw new Error(`Flow ${flowId} has no intent`);
+
+    const records = await this.flowIntentRepo.findByFlowId(flowId);
+    const conversationFlows = records
+      .filter((r) => r.analysis.flowSummary || r.analysis.flowDiagram)
+      .map((r) => ({
+        conversationId: r.analysis.conversationId,
+        flowSummary: r.analysis.flowSummary,
+        flowDiagram: r.analysis.flowDiagram,
+      }));
+
+    if (conversationFlows.length === 0) {
+      throw new Error(`Flow ${flowId} has no analyses to consolidate`);
+    }
+
+    const INITIAL_BATCH = 15;
+    const BATCH_SIZE = 10;
+    let costUsd = 0;
+    let currentDiagram: string | null = null;
+    let currentNodeMapping: Record<string, any[]> | null = null;
+
+    const firstBatch = conversationFlows.slice(0, INITIAL_BATCH);
+    if (firstBatch.length > 0) {
+      const result = await this.diagramConsolidatorNode.consolidate({
+        intentName,
+        conversationFlows: firstBatch,
+        currentDiagram: null,
+        currentNodeMapping: null,
+      });
+      currentDiagram = result.diagram;
+      currentNodeMapping = result.nodeMapping;
+      costUsd += result.costUsd;
+      this.logger.log(`regenerateDiagram [${intentName}]: initial batch (${firstBatch.length} flows)`);
+    }
+
+    const remaining = conversationFlows.slice(INITIAL_BATCH);
+    for (let i = 0; i < remaining.length; i += BATCH_SIZE) {
+      const batch = remaining.slice(i, i + BATCH_SIZE);
+      const result = await this.diagramConsolidatorNode.consolidate({
+        intentName,
+        conversationFlows: batch,
+        currentDiagram,
+        currentNodeMapping,
+      });
+      currentDiagram = result.diagram;
+      currentNodeMapping = result.nodeMapping;
+      costUsd += result.costUsd;
+      this.logger.log(`regenerateDiagram [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+    }
+
+    if (!currentDiagram) throw new Error(`regenerateDiagram [${intentName}]: no diagram generated`);
+
+    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
+    this.logger.log(`regenerateDiagram [${intentName}]: diagram saved for flowId=${flowId}`);
+
+    return { flowId, intentName, costUsd };
+  }
+
   async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
 
