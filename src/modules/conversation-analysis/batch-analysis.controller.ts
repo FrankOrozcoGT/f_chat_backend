@@ -283,4 +283,40 @@ export class BatchAnalysisController {
 
     return { clientId, channelName: dto.channelName, status: 'approved' };
   }
+
+  @Post('groups/:groupJid/mark-internal')
+  @HttpCode(200)
+  async markGroupAsInternal(
+    @Param('groupJid') groupJid: string,
+    @Body() dto: MarkInternalDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.internalChannelReviewRepo.upsert({
+      tenantId: user.tenantId,
+      clientId: null,
+      groupJid,
+      internalPurpose: dto.internalPurpose,
+      channelName: dto.channelName,
+    });
+
+    await this.internalChannelReviewRepo.review(
+      (await this.prisma.internalChannelReview.findFirst({
+        where: { tenantId: user.tenantId, groupJid },
+        select: { id: true },
+      }))!.id,
+      { status: 'approved' },
+    );
+
+    await this.clientLabelRepo.upsertDraftLabel({
+      tenantId: user.tenantId,
+      clientId: null,
+      groupJid,
+      internalPurpose: dto.internalPurpose,
+      channelName: dto.channelName,
+    });
+
+    await this.conversationAnalysisRepo.markAllAsInternalByGroup(groupJid, dto.internalPurpose);
+
+    return { groupJid, channelName: dto.channelName, status: 'approved' };
+  }
 }

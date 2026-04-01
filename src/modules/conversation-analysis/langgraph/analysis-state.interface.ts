@@ -8,6 +8,7 @@ export interface AnalysisMessage {
   senderType: string;
   transcription: string | null;
   mediaUrl: string | null;
+  metadata: Record<string, any> | null;
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ export const AnalysisState = Annotation.Root({
   tenantId: Annotation<string>,
   phoneId: Annotation<string>,
   clientId: Annotation<string | null>,
+  isGroup: Annotation<boolean>,
   messages: Annotation<AnalysisMessage[]>,
 
   // After InputRouter (messages with transcriptions resolved)

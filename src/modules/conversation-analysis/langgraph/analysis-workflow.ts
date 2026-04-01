@@ -13,6 +13,7 @@ export interface AnalysisWorkflowInput {
   tenantId: string;
   phoneId: string;
   clientId: string | null;
+  isGroup: boolean;
   messages: AnalysisMessage[];
   existingIntents: string[];
 }
@@ -50,6 +51,7 @@ export class AnalysisWorkflow {
       tenantId: input.tenantId,
       phoneId: input.phoneId,
       clientId: input.clientId,
+      isGroup: input.isGroup,
       messages: input.messages,
       processedMessages: [],
       warnings: [],

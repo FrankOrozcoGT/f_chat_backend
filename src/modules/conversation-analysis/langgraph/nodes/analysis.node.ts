@@ -25,11 +25,18 @@ export class AnalysisNode {
   async execute(
     state: AnalysisStateType,
   ): Promise<Partial<AnalysisStateType>> {
-    const { processedMessages, tenantId, totalCost, existingIntents } = state;
+    const { processedMessages, tenantId, totalCost, existingIntents, isGroup } = state;
 
     const messagesText = processedMessages
       .map((m) => {
-        const sender = m.direction === 'incoming' ? 'Cliente' : 'Negocio';
+        let sender: string;
+        if (m.direction === 'outgoing') {
+          sender = 'Negocio';
+        } else if (isGroup && m.metadata?.senderName) {
+          sender = m.metadata.senderName;
+        } else {
+          sender = 'Cliente';
+        }
         const time = new Date(m.createdAt).toLocaleString('es-MX');
         const text = m.transcription || m.content || '[sin contenido]';
         return `[${time}] ${sender} (id:${m.id}): ${text}`;

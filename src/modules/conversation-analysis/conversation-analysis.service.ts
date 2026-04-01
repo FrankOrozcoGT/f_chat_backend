@@ -18,6 +18,7 @@ export interface ConversationSplit {
 export interface ConversationForAnalysis {
   id: string;
   phoneId: string;
+  groupJid?: string | null;
   phone: { id: string; tenantId: string };
   client: { id: string; phoneNumber: string; name: string | null } | null;
 }
@@ -86,16 +87,19 @@ export class ConversationAnalysisService {
       senderType: m.senderType,
       transcription: m.transcription,
       mediaUrl: m.mediaUrl,
+      metadata: m.metadata as Record<string, any> | null,
       createdAt: m.createdAt,
     }));
 
     const clientId = conversation.client?.id ?? null;
+    const isGroup = !!conversation.groupJid;
 
     const result = await this.analysisWorkflow.execute({
       conversationId: conversation.id,
       tenantId,
       phoneId: conversation.phoneId,
       clientId,
+      isGroup,
       messages,
       existingIntents,
     });
