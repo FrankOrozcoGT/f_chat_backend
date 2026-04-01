@@ -1,4 +1,4 @@
-import { Injectable, Logger, ConflictException, ForbiddenException, BadGatewayException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, Logger, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
@@ -43,6 +43,7 @@ export class BatchAnalysisService {
     let internalsDetected = 0;
     let totalCostUsd = 0;
     const internals: { conversationId: string; clientId: string | null; groupJid: string | null; internalPurpose: string | null }[] = [];
+    const accumulatedIntents = new Set<string>();
 
     for (const conversation of conversations) {
       try {
@@ -66,6 +67,7 @@ export class BatchAnalysisService {
           conversation,
           tenantId,
           messageLimit,
+          [...accumulatedIntents],
         );
 
         if (result.warnings.some((w) => w.type === 'no_messages')) {
@@ -75,6 +77,7 @@ export class BatchAnalysisService {
 
         analyzed++;
         totalCostUsd += result.creditsUsed;
+        result.detectedIntents.forEach((i) => accumulatedIntents.add(i));
 
         await this.conversationAnalysisRepo.upsertInternal({
           conversationId: conversation.id,
@@ -107,7 +110,7 @@ export class BatchAnalysisService {
     return { analyzed, internalsDetected, totalCostUsd, intents, internals };
   }
 
-  async generateDiagrams(tenantId: string): Promise<{ diagramsGenerated: number; totalCostUsd: number; flows: { flowId: string; intentName: string }[] }> {
+  async generateDiagrams(tenantId: string): Promise<{ diagramsGenerated: number; totalCostUsd: number; flows: { flowId: string; intentName: string }[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
     const rawIntents = [...new Set(analyses.map((a) => a.intent).filter((i): i is string => !!i))];
     const normalizationMap = await this.intentClassifierNode.classify({
@@ -119,8 +122,10 @@ export class BatchAnalysisService {
     let diagramsGenerated = 0;
     let totalCostUsd = 0;
     const flows: { flowId: string; intentName: string }[] = [];
+    const errors: { intentName: string; error: string }[] = [];
 
     for (const [intentName, intentAnalyses] of grouped.entries()) {
+      try {
         let existingIntent = await this.intentRepo.findByTenantIdAndName(tenantId, intentName);
         let flowId: string;
 
@@ -132,11 +137,12 @@ export class BatchAnalysisService {
             tenantId,
           });
           await this.intentRepo.upsert(tenantId, intentName, flow.id);
-          const analysisIds = intentAnalyses.map((a) => a.id);
-          await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flow.id);
           flowId = flow.id;
           this.logger.log(`generateDiagrams: created draft flow for intent "${intentName}": flowId=${flowId}`);
         }
+
+        const analysisIds = intentAnalyses.map((a) => a.id);
+        await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flowId);
 
         const conversationFlows = intentAnalyses.map((a) => ({
           conversationId: a.conversationId,
@@ -148,7 +154,6 @@ export class BatchAnalysisService {
         const BATCH_SIZE = 10;
         let costUsd = 0;
 
-        // Si ya existe diagrama consolidado → refinar desde ahí, todo en batches de 10
         const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
         let currentDiagram: string | null = existingVersion?.consolidatedDiagram ?? null;
         let currentNodeMapping: Record<string, any[]> | null = (existingVersion as any)?.nodeMapping ?? null;
@@ -188,19 +193,23 @@ export class BatchAnalysisService {
           this.logger.log(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
         }
 
-        if (!currentDiagram) throw new UnprocessableEntityException(`Intent "${intentName}": no conversation flows to consolidate`);
+        if (!currentDiagram) throw new Error(`no conversation flows to consolidate`);
 
         await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
         totalCostUsd += costUsd;
         diagramsGenerated++;
         flows.push({ flowId, intentName });
         this.logger.log(`generateDiagrams [${intentName}]: diagram saved for flowId=${flowId}`);
+      } catch (error) {
+        this.logger.error(`generateDiagrams failed for intent "${intentName}": ${error.message}`);
+        errors.push({ intentName, error: error.message });
+      }
     }
 
-    return { diagramsGenerated, totalCostUsd, flows };
+    return { diagramsGenerated, totalCostUsd, flows, errors };
   }
 
-  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[] }> {
+  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
 
     const [activeIntents, activeFlows] = await Promise.all([
@@ -226,6 +235,7 @@ export class BatchAnalysisService {
 
     let flowsGenerated = 0;
     const flows: any[] = [];
+    const errors: { intentName: string; error: string }[] = [];
 
     const internalChannelLabels = internalChannels.map((c) => ({
       label: c.label,
@@ -233,54 +243,59 @@ export class BatchAnalysisService {
     }));
 
     for (const [intentName, intentAnalyses] of grouped.entries()) {
-      const existingIntent = await this.intentRepo.findByTenantIdAndName(tenantId, intentName);
-      if (!existingIntent?.flowId) {
-        throw new ConflictException(`Intent "${intentName}" has no flow — run generate-diagrams first`);
+      try {
+        const existingIntent = await this.intentRepo.findByTenantIdAndName(tenantId, intentName);
+        if (!existingIntent?.flowId) {
+          throw new ConflictException(`Intent "${intentName}" has no flow — run generate-diagrams first`);
+        }
+
+        const flowId = existingIntent.flowId;
+        const latestVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
+        if (!latestVersion?.diagramApproved) {
+          throw new ForbiddenException(`Intent "${intentName}" diagram not approved — approve it before generating flows`);
+        }
+
+        const conversationFlows = intentAnalyses.map((a) => ({
+          flowSummary: a.flowSummary,
+          flowDiagram: a.flowDiagram,
+        }));
+
+        const baseVersion = (await this.flowVersionRepo.findPromotedByFlowId(flowId))
+          ?? (await this.flowVersionRepo.findLatestByFlowId(flowId));
+        const baseSnapshot = baseVersion?.nodesSnapshot as any;
+        const initialCases: import('./langgraph/nodes/flow-generator.node').RepresentativeCase[] =
+          Array.isArray(baseSnapshot?.selectedCases) ? baseSnapshot.selectedCases : [];
+
+        const generated = await this.processBatches({
+          intentName,
+          conversationFlows,
+          internalChannels: internalChannelLabels,
+          existingFlows: activeFlows.map((f) => ({ name: f.name, nodes: f.nodes })),
+          existingIntents: activeIntents.map((i) => ({ name: i.name })),
+          initialCases: initialCases.length > 0 ? initialCases : undefined,
+        });
+
+        const snapshot: import('@modules/nodes/repositories/flow-version.repository').DraftFlowSnapshot = {
+          nodes: generated.nodes.map((n) => ({ name: n.name, systemPrompt: n.systemPrompt, todos: n.todos, tools: n.tools })),
+          transitions: generated.transitions,
+          selectedCases: generated.selectedCases,
+        };
+        const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+        await this.flowVersionRepo.saveVersion(flowId, snapshot, hash, generated.proposedTools);
+
+        const analysisIds = intentAnalyses.map((a) => a.id);
+        await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flowId);
+
+        flowsGenerated++;
+        flows.push({ id: flowId, name: existingIntent.flow?.name ?? intentName });
+        this.logger.log(`Generated nodes for intent "${intentName}": flowId=${flowId}`);
+      } catch (error) {
+        this.logger.error(`generateDraftFlows failed for intent "${intentName}": ${error.message}`);
+        errors.push({ intentName, error: error.message });
       }
-
-      const flowId = existingIntent.flowId;
-      const latestVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
-      if (!latestVersion?.diagramApproved) {
-        throw new ForbiddenException(`Intent "${intentName}" diagram not approved — approve it before generating flows`);
-      }
-
-      const conversationFlows = intentAnalyses.map((a) => ({
-        flowSummary: a.flowSummary,
-        flowDiagram: a.flowDiagram,
-      }));
-
-      const baseVersion = (await this.flowVersionRepo.findPromotedByFlowId(flowId))
-        ?? (await this.flowVersionRepo.findLatestByFlowId(flowId));
-      const baseSnapshot = baseVersion?.nodesSnapshot as any;
-      const initialCases: import('./langgraph/nodes/flow-generator.node').RepresentativeCase[] =
-        Array.isArray(baseSnapshot?.selectedCases) ? baseSnapshot.selectedCases : [];
-
-      const generated = await this.processBatches({
-        intentName,
-        conversationFlows,
-        internalChannels: internalChannelLabels,
-        existingFlows: activeFlows.map((f) => ({ name: f.name, nodes: f.nodes })),
-        existingIntents: activeIntents.map((i) => ({ name: i.name })),
-        initialCases: initialCases.length > 0 ? initialCases : undefined,
-      });
-
-      const snapshot: import('@modules/nodes/repositories/flow-version.repository').DraftFlowSnapshot = {
-        nodes: generated.nodes.map((n) => ({ name: n.name, systemPrompt: n.systemPrompt, todos: n.todos, tools: n.tools })),
-        transitions: generated.transitions,
-        selectedCases: generated.selectedCases,
-      };
-      const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
-      await this.flowVersionRepo.saveVersion(flowId, snapshot, hash, generated.proposedTools);
-
-      const analysisIds = intentAnalyses.map((a) => a.id);
-      await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flowId);
-
-      flowsGenerated++;
-      flows.push({ id: flowId, name: existingIntent.flow?.name ?? intentName });
-      this.logger.log(`Generated nodes for intent "${intentName}": flowId=${flowId}`);
     }
 
-    return { flowsGenerated, flows };
+    return { flowsGenerated, flows, errors };
   }
 
   private async processBatches(input: {

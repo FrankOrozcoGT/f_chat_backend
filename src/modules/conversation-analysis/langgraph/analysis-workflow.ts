@@ -14,6 +14,7 @@ export interface AnalysisWorkflowInput {
   phoneId: string;
   clientId: string | null;
   messages: AnalysisMessage[];
+  existingIntents: string[];
 }
 
 @Injectable()
@@ -57,6 +58,7 @@ export class AnalysisWorkflow {
       subConversations: [],
       products: [],
       promotions: [],
+      existingIntents: input.existingIntents,
       isInternal: false,
       internalPurpose: null,
     };

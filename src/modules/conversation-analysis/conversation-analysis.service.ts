@@ -32,6 +32,7 @@ export interface AnalysisResult {
   isInternal: boolean;
   internalPurpose: string | null;
   channelName: string | null;
+  detectedIntents: string[];
 }
 
 @Injectable()
@@ -48,6 +49,7 @@ export class ConversationAnalysisService {
     conversation: ConversationForAnalysis,
     tenantId: string,
     messageLimit?: number,
+    existingIntents: string[] = [],
   ): Promise<AnalysisResult> {
     let limit = messageLimit;
     if (!limit) {
@@ -72,6 +74,7 @@ export class ConversationAnalysisService {
         isInternal: false,
         internalPurpose: null,
         channelName: null,
+        detectedIntents: [],
       };
     }
 
@@ -94,6 +97,7 @@ export class ConversationAnalysisService {
       phoneId: conversation.phoneId,
       clientId,
       messages,
+      existingIntents,
     });
 
     if (!clientId) {
@@ -152,6 +156,9 @@ export class ConversationAnalysisService {
       isInternal: result.isInternal,
       internalPurpose: result.internalPurpose,
       channelName: result.channelName,
+      detectedIntents: result.subConversations
+        .map((s) => s.intent)
+        .filter((i): i is string => !!i),
     };
   }
 

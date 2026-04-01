@@ -67,6 +67,7 @@ export const AnalysisState = Annotation.Root({
   subConversations: Annotation<SubConversation[]>,
   products: Annotation<AnalysisProduct[]>,
   promotions: Annotation<AnalysisPromotion[]>,
+  existingIntents: Annotation<string[]>,
   isInternal: Annotation<boolean>,
   internalPurpose: Annotation<string | null>,
   channelName: Annotation<string | null>,

@@ -25,7 +25,7 @@ export class AnalysisNode {
   async execute(
     state: AnalysisStateType,
   ): Promise<Partial<AnalysisStateType>> {
-    const { processedMessages, tenantId, totalCost } = state;
+    const { processedMessages, tenantId, totalCost, existingIntents } = state;
 
     const messagesText = processedMessages
       .map((m) => {
@@ -36,7 +36,11 @@ export class AnalysisNode {
       })
       .join('\n');
 
-    const userPrompt = `Analiza la siguiente conversación de WhatsApp y divídela en sub-conversaciones:\n\n${messagesText}`;
+    const intentsSection = existingIntents.length > 0
+      ? `\n\nIntenciones ya detectadas en conversaciones anteriores (reutiliza si aplica): ${existingIntents.join(', ')}\n`
+      : '';
+
+    const userPrompt = `Analiza la siguiente conversación de WhatsApp y divídela en sub-conversaciones:${intentsSection}\n${messagesText}`;
 
     const result = await this.kimiClient.rawChat(
       [
