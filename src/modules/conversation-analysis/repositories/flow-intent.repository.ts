@@ -15,7 +15,23 @@ export class FlowIntentRepository {
   async findByFlowId(flowId: string) {
     return this.prisma.conversationAnalysisFlow.findMany({
       where: { flowId },
-      include: { analysis: true },
+      include: {
+        analysis: {
+          include: {
+            conversation: {
+              select: {
+                groupJid: true,
+                participants: {
+                  select: {
+                    clientId: true,
+                    client: { select: { name: true, phoneNumber: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
 

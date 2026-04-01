@@ -179,6 +179,12 @@ export class BatchAnalysisController {
     return records.map((r) => ({
       analysisId: r.analysis.id,
       conversationId: r.analysis.conversationId,
+      groupJid: r.analysis.conversation?.groupJid ?? null,
+      participants: (r.analysis.conversation?.participants ?? []).map((p) => ({
+        clientId: p.clientId,
+        name: p.client?.name ?? null,
+        phoneNumber: p.client?.phoneNumber ?? null,
+      })),
       intent: r.analysis.intent,
       flowSummary: r.analysis.flowSummary,
       flowDiagram: r.analysis.flowDiagram,
