@@ -1,5 +1,6 @@
-import { Controller, Post, Get, Patch, Param, Body, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
 import { IsInt, Min, IsIn, IsOptional, IsString } from 'class-validator';
+import { PrismaService } from '@common/prisma/prisma.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
@@ -25,6 +26,14 @@ class RunBatchDto {
 class UpdateDiagramDto {
   @IsString()
   diagram: string;
+}
+
+class MarkInternalDto {
+  @IsString()
+  channelName: string;
+
+  @IsString()
+  internalPurpose: string;
 }
 
 class ReviewInternalDto {
@@ -53,6 +62,7 @@ export class BatchAnalysisController {
     private readonly clientLabelRepo: ClientLabelRepository,
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
     private readonly flowVersionRepo: FlowVersionRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -170,5 +180,95 @@ export class BatchAnalysisController {
       internalPurpose: r.analysis.internalPurpose,
       analyzedAt: r.analysis.analyzedAt,
     }));
+  }
+
+  @Get('clients/:clientId/conversations')
+  async getClientConversations(
+    @Param('clientId') clientId: string,
+    @Query('limit') limit?: string,
+  ) {
+    const msgLimit = parseInt(limit ?? '100', 10);
+    const conversations = await this.prisma.conversation.findMany({
+      where: { participants: { some: { clientId } } },
+      orderBy: { lastMessageAt: 'desc' },
+      select: {
+        id: true,
+        groupJid: true,
+        isActive: true,
+        lastMessageAt: true,
+      },
+    });
+
+    const conversationIds = conversations.map((c) => c.id);
+    const messages = await this.prisma.message.findMany({
+      where: { conversationId: { in: conversationIds } },
+      orderBy: { createdAt: 'desc' },
+      take: msgLimit,
+      select: {
+        id: true,
+        conversationId: true,
+        content: true,
+        transcription: true,
+        direction: true,
+        type: true,
+        createdAt: true,
+      },
+    });
+
+    const analysis = await this.prisma.conversationAnalysis.findMany({
+      where: { conversationId: { in: conversationIds } },
+      select: {
+        conversationId: true,
+        isInternal: true,
+        internalPurpose: true,
+        intent: true,
+      },
+    });
+
+    const analysisMap = new Map(analysis.map((a) => [a.conversationId, a]));
+
+    return conversations.map((c) => ({
+      ...c,
+      analysis: analysisMap.get(c.id) ?? null,
+      messages: messages
+        .filter((m) => m.conversationId === c.id)
+        .reverse(),
+    }));
+  }
+
+  @Post('clients/:clientId/mark-internal')
+  @HttpCode(200)
+  async markClientAsInternal(
+    @Param('clientId') clientId: string,
+    @Body() dto: MarkInternalDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.internalChannelReviewRepo.upsert({
+      tenantId: user.tenantId,
+      clientId,
+      groupJid: null,
+      internalPurpose: dto.internalPurpose,
+      channelName: dto.channelName,
+    });
+
+    await this.internalChannelReviewRepo.review(
+      (await this.prisma.internalChannelReview.findFirst({
+        where: { tenantId: user.tenantId, clientId },
+        select: { id: true },
+      }))!.id,
+      { status: 'approved' },
+    );
+
+    await this.clientLabelRepo.upsertDraftLabel({
+      tenantId: user.tenantId,
+      clientId,
+      groupJid: null,
+      internalPurpose: dto.internalPurpose,
+      channelName: dto.channelName,
+    });
+
+    await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, dto.internalPurpose);
+
+    return { clientId, channelName: dto.channelName, status: 'approved' };
   }
 }
