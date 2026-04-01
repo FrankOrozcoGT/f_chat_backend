@@ -18,4 +18,13 @@ export class FlowIntentRepository {
       include: { analysis: true },
     });
   }
+
+  async deleteInternalByFlowId(flowId: string) {
+    return this.prisma.conversationAnalysisFlow.deleteMany({
+      where: {
+        flowId,
+        analysis: { isInternal: true },
+      },
+    });
+  }
 }

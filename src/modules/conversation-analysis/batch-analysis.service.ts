@@ -209,7 +209,7 @@ export class BatchAnalysisService {
     return { diagramsGenerated, totalCostUsd, flows, errors };
   }
 
-  async regenerateDiagram(flowId: string): Promise<{ flowId: string; intentName: string; costUsd: number }> {
+  async regenerateDiagram(flowId: string): Promise<{ flowId: string; intentName: string; costUsd: number; removedInternals: number }> {
     const intent = await this.prisma.flow.findUnique({
       where: { id: flowId },
       select: { id: true, intents: { select: { name: true } } },
@@ -217,6 +217,13 @@ export class BatchAnalysisService {
     if (!intent) throw new Error(`Flow ${flowId} not found`);
     const intentName = intent.intents[0]?.name;
     if (!intentName) throw new Error(`Flow ${flowId} has no intent`);
+
+    // Eliminar links a análisis que ahora son internos
+    const deleted = await this.flowIntentRepo.deleteInternalByFlowId(flowId);
+    const removedInternals = deleted.count;
+    if (removedInternals > 0) {
+      this.logger.log(`regenerateDiagram [${intentName}]: removed ${removedInternals} internal analysis links`);
+    }
 
     const records = await this.flowIntentRepo.findByFlowId(flowId);
     const conversationFlows = records
@@ -271,7 +278,7 @@ export class BatchAnalysisService {
     await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
     this.logger.log(`regenerateDiagram [${intentName}]: diagram saved for flowId=${flowId}`);
 
-    return { flowId, intentName, costUsd };
+    return { flowId, intentName, costUsd, removedInternals };
   }
 
   async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
