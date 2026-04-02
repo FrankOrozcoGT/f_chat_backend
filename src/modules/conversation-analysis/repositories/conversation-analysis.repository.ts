@@ -77,10 +77,28 @@ export class ConversationAnalysisRepository {
     });
   }
 
-  async findAllByTenantId(tenantId: string) {
+  async findAllByTenantId(tenantId: string, excludeInternalReviews = true) {
+    let excludedClientIds: string[] = [];
+    let excludedGroupJids: string[] = [];
+
+    if (excludeInternalReviews) {
+      const reviews = await this.prisma.internalChannelReview.findMany({
+        where: { tenantId, status: { not: 'rejected' } },
+        select: { clientId: true, groupJid: true },
+      });
+      excludedClientIds = reviews.map((r) => r.clientId).filter((id): id is string => !!id);
+      excludedGroupJids = reviews.map((r) => r.groupJid).filter((jid): jid is string => !!jid);
+    }
+
     return this.prisma.conversationAnalysis.findMany({
       where: {
-        conversation: { phone: { tenantId } },
+        conversation: {
+          phone: { tenantId },
+          ...(excludedGroupJids.length > 0 ? { groupJid: { notIn: excludedGroupJids } } : {}),
+          ...(excludedClientIds.length > 0
+            ? { participants: { none: { clientId: { in: excludedClientIds } } } }
+            : {}),
+        },
         isInternal: false,
         intent: { not: null },
         OR: [
