@@ -43,50 +43,10 @@ Para cada sub-conversación, genera:
 - Si en la conversación se menciona el nombre real del cliente, extráelo en `realName`
 - Si no se menciona, usa `null`
 
-## Canal Interno
-
-Detecta si este canal es interno o externo:
-- `isInternal: true` — la otra persona opera, apoya o representa al negocio: empleado, vendedor, técnico, mensajero, proveedor, jefe, socio. Señales: tiene acceso a información interna (precios, clientes, inventario), coordina operaciones del negocio, o el negocio le solicita/contrata/paga.
-- `isInternal: false` — si la persona del otro lado es un cliente externo — sin importar si compra, consulta, pide soporte, solicita presupuesto, hace reclamos, o cualquier otra interacción donde el negocio le está **atendiendo como cliente**.
-
-Si `isInternal` es `true`, genera:
-- `internalPurpose`: descripción breve del propósito del canal
-- `channelName`: nombre corto en snake_case que identifica al canal, sin espacios, máximo 30 caracteres
-
-Si `isInternal` es `false`, usa `internalPurpose: null` y `channelName: null`.
+{{INTERNAL_SECTION}}
 
 ## Output
 
 Responde SOLO con JSON válido, sin markdown ni texto adicional:
 
-{
-  "realName": "Nombre real del cliente o null",
-  "isInternal": false,
-  "internalPurpose": null,
-  "channelName": null,
-  "subConversations": [
-    {
-      "summary": "Breve resumen de la sub-conversación",
-      "firstMessageId": "id del primer mensaje",
-      "lastMessageId": "id del último mensaje",
-      "intent": "venta",
-      "flowSummary": "Descripción del flujo en texto",
-      "flowDiagram": "flowchart TD\n    A[Inicio] --> B[Paso]"
-    }
-  ],
-  "products": [
-    {
-      "name": "Nombre del producto",
-      "price": 100.00,
-      "description": "Descripción opcional"
-    }
-  ],
-  "promotions": [
-    {
-      "name": "Nombre del combo/promoción",
-      "description": "Descripción opcional",
-      "specialPrice": 250.00,
-      "productNames": ["Producto A", "Producto B"]
-    }
-  ]
-}
+{{OUTPUT_SECTION}}
