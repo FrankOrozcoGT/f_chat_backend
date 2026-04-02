@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient } from '@modules/ai/clients/kimi.client';
+import { PrismaService } from '@common/prisma/prisma.service';
+import { KimiClient, ToolDefinition, ToolTermination } from '@modules/ai/clients/kimi.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
@@ -17,24 +18,111 @@ export interface NodeMappingEntry {
   nodeId: string;
 }
 
+export interface InternalChannel {
+  channelName: string | null;
+  internalPurpose: string | null;
+  clientId: string | null;
+  groupJid: string | null;
+}
+
+export interface InternalQueueEntry {
+  channelName: string;
+  nodeId: string;
+  queueType: 'fifo' | 'batch_reply' | 'llm_flexible';
+  usage: string;
+}
+
 export interface DiagramConsolidatorInput {
   intentName: string;
   conversationFlows: ConversationFlow[];
+  internals: InternalChannel[];
   currentDiagram?: string | null;
   currentNodeMapping?: Record<string, NodeMappingEntry[]> | null;
 }
 
 export interface DiagramConsolidatorOutput {
   diagram: string;
+  nodeCategories: Record<string, string>;
   nodeMapping: Record<string, NodeMappingEntry[]>;
+  internalQueues: InternalQueueEntry[];
   costUsd: number;
 }
+
+const CONSULT_INTERNAL_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'consult_internal',
+    description: 'Consulta los últimos mensajes de un canal interno para entender el patrón de interacción.',
+    parameters: {
+      type: 'object',
+      properties: {
+        channelName: {
+          type: 'string',
+          description: 'El channelName del canal interno a consultar',
+        },
+      },
+      required: ['channelName'],
+    },
+  },
+};
+
+const SUBMIT_DIAGRAM_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'submit_diagram',
+    description: 'Envía el diagrama consolidado final con nodeMapping e internalQueues.',
+    parameters: {
+      type: 'object',
+      properties: {
+        diagram: { type: 'string', description: 'Diagrama Mermaid flowchart TD' },
+        nodeCategories: {
+          type: 'object',
+          description: 'Categoría de cada nodo: { nodeId: categoryName }',
+          additionalProperties: { type: 'string' },
+        },
+        nodeMapping: {
+          type: 'object',
+          description: 'Mapeo de nodos consolidados a nodos individuales',
+          additionalProperties: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                conversationId: { type: 'string' },
+                nodeId: { type: 'string' },
+              },
+              required: ['conversationId', 'nodeId'],
+            },
+          },
+        },
+        internalQueues: {
+          type: 'array',
+          description: 'Internals que participan en este flujo con su tipo de cola',
+          items: {
+            type: 'object',
+            properties: {
+              channelName: { type: 'string' },
+              nodeId: { type: 'string', description: 'ID del nodo del diagrama donde se usa este internal' },
+              queueType: { type: 'string', enum: ['fifo', 'batch_reply', 'llm_flexible'] },
+              usage: { type: 'string', description: 'Descripción breve de cómo se usa el internal en ese nodo' },
+            },
+            required: ['channelName', 'nodeId', 'queueType', 'usage'],
+          },
+        },
+      },
+      required: ['diagram', 'nodeCategories', 'nodeMapping', 'internalQueues'],
+    },
+  },
+};
 
 @Injectable()
 export class DiagramConsolidatorNode {
   private readonly logger = new Logger(DiagramConsolidatorNode.name);
 
-  constructor(private readonly kimiClient: KimiClient) {}
+  constructor(
+    private readonly kimiClient: KimiClient,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async consolidate(input: DiagramConsolidatorInput): Promise<DiagramConsolidatorOutput> {
     const flowsText = input.conversationFlows
@@ -55,26 +143,175 @@ export class DiagramConsolidatorNode {
       }
     }
 
-    const userPrompt = `Intención: **${input.intentName}**${currentSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
+    let internalsSection = '';
+    const validInternals = input.internals.filter((i) => i.channelName && i.internalPurpose);
+    if (validInternals.length > 0) {
+      internalsSection = '\n\n## Canales internos del negocio:\n' +
+        validInternals.map((i) => `- **${i.channelName}**: ${i.internalPurpose}`).join('\n');
+    }
 
-    const result = await this.kimiClient.rawChat(
-      [
+    const userPrompt = `Intención: **${input.intentName}**${currentSection}${internalsSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
+
+    // Build internals lookup for tool calls
+    const internalsMap = new Map<string, InternalChannel>();
+    for (const internal of input.internals) {
+      if (internal.channelName) {
+        internalsMap.set(internal.channelName, internal);
+      }
+    }
+
+    const result = await this.kimiClient.chatWithTools({
+      messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      8000,
+      tools: [CONSULT_INTERNAL_TOOL, SUBMIT_DIAGRAM_TOOL],
+      maxTokens: 8000,
+      maxIterations: 15,
+      onToolCall: async (name, args) => {
+        if (name === 'submit_diagram') {
+          throw new ToolTermination(name, args);
+        }
+
+        if (name === 'consult_internal') {
+          return this.handleConsultInternal(args.channelName as string, internalsMap);
+        }
+
+        return JSON.stringify({ error: `Unknown tool: ${name}` });
+      },
+    });
+
+    if (result.terminationTool === 'submit_diagram' && result.terminationArgs) {
+      const args = result.terminationArgs as {
+        diagram: string;
+        nodeCategories: Record<string, string>;
+        nodeMapping: Record<string, NodeMappingEntry[]>;
+        internalQueues: InternalQueueEntry[];
+      };
+
+      if (!args.diagram || typeof args.diagram !== 'string') {
+        throw new Error('DiagramConsolidator: submit_diagram missing diagram field');
+      }
+      if (!args.nodeMapping || typeof args.nodeMapping !== 'object') {
+        throw new Error('DiagramConsolidator: submit_diagram missing nodeMapping field');
+      }
+
+      this.logger.log(
+        `DiagramConsolidator [${input.intentName}]: ${input.conversationFlows.length} flows consolidated, ` +
+        `${(args.internalQueues ?? []).length} internal queues, ` +
+        `${result.iterations} iterations, cost=$${result.costUsd.toFixed(6)}`,
+      );
+
+      return {
+        diagram: args.diagram,
+        nodeCategories: args.nodeCategories ?? {},
+        nodeMapping: args.nodeMapping,
+        internalQueues: args.internalQueues ?? [],
+        costUsd: result.costUsd,
+      };
+    }
+
+    // If we got a text response instead of submit_diagram, try to parse it as JSON fallback
+    if (result.textResponse) {
+      const parsed = this.parseResponseFallback(result.textResponse);
+      this.logger.warn(
+        `DiagramConsolidator [${input.intentName}]: fell back to text parsing (no submit_diagram tool call)`,
+      );
+      return { ...parsed, costUsd: result.costUsd };
+    }
+
+    throw new Error(
+      `DiagramConsolidator [${input.intentName}]: no submit_diagram call and no text response after ${result.iterations} iterations`,
     );
-
-    const parsed = this.parseResponse(result.response);
-
-    this.logger.log(
-      `DiagramConsolidator [${input.intentName}]: ${input.conversationFlows.length} flows consolidated, cost=$${result.costUsd.toFixed(6)}`,
-    );
-
-    return { diagram: parsed.diagram, nodeMapping: parsed.nodeMapping, costUsd: result.costUsd };
   }
 
-  private parseResponse(response: string): { diagram: string; nodeMapping: Record<string, NodeMappingEntry[]> } {
+  private async handleConsultInternal(
+    channelName: string,
+    internalsMap: Map<string, InternalChannel>,
+  ): Promise<string> {
+    const internal = internalsMap.get(channelName);
+    if (!internal) {
+      return JSON.stringify({ error: `Canal interno "${channelName}" no encontrado` });
+    }
+
+    if (internal.groupJid) {
+      // Group: last 75 messages
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { groupJid: internal.groupJid },
+        select: { id: true },
+      });
+      if (!conversation) {
+        this.logger.error(`consult_internal: no conversation found for groupJid=${internal.groupJid} (${channelName})`);
+        return JSON.stringify({ error: `Sin conversación encontrada para grupo "${channelName}"` });
+      }
+
+      const messages = await this.prisma.message.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: 'desc' },
+        take: 75,
+        select: { content: true, direction: true, senderType: true, createdAt: true, metadata: true },
+      });
+
+      if (messages.length === 0) {
+        this.logger.error(`consult_internal: no messages found for group "${channelName}" (conversationId=${conversation.id})`);
+        return JSON.stringify({ error: `Sin mensajes disponibles para grupo "${channelName}"` });
+      }
+
+      return this.formatMessages(messages.reverse(), channelName, 'grupo');
+    }
+
+    if (internal.clientId) {
+      // Individual: last 50 messages
+      const conversations = await this.prisma.conversation.findMany({
+        where: { participants: { some: { clientId: internal.clientId } }, groupJid: null },
+        select: { id: true },
+      });
+
+      if (conversations.length === 0) {
+        this.logger.error(`consult_internal: no individual conversation found for clientId=${internal.clientId} (${channelName})`);
+        return JSON.stringify({ error: `Sin conversación encontrada para "${channelName}"` });
+      }
+
+      const conversationIds = conversations.map((c) => c.id);
+      const messages = await this.prisma.message.findMany({
+        where: { conversationId: { in: conversationIds } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { content: true, direction: true, senderType: true, createdAt: true },
+      });
+
+      if (messages.length === 0) {
+        this.logger.error(`consult_internal: no messages found for "${channelName}" (clientId=${internal.clientId})`);
+        return JSON.stringify({ error: `Sin mensajes disponibles para "${channelName}"` });
+      }
+
+      return this.formatMessages(messages.reverse(), channelName, 'individual');
+    }
+
+    this.logger.error(`consult_internal: internal "${channelName}" has no clientId or groupJid`);
+    return JSON.stringify({ error: `Canal interno "${channelName}" sin clientId ni groupJid` });
+  }
+
+  private formatMessages(
+    messages: { content: string; direction: string; senderType: string; createdAt: Date; metadata?: any }[],
+    channelName: string,
+    type: string,
+  ): string {
+    const formatted = messages.map((m) => {
+      const sender = m.direction === 'outgoing' ? 'Negocio' : channelName;
+      const senderJid = m.metadata?.senderJid ? ` (${m.metadata.senderJid})` : '';
+      return `[${sender}${senderJid}]: ${m.content}`;
+    }).join('\n');
+
+    return `Últimos ${messages.length} mensajes de "${channelName}" (${type}):\n\n${formatted}`;
+  }
+
+  private parseResponseFallback(response: string): {
+    diagram: string;
+    nodeCategories: Record<string, string>;
+    nodeMapping: Record<string, NodeMappingEntry[]>;
+    internalQueues: InternalQueueEntry[];
+  } {
     let cleaned = response.trim();
     if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
     else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
@@ -88,6 +325,11 @@ export class DiagramConsolidatorNode {
     if (!parsed.nodeMapping || typeof parsed.nodeMapping !== 'object') {
       throw new Error('DiagramConsolidator: LLM response missing nodeMapping field');
     }
-    return { diagram: parsed.diagram, nodeMapping: parsed.nodeMapping };
+    return {
+      diagram: parsed.diagram,
+      nodeCategories: parsed.nodeCategories ?? {},
+      nodeMapping: parsed.nodeMapping,
+      internalQueues: parsed.internalQueues ?? [],
+    };
   }
 }
