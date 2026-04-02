@@ -140,6 +140,9 @@ export class BatchAnalysisService {
   async generateDiagrams(tenantId: string): Promise<{ diagramsGenerated: number; totalCostUsd: number; flows: { flowId: string; intentName: string }[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
     this.logger.log(`generateDiagrams: ${analyses.length} analyses found`);
+
+    const internals = await this.internalChannelReviewRepo.findApprovedByTenantId(tenantId);
+    this.logger.log(`generateDiagrams: ${internals.length} approved internals`);
     const rawIntents = [...new Set(analyses.map((a) => a.intent).filter((i): i is string => !!i))];
     this.logger.log(`generateDiagrams: ${rawIntents.length} raw intents: ${rawIntents.join(', ')}`);
     const normalizationMap = await this.intentClassifierNode.classify({
@@ -200,6 +203,7 @@ export class BatchAnalysisService {
             const result = await this.diagramConsolidatorNode.consolidate({
               intentName,
               conversationFlows: firstBatch,
+              internals,
               currentDiagram: null,
               currentNodeMapping: null,
             });
@@ -215,6 +219,7 @@ export class BatchAnalysisService {
           const result = await this.diagramConsolidatorNode.consolidate({
             intentName,
             conversationFlows: batch,
+            internals,
             currentDiagram,
             currentNodeMapping,
           });
@@ -241,13 +246,15 @@ export class BatchAnalysisService {
   }
 
   async regenerateDiagram(flowId: string): Promise<{ flowId: string; intentName: string; costUsd: number; removedInternals: number }> {
-    const intent = await this.prisma.flow.findUnique({
+    const flow = await this.prisma.flow.findUnique({
       where: { id: flowId },
-      select: { id: true, intents: { select: { name: true } } },
+      select: { id: true, tenantId: true, intents: { select: { name: true } } },
     });
-    if (!intent) throw new Error(`Flow ${flowId} not found`);
-    const intentName = intent.intents[0]?.name;
+    if (!flow) throw new Error(`Flow ${flowId} not found`);
+    const intentName = flow.intents[0]?.name;
     if (!intentName) throw new Error(`Flow ${flowId} has no intent`);
+
+    const internals = await this.internalChannelReviewRepo.findApprovedByTenantId(flow.tenantId);
 
     // Eliminar links a análisis que ahora son internos
     const deleted = await this.flowIntentRepo.deleteInternalByFlowId(flowId);
@@ -280,6 +287,7 @@ export class BatchAnalysisService {
       const result = await this.diagramConsolidatorNode.consolidate({
         intentName,
         conversationFlows: firstBatch,
+        internals,
         currentDiagram: null,
         currentNodeMapping: null,
       });
@@ -295,6 +303,7 @@ export class BatchAnalysisService {
       const result = await this.diagramConsolidatorNode.consolidate({
         intentName,
         conversationFlows: batch,
+        internals,
         currentDiagram,
         currentNodeMapping,
       });

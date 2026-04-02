@@ -111,6 +111,18 @@ export class InternalChannelReviewRepository {
     });
   }
 
+  async findApprovedByTenantId(tenantId: string) {
+    return this.prisma.internalChannelReview.findMany({
+      where: { tenantId, status: 'approved' },
+      select: {
+        channelName: true,
+        internalPurpose: true,
+        clientId: true,
+        groupJid: true,
+      },
+    });
+  }
+
   async review(
     id: string,
     data: { status: 'approved' | 'rejected'; modifiedPurpose?: string | null },
