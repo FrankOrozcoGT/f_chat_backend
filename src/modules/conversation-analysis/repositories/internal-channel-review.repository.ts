@@ -54,7 +54,7 @@ export class InternalChannelReviewRepository {
     tenantId: string;
     clientId: string | null;
     groupJid: string | null;
-  }): Promise<{ id: string; status: InternalReviewStatus } | null> {
+  }): Promise<{ id: string; status: InternalReviewStatus; internalPurpose: string | null } | null> {
     if (!data.clientId && !data.groupJid) return null;
     const conditions: any[] = [];
     if (data.clientId) conditions.push({ clientId: data.clientId });
@@ -65,7 +65,7 @@ export class InternalChannelReviewRepository {
         status: { not: 'rejected' },
         OR: conditions,
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, internalPurpose: true },
     });
   }
 

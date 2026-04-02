@@ -50,24 +50,27 @@ export class BatchAnalysisService {
         const clientId = conversation.client?.id ?? null;
         const groupJid = conversation.groupJid ?? null;
 
-        // Si ya existe una review no-rechazada, skip la IA
+        // Si ya existe una review no-rechazada, verificar si tiene purpose
         const existingReview = await this.internalChannelReviewRepo.findNonRejectedByClientOrGroup({
           tenantId,
           clientId,
           groupJid,
         });
 
-        if (existingReview) {
+        if (existingReview && existingReview.internalPurpose) {
           internalsDetected++;
-          this.logger.log(`Skipping AI for internal conversation ${conversation.id} (review status: ${existingReview.status})`);
+          this.logger.log(`Skipping AI for internal conversation ${conversation.id} (review with purpose, status: ${existingReview.status})`);
           continue;
         }
+
+        const knownInternal = !!existingReview;
 
         const result = await this.analysisService.runAnalysis(
           conversation,
           tenantId,
           messageLimit,
           [...accumulatedIntents],
+          knownInternal,
         );
 
         if (result.warnings.some((w) => w.type === 'no_messages')) {
@@ -87,13 +90,37 @@ export class BatchAnalysisService {
 
         if (result.isInternal) {
           internalsDetected++;
-          await this.internalChannelReviewRepo.upsert({
-            tenantId,
-            clientId,
-            groupJid,
-            internalPurpose: result.internalPurpose,
-            channelName: result.channelName,
-          });
+
+          if (groupJid) {
+            // Grupo interno: crear review por cada participante con groupJid
+            if (result.participants.length === 0) {
+              throw new Error(`Group ${conversation.id} marked as internal but AI returned 0 participants`);
+            }
+            for (const participant of result.participants) {
+              const phoneNumber = participant.senderJid.replace('@s.whatsapp.net', '');
+              const matchedClient = conversation.allParticipants.find((p) => p.phoneNumber === phoneNumber);
+              if (matchedClient) {
+                await this.internalChannelReviewRepo.upsert({
+                  tenantId,
+                  clientId: matchedClient.id,
+                  groupJid,
+                  internalPurpose: participant.internalPurpose,
+                  channelName: participant.channelName,
+                });
+                this.logger.log(`Created group participant review: ${participant.channelName} → clientId=${matchedClient.id}, groupJid=${groupJid}`);
+              }
+            }
+          } else {
+            // Individual interno: una review con clientId
+            await this.internalChannelReviewRepo.upsert({
+              tenantId,
+              clientId,
+              groupJid: null,
+              internalPurpose: result.internalPurpose,
+              channelName: result.channelName,
+            });
+          }
+
           internals.push({ conversationId: conversation.id, clientId, groupJid, internalPurpose: result.internalPurpose });
         }
       } catch (error) {
@@ -112,12 +139,16 @@ export class BatchAnalysisService {
 
   async generateDiagrams(tenantId: string): Promise<{ diagramsGenerated: number; totalCostUsd: number; flows: { flowId: string; intentName: string }[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
+    this.logger.log(`generateDiagrams: ${analyses.length} analyses found`);
     const rawIntents = [...new Set(analyses.map((a) => a.intent).filter((i): i is string => !!i))];
+    this.logger.log(`generateDiagrams: ${rawIntents.length} raw intents: ${rawIntents.join(', ')}`);
     const normalizationMap = await this.intentClassifierNode.classify({
       rawIntents,
       existingIntents: (await this.intentRepo.findActiveByTenantId(tenantId)).map((i) => i.name),
     });
+    this.logger.log(`generateDiagrams: normalization map: ${JSON.stringify([...normalizationMap.entries()])}`);
     const grouped = this.groupByIntent(analyses, normalizationMap);
+    this.logger.log(`generateDiagrams: ${grouped.size} groups: ${[...grouped.entries()].map(([k, v]) => `${k}(${v.length})`).join(', ')}`);
 
     let diagramsGenerated = 0;
     let totalCostUsd = 0;
@@ -453,7 +484,6 @@ export class BatchAnalysisService {
         groupJid: true,
         phone: { select: { id: true, tenantId: true } },
         participants: {
-          take: 1,
           select: { client: { select: { id: true, phoneNumber: true, name: true } } },
         },
       },
@@ -465,6 +495,7 @@ export class BatchAnalysisService {
       groupJid: c.groupJid,
       phone: c.phone,
       client: c.participants[0]?.client ?? null,
+      allParticipants: c.participants.map((p) => p.client).filter((cl): cl is NonNullable<typeof cl> => !!cl),
     }));
   }
 }
