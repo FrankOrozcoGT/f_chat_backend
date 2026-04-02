@@ -14,6 +14,7 @@ export interface AnalysisWorkflowInput {
   phoneId: string;
   clientId: string | null;
   isGroup: boolean;
+  knownInternal: boolean;
   messages: AnalysisMessage[];
   existingIntents: string[];
 }
@@ -52,6 +53,7 @@ export class AnalysisWorkflow {
       phoneId: input.phoneId,
       clientId: input.clientId,
       isGroup: input.isGroup,
+      knownInternal: input.knownInternal,
       messages: input.messages,
       processedMessages: [],
       warnings: [],
@@ -63,6 +65,8 @@ export class AnalysisWorkflow {
       existingIntents: input.existingIntents,
       isInternal: false,
       internalPurpose: null,
+      channelName: null,
+      participants: [],
     };
 
     const result = await this.graph.invoke(initialState);

@@ -34,6 +34,12 @@ export interface AnalysisPromotion {
   productNames: string[];
 }
 
+export interface InternalParticipant {
+  senderJid: string;
+  channelName: string;
+  internalPurpose: string;
+}
+
 export interface AnalysisLlmOutput {
   realName: string | null;
   subConversations: SubConversation[];
@@ -42,6 +48,7 @@ export interface AnalysisLlmOutput {
   isInternal: boolean;
   internalPurpose: string | null;
   channelName: string | null;
+  participants: InternalParticipant[];
 }
 
 export interface AnalysisWarning {
@@ -57,6 +64,7 @@ export const AnalysisState = Annotation.Root({
   phoneId: Annotation<string>,
   clientId: Annotation<string | null>,
   isGroup: Annotation<boolean>,
+  knownInternal: Annotation<boolean>,
   messages: Annotation<AnalysisMessage[]>,
 
   // After InputRouter (messages with transcriptions resolved)
@@ -73,6 +81,7 @@ export const AnalysisState = Annotation.Root({
   isInternal: Annotation<boolean>,
   internalPurpose: Annotation<string | null>,
   channelName: Annotation<string | null>,
+  participants: Annotation<InternalParticipant[]>,
 });
 
 export type AnalysisStateType = typeof AnalysisState.State;
