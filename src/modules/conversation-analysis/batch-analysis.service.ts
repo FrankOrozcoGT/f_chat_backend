@@ -191,6 +191,8 @@ export class BatchAnalysisService {
         const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
         let currentDiagram: string | null = existingVersion?.consolidatedDiagram ?? null;
         let currentNodeMapping: Record<string, any[]> | null = (existingVersion as any)?.nodeMapping ?? null;
+        let currentNodeCategories: Record<string, string> = {};
+        let currentInternalQueues: any[] = [];
         const isRefinement = !!currentDiagram;
 
         let remaining: typeof conversationFlows;
@@ -209,6 +211,8 @@ export class BatchAnalysisService {
             });
             currentDiagram = result.diagram;
             currentNodeMapping = result.nodeMapping;
+            currentNodeCategories = result.nodeCategories;
+            currentInternalQueues = result.internalQueues;
             costUsd += result.costUsd;
             this.logger.log(`generateDiagrams [${intentName}]: initial batch (${firstBatch.length} flows)`);
           }
@@ -225,13 +229,15 @@ export class BatchAnalysisService {
           });
           currentDiagram = result.diagram;
           currentNodeMapping = result.nodeMapping;
+          currentNodeCategories = result.nodeCategories;
+          currentInternalQueues = result.internalQueues;
           costUsd += result.costUsd;
           this.logger.log(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
         }
 
         if (!currentDiagram) throw new Error(`no conversation flows to consolidate`);
 
-        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
+        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues);
         totalCostUsd += costUsd;
         diagramsGenerated++;
         flows.push({ flowId, intentName });
@@ -281,6 +287,8 @@ export class BatchAnalysisService {
     let costUsd = 0;
     let currentDiagram: string | null = null;
     let currentNodeMapping: Record<string, any[]> | null = null;
+    let currentNodeCategories: Record<string, string> = {};
+    let currentInternalQueues: any[] = [];
 
     const firstBatch = conversationFlows.slice(0, INITIAL_BATCH);
     if (firstBatch.length > 0) {
@@ -293,6 +301,8 @@ export class BatchAnalysisService {
       });
       currentDiagram = result.diagram;
       currentNodeMapping = result.nodeMapping;
+      currentNodeCategories = result.nodeCategories;
+      currentInternalQueues = result.internalQueues;
       costUsd += result.costUsd;
       this.logger.log(`regenerateDiagram [${intentName}]: initial batch (${firstBatch.length} flows)`);
     }
@@ -309,13 +319,15 @@ export class BatchAnalysisService {
       });
       currentDiagram = result.diagram;
       currentNodeMapping = result.nodeMapping;
+      currentNodeCategories = result.nodeCategories;
+      currentInternalQueues = result.internalQueues;
       costUsd += result.costUsd;
       this.logger.log(`regenerateDiagram [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
     }
 
     if (!currentDiagram) throw new Error(`regenerateDiagram [${intentName}]: no diagram generated`);
 
-    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {});
+    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues);
     this.logger.log(`regenerateDiagram [${intentName}]: diagram saved for flowId=${flowId}`);
 
     return { flowId, intentName, costUsd, removedInternals };

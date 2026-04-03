@@ -94,6 +94,8 @@ export class BatchAnalysisController {
       version: version.version,
       consolidatedDiagram: version.consolidatedDiagram,
       nodeMapping: version.nodeMapping,
+      nodeCategories: version.nodeCategories,
+      internalQueues: version.internalQueues,
       diagramApproved: version.diagramApproved,
       diagramModified: version.diagramModified,
     };

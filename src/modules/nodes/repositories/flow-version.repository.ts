@@ -77,11 +77,11 @@ export class FlowVersionRepository {
     return this.prisma.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: 'desc' },
-      select: { id: true, consolidatedDiagram: true, nodeMapping: true, diagramApproved: true, diagramModified: true, version: true },
+      select: { id: true, consolidatedDiagram: true, nodeMapping: true, nodeCategories: true, internalQueues: true, diagramApproved: true, diagramModified: true, version: true },
     });
   }
 
-  async saveConsolidatedDiagram(flowId: string, diagram: string, nodeMapping: Record<string, any[]>): Promise<void> {
+  async saveConsolidatedDiagram(flowId: string, diagram: string, nodeMapping: Record<string, any[]>, nodeCategories: Record<string, string>, internalQueues: any[]): Promise<void> {
     const latest = await this.prisma.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: 'desc' },
@@ -91,7 +91,7 @@ export class FlowVersionRepository {
     if (latest) {
       await this.prisma.flowVersion.update({
         where: { id: latest.id },
-        data: { consolidatedDiagram: diagram, nodeMapping: nodeMapping as any, diagramApproved: false, diagramModified: false },
+        data: { consolidatedDiagram: diagram, nodeMapping: nodeMapping as any, nodeCategories: nodeCategories as any, internalQueues: internalQueues as any, diagramApproved: false, diagramModified: false },
       });
     } else {
       await this.prisma.flowVersion.create({
@@ -102,6 +102,8 @@ export class FlowVersionRepository {
           contentHash: '',
           consolidatedDiagram: diagram,
           nodeMapping: nodeMapping as any,
+          nodeCategories: nodeCategories as any,
+          internalQueues: internalQueues as any,
           diagramApproved: false,
           diagramModified: false,
         },
