@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
-import { IsInt, Min, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsInt, Min, IsIn, IsOptional, IsString, IsArray, ArrayMinSize } from 'class-validator';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
@@ -34,6 +34,13 @@ class MarkInternalDto {
 
   @IsString()
   internalPurpose: string;
+}
+
+class MergeIntentsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  sourceIntentIds: string[];
 }
 
 class ReviewInternalDto {
@@ -96,6 +103,7 @@ export class BatchAnalysisController {
       nodeMapping: version.nodeMapping,
       nodeCategories: version.nodeCategories,
       internalQueues: version.internalQueues,
+      representativeCases: version.representativeCases,
       diagramApproved: version.diagramApproved,
       diagramModified: version.diagramModified,
     };
@@ -284,6 +292,16 @@ export class BatchAnalysisController {
     await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, dto.internalPurpose);
 
     return { clientId, channelName: dto.channelName, status: 'approved' };
+  }
+
+  @Post('intents/:targetIntentId/merge')
+  @HttpCode(200)
+  async mergeIntents(
+    @Param('targetIntentId') targetIntentId: string,
+    @Body() dto: MergeIntentsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.batchAnalysisService.mergeIntents(user.tenantId, dto.sourceIntentIds, targetIntentId);
   }
 
   @Post('groups/:groupJid/mark-internal')

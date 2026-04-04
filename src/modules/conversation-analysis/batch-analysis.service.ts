@@ -1,4 +1,5 @@
-import { Injectable, Logger, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
@@ -193,6 +194,7 @@ export class BatchAnalysisService {
         let currentNodeMapping: Record<string, any[]> | null = (existingVersion as any)?.nodeMapping ?? null;
         let currentNodeCategories: Record<string, string> = {};
         let currentInternalQueues: any[] = [];
+        let currentRepresentativeCases: any[] = [];
         const isRefinement = !!currentDiagram;
 
         let remaining: typeof conversationFlows;
@@ -213,31 +215,40 @@ export class BatchAnalysisService {
             currentNodeMapping = result.nodeMapping;
             currentNodeCategories = result.nodeCategories;
             currentInternalQueues = result.internalQueues;
+            currentRepresentativeCases = result.representativeCases;
             costUsd += result.costUsd;
             this.logger.log(`generateDiagrams [${intentName}]: initial batch (${firstBatch.length} flows)`);
           }
           remaining = conversationFlows.slice(INITIAL_BATCH);
         }
         for (let i = 0; i < remaining.length; i += BATCH_SIZE) {
-          const batch = remaining.slice(i, i + BATCH_SIZE);
-          const result = await this.diagramConsolidatorNode.consolidate({
-            intentName,
-            conversationFlows: batch,
-            internals,
-            currentDiagram,
-            currentNodeMapping,
-          });
-          currentDiagram = result.diagram;
-          currentNodeMapping = result.nodeMapping;
-          currentNodeCategories = result.nodeCategories;
-          currentInternalQueues = result.internalQueues;
-          costUsd += result.costUsd;
-          this.logger.log(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+          try {
+            const batch = remaining.slice(i, i + BATCH_SIZE);
+            const result = await this.diagramConsolidatorNode.consolidate({
+              intentName,
+              conversationFlows: batch,
+              internals,
+              currentDiagram,
+              currentNodeMapping,
+              currentRepresentativeCases,
+            });
+            currentDiagram = result.diagram;
+            currentNodeMapping = result.nodeMapping;
+            currentNodeCategories = result.nodeCategories;
+            currentInternalQueues = result.internalQueues;
+            currentRepresentativeCases = result.representativeCases;
+            costUsd += result.costUsd;
+            this.logger.log(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+          } catch (batchError) {
+            this.logger.error(`generateDiagrams [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${batchError.message}`);
+            errors.push({ intentName, error: `batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${batchError.message}` });
+            break;
+          }
         }
 
         if (!currentDiagram) throw new Error(`no conversation flows to consolidate`);
 
-        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues);
+        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
         totalCostUsd += costUsd;
         diagramsGenerated++;
         flows.push({ flowId, intentName });
@@ -246,6 +257,9 @@ export class BatchAnalysisService {
         this.logger.error(`generateDiagrams failed for intent "${intentName}": ${error.message}`);
         errors.push({ intentName, error: error.message });
       }
+
+      // Delay between intents to avoid overloading Kimi
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     return { diagramsGenerated, totalCostUsd, flows, errors };
@@ -289,6 +303,7 @@ export class BatchAnalysisService {
     let currentNodeMapping: Record<string, any[]> | null = null;
     let currentNodeCategories: Record<string, string> = {};
     let currentInternalQueues: any[] = [];
+    let currentRepresentativeCases: any[] = [];
 
     const firstBatch = conversationFlows.slice(0, INITIAL_BATCH);
     if (firstBatch.length > 0) {
@@ -303,34 +318,159 @@ export class BatchAnalysisService {
       currentNodeMapping = result.nodeMapping;
       currentNodeCategories = result.nodeCategories;
       currentInternalQueues = result.internalQueues;
+      currentRepresentativeCases = result.representativeCases;
       costUsd += result.costUsd;
       this.logger.log(`regenerateDiagram [${intentName}]: initial batch (${firstBatch.length} flows)`);
     }
 
     const remaining = conversationFlows.slice(INITIAL_BATCH);
     for (let i = 0; i < remaining.length; i += BATCH_SIZE) {
-      const batch = remaining.slice(i, i + BATCH_SIZE);
-      const result = await this.diagramConsolidatorNode.consolidate({
-        intentName,
-        conversationFlows: batch,
-        internals,
-        currentDiagram,
-        currentNodeMapping,
-      });
-      currentDiagram = result.diagram;
-      currentNodeMapping = result.nodeMapping;
-      currentNodeCategories = result.nodeCategories;
-      currentInternalQueues = result.internalQueues;
-      costUsd += result.costUsd;
-      this.logger.log(`regenerateDiagram [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+      try {
+        const batch = remaining.slice(i, i + BATCH_SIZE);
+        const result = await this.diagramConsolidatorNode.consolidate({
+          intentName,
+          conversationFlows: batch,
+          internals,
+          currentDiagram,
+          currentNodeMapping,
+          currentRepresentativeCases,
+        });
+        currentDiagram = result.diagram;
+        currentNodeMapping = result.nodeMapping;
+        currentNodeCategories = result.nodeCategories;
+        currentInternalQueues = result.internalQueues;
+        currentRepresentativeCases = result.representativeCases;
+        costUsd += result.costUsd;
+        this.logger.log(`regenerateDiagram [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+      } catch (batchError) {
+        this.logger.error(`regenerateDiagram [${intentName}]: refinement batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${batchError.message}`);
+        break;
+      }
     }
 
     if (!currentDiagram) throw new Error(`regenerateDiagram [${intentName}]: no diagram generated`);
 
-    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues);
+    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
     this.logger.log(`regenerateDiagram [${intentName}]: diagram saved for flowId=${flowId}`);
 
     return { flowId, intentName, costUsd, removedInternals };
+  }
+
+  async mergeIntents(tenantId: string, sourceIntentIds: string[], targetIntentId: string) {
+    const target = await this.prisma.intent.findUnique({ where: { id: targetIntentId }, include: { flow: true } });
+    if (!target) throw new BadRequestException(`Target intent ${targetIntentId} not found`);
+    if (target.tenantId !== tenantId) throw new ForbiddenException('Target intent does not belong to this tenant');
+    if (!target.flowId) throw new BadRequestException(`Target intent "${target.name}" has no flow`);
+
+    const sources = await this.prisma.intent.findMany({
+      where: { id: { in: sourceIntentIds } },
+      include: { flow: true },
+    });
+    if (sources.length !== sourceIntentIds.length) {
+      const found = new Set(sources.map((s) => s.id));
+      const missing = sourceIntentIds.filter((id) => !found.has(id));
+      throw new BadRequestException(`Source intents not found: ${missing.join(', ')}`);
+    }
+    for (const source of sources) {
+      if (source.tenantId !== tenantId) throw new ForbiddenException(`Source intent ${source.id} does not belong to this tenant`);
+    }
+
+    let totalMergedAnalyses = 0;
+    const removedFlows: string[] = [];
+    const newConversationFlows: { conversationId: string; flowSummary: string | null; flowDiagram: string | null }[] = [];
+
+    for (const source of sources) {
+      // 1. Rename analyses
+      const updated = await this.prisma.conversationAnalysis.updateMany({
+        where: { intent: source.name, conversation: { phone: { tenantId } } },
+        data: { intent: target.name },
+      });
+      totalMergedAnalyses += updated.count;
+      this.logger.log(`mergeIntents: renamed ${updated.count} analyses from "${source.name}" to "${target.name}"`);
+
+      // 2. Move analysis links and collect conversation flows for refinement
+      if (source.flowId) {
+        const sourceLinks = await this.prisma.conversationAnalysisFlow.findMany({
+          where: { flowId: source.flowId },
+          select: { id: true, analysisId: true, analysis: { select: { conversationId: true, flowSummary: true, flowDiagram: true } } },
+        });
+
+        for (const link of sourceLinks) {
+          const exists = await this.prisma.conversationAnalysisFlow.findUnique({
+            where: { analysisId_flowId: { analysisId: link.analysisId, flowId: target.flowId! } },
+          });
+          if (!exists) {
+            await this.prisma.conversationAnalysisFlow.update({
+              where: { id: link.id },
+              data: { flowId: target.flowId! },
+            });
+          } else {
+            await this.prisma.conversationAnalysisFlow.delete({ where: { id: link.id } });
+          }
+
+          if (link.analysis.flowSummary || link.analysis.flowDiagram) {
+            newConversationFlows.push({
+              conversationId: link.analysis.conversationId,
+              flowSummary: link.analysis.flowSummary,
+              flowDiagram: link.analysis.flowDiagram,
+            });
+          }
+        }
+        this.logger.log(`mergeIntents: moved ${sourceLinks.length} analysis links to flow ${target.flowId}`);
+      }
+
+      // 3. Delete source intent + its flow
+      if (source.flowId) removedFlows.push(source.flowId);
+      await this.prisma.intent.delete({ where: { id: source.id } });
+      if (source.flowId) {
+        await this.prisma.flow.delete({ where: { id: source.flowId } });
+        this.logger.log(`mergeIntents: deleted source intent "${source.name}" and flow ${source.flowId}`);
+      }
+    }
+
+    // 4. Refine existing diagram with new conversations (no regenerate from scratch)
+    let refinement: { flowId: string; intentName: string; costUsd: number; newFlows: number } | null = null;
+    if (newConversationFlows.length > 0) {
+      const internals = await this.internalChannelReviewRepo.findApprovedByTenantId(tenantId);
+      const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(target.flowId!);
+      const currentDiagram = existingVersion?.consolidatedDiagram ?? null;
+      const currentNodeMapping = (existingVersion as any)?.nodeMapping ?? null;
+      const currentRepresentativeCases = (existingVersion as any)?.representativeCases ?? [];
+
+      const BATCH_SIZE = 10;
+      let diagram = currentDiagram;
+      let nodeMapping = currentNodeMapping;
+      let nodeCategories: Record<string, string> = {};
+      let internalQueues: any[] = [];
+      let representativeCases: any[] = currentRepresentativeCases;
+      let costUsd = 0;
+
+      for (let i = 0; i < newConversationFlows.length; i += BATCH_SIZE) {
+        const batch = newConversationFlows.slice(i, i + BATCH_SIZE);
+        const result = await this.diagramConsolidatorNode.consolidate({
+          intentName: target.name,
+          conversationFlows: batch,
+          internals,
+          currentDiagram: diagram,
+          currentNodeMapping: nodeMapping,
+          currentRepresentativeCases: representativeCases,
+        });
+        diagram = result.diagram;
+        nodeMapping = result.nodeMapping;
+        nodeCategories = result.nodeCategories;
+        internalQueues = result.internalQueues;
+        representativeCases = result.representativeCases;
+        costUsd += result.costUsd;
+      }
+
+      if (diagram) {
+        await this.flowVersionRepo.saveConsolidatedDiagram(target.flowId!, diagram, nodeMapping ?? {}, nodeCategories, internalQueues, representativeCases);
+        this.logger.log(`mergeIntents: refined diagram for flow ${target.flowId}, cost=$${costUsd.toFixed(6)}`);
+      }
+      refinement = { flowId: target.flowId!, intentName: target.name, costUsd, newFlows: newConversationFlows.length };
+    }
+
+    return { mergedAnalyses: totalMergedAnalyses, removedFlows, refinement };
   }
 
   async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
@@ -405,7 +545,7 @@ export class BatchAnalysisService {
           selectedCases: generated.selectedCases,
         };
         const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
-        await this.flowVersionRepo.saveVersion(flowId, snapshot, hash, generated.proposedTools);
+        await this.flowVersionRepo.saveVersion(flowId, snapshot as unknown as Prisma.InputJsonValue, hash, generated.proposedTools as unknown as Prisma.InputJsonValue);
 
         const analysisIds = intentAnalyses.map((a) => a.id);
         await this.flowIntentRepo.linkAnalysesToFlow(analysisIds, flowId);
