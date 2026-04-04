@@ -40,6 +40,7 @@ export class NodeRepository {
         routerNode: true,
         nodes: { include: { node: true } },
         transitions: { include: { fromNode: true, toNode: true } },
+        intents: { select: { id: true, name: true } },
         _count: { select: { analysisFlows: true } },
       },
     });

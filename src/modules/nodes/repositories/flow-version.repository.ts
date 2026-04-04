@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
+
 
 export interface FlowSnapshot {
   nodes: { id: string; name: string; systemPrompt: string; todos: any; tools: any }[];
@@ -19,9 +21,9 @@ export class FlowVersionRepository {
 
   async saveVersion(
     flowId: string,
-    snapshot: FlowSnapshot | DraftFlowSnapshot,
+    snapshot: Prisma.InputJsonValue,
     contentHash: string,
-    proposedTools?: { name: string; description: string }[],
+    proposedTools?: Prisma.InputJsonValue,
   ): Promise<{ skipped: boolean }> {
     const last = await this.prisma.flowVersion.findFirst({
       where: { flowId },
@@ -39,9 +41,9 @@ export class FlowVersionRepository {
       data: {
         flowId,
         version: nextVersion,
-        nodesSnapshot: snapshot as any,
+        nodesSnapshot: snapshot,
         contentHash,
-        proposedTools: proposedTools ? (proposedTools as any) : undefined,
+        proposedTools: proposedTools ?? undefined,
       },
     });
 
@@ -77,11 +79,18 @@ export class FlowVersionRepository {
     return this.prisma.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: 'desc' },
-      select: { id: true, consolidatedDiagram: true, nodeMapping: true, nodeCategories: true, internalQueues: true, diagramApproved: true, diagramModified: true, version: true },
+      select: { id: true, consolidatedDiagram: true, nodeMapping: true, nodeCategories: true, internalQueues: true, representativeCases: true, diagramApproved: true, diagramModified: true, version: true },
     });
   }
 
-  async saveConsolidatedDiagram(flowId: string, diagram: string, nodeMapping: Record<string, any[]>, nodeCategories: Record<string, string>, internalQueues: any[]): Promise<void> {
+  async saveConsolidatedDiagram(
+    flowId: string,
+    diagram: string,
+    nodeMapping: Prisma.InputJsonValue,
+    nodeCategories: Prisma.InputJsonValue,
+    internalQueues: Prisma.InputJsonValue,
+    representativeCases: Prisma.InputJsonValue,
+  ): Promise<void> {
     const latest = await this.prisma.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: 'desc' },
@@ -91,7 +100,15 @@ export class FlowVersionRepository {
     if (latest) {
       await this.prisma.flowVersion.update({
         where: { id: latest.id },
-        data: { consolidatedDiagram: diagram, nodeMapping: nodeMapping as any, nodeCategories: nodeCategories as any, internalQueues: internalQueues as any, diagramApproved: false, diagramModified: false },
+        data: {
+          consolidatedDiagram: diagram,
+          nodeMapping: nodeMapping,
+          nodeCategories: nodeCategories,
+          internalQueues: internalQueues,
+          representativeCases: representativeCases,
+          diagramApproved: false,
+          diagramModified: false,
+        },
       });
     } else {
       await this.prisma.flowVersion.create({
@@ -101,9 +118,10 @@ export class FlowVersionRepository {
           nodesSnapshot: {},
           contentHash: '',
           consolidatedDiagram: diagram,
-          nodeMapping: nodeMapping as any,
-          nodeCategories: nodeCategories as any,
-          internalQueues: internalQueues as any,
+          nodeMapping: nodeMapping,
+          nodeCategories: nodeCategories,
+          internalQueues: internalQueues,
+          representativeCases: representativeCases,
           diagramApproved: false,
           diagramModified: false,
         },
