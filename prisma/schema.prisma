@@ -291,6 +291,7 @@ model FlowVersion {
   nodeMapping      Json?
   nodeCategories   Json?
   internalQueues   Json?
+  representativeCases Json?
   diagramApproved  Boolean  @default(false)
   diagramModified  Boolean  @default(false)
   createdAt        DateTime @default(now())
