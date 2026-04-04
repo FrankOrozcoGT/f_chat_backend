@@ -32,18 +32,26 @@ export interface InternalQueueEntry {
   usage: string;
 }
 
+export interface RepresentativeCase {
+  conversationId: string;
+  path: string[];
+  reason: string;
+}
+
 export interface DiagramConsolidatorInput {
   intentName: string;
   conversationFlows: ConversationFlow[];
   internals: InternalChannel[];
   currentDiagram?: string | null;
   currentNodeMapping?: Record<string, NodeMappingEntry[]> | null;
+  currentRepresentativeCases?: RepresentativeCase[] | null;
 }
 
 export interface DiagramConsolidatorOutput {
   diagram: string;
   nodeCategories: Record<string, string>;
   nodeMapping: Record<string, NodeMappingEntry[]>;
+  representativeCases: RepresentativeCase[];
   internalQueues: InternalQueueEntry[];
   costUsd: number;
 }
@@ -95,6 +103,19 @@ const SUBMIT_DIAGRAM_TOOL: ToolDefinition = {
             },
           },
         },
+        representativeCases: {
+          type: 'array',
+          description: 'Hasta 7 conversaciones representativas que cubren los distintos caminos del diagrama',
+          items: {
+            type: 'object',
+            properties: {
+              conversationId: { type: 'string' },
+              path: { type: 'array', items: { type: 'string' }, description: 'IDs de nodos del diagrama que recorre esta conversación' },
+              reason: { type: 'string', description: 'Por qué es representativa' },
+            },
+            required: ['conversationId', 'path', 'reason'],
+          },
+        },
         internalQueues: {
           type: 'array',
           description: 'Internals que participan en este flujo con su tipo de cola',
@@ -110,7 +131,7 @@ const SUBMIT_DIAGRAM_TOOL: ToolDefinition = {
           },
         },
       },
-      required: ['diagram', 'nodeCategories', 'nodeMapping', 'internalQueues'],
+      required: ['diagram', 'nodeCategories', 'nodeMapping', 'representativeCases', 'internalQueues'],
     },
   },
 };
@@ -140,6 +161,9 @@ export class DiagramConsolidatorNode {
       currentSection = `\n\n## Diagrama base actual (refinar):\n${input.currentDiagram}`;
       if (input.currentNodeMapping) {
         currentSection += `\n\nNodeMapping actual:\n${JSON.stringify(input.currentNodeMapping)}`;
+      }
+      if (input.currentRepresentativeCases && input.currentRepresentativeCases.length > 0) {
+        currentSection += `\n\nCasos representativos actuales:\n${JSON.stringify(input.currentRepresentativeCases)}`;
       }
     }
 
@@ -186,6 +210,7 @@ export class DiagramConsolidatorNode {
         diagram: string;
         nodeCategories: Record<string, string>;
         nodeMapping: Record<string, NodeMappingEntry[]>;
+        representativeCases: RepresentativeCase[];
         internalQueues: InternalQueueEntry[];
       };
 
@@ -206,6 +231,7 @@ export class DiagramConsolidatorNode {
         diagram: args.diagram,
         nodeCategories: args.nodeCategories ?? {},
         nodeMapping: args.nodeMapping,
+        representativeCases: args.representativeCases ?? [],
         internalQueues: args.internalQueues ?? [],
         costUsd: result.costUsd,
       };
@@ -310,6 +336,7 @@ export class DiagramConsolidatorNode {
     diagram: string;
     nodeCategories: Record<string, string>;
     nodeMapping: Record<string, NodeMappingEntry[]>;
+    representativeCases: RepresentativeCase[];
     internalQueues: InternalQueueEntry[];
   } {
     let cleaned = response.trim();
@@ -329,6 +356,7 @@ export class DiagramConsolidatorNode {
       diagram: parsed.diagram,
       nodeCategories: parsed.nodeCategories ?? {},
       nodeMapping: parsed.nodeMapping,
+      representativeCases: parsed.representativeCases ?? [],
       internalQueues: parsed.internalQueues ?? [],
     };
   }
