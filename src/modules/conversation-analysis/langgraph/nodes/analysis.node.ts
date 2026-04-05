@@ -105,6 +105,7 @@ export class AnalysisNode {
       internalPurpose: parsed.internalPurpose,
       channelName: parsed.channelName,
       participants: parsed.participants,
+      intentRenames: parsed.intentRenames,
       totalCost: totalCost + result.costUsd,
     };
   }
@@ -158,6 +159,9 @@ export class AnalysisNode {
         internalPurpose: parsed.internalPurpose ?? null,
         channelName: parsed.channelName ?? null,
         participants,
+        intentRenames: Array.isArray(parsed.intentRenames)
+          ? parsed.intentRenames.filter((r: { from: string; to: string }) => r.from && r.to && r.from !== r.to)
+          : [],
       };
     } catch (error) {
       this.logger.error(

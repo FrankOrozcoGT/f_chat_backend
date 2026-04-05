@@ -63,6 +63,7 @@ export class AnalysisWorkflow {
       products: [],
       promotions: [],
       existingIntents: input.existingIntents,
+      intentRenames: [],
       isInternal: false,
       internalPurpose: null,
       channelName: null,

@@ -34,6 +34,7 @@ export interface AnalysisResult {
   internalPurpose: string | null;
   channelName: string | null;
   detectedIntents: string[];
+  intentRenames: { from: string; to: string }[];
   participants: { senderJid: string; channelName: string; internalPurpose: string }[];
 }
 
@@ -78,6 +79,7 @@ export class ConversationAnalysisService {
         internalPurpose: null,
         channelName: null,
         detectedIntents: [],
+        intentRenames: [],
         participants: [],
       };
     }
@@ -167,6 +169,7 @@ export class ConversationAnalysisService {
       detectedIntents: result.subConversations
         .map((s) => s.intent)
         .filter((i): i is string => !!i),
+      intentRenames: result.intentRenames,
       participants: result.participants,
     };
   }

@@ -77,6 +77,16 @@ export class ConversationAnalysisRepository {
     });
   }
 
+  async renameIntent(fromIntent: string, toIntent: string, tenantId: string) {
+    return this.prisma.conversationAnalysis.updateMany({
+      where: {
+        intent: fromIntent,
+        conversation: { phone: { tenantId } },
+      },
+      data: { intent: toIntent },
+    });
+  }
+
   async findAllByTenantId(tenantId: string, excludeInternalReviews = true) {
     let excludedClientIds: string[] = [];
 

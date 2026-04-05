@@ -49,6 +49,7 @@ export interface AnalysisLlmOutput {
   internalPurpose: string | null;
   channelName: string | null;
   participants: InternalParticipant[];
+  intentRenames: { from: string; to: string }[];
 }
 
 export interface AnalysisWarning {
@@ -78,6 +79,7 @@ export const AnalysisState = Annotation.Root({
   products: Annotation<AnalysisProduct[]>,
   promotions: Annotation<AnalysisPromotion[]>,
   existingIntents: Annotation<string[]>,
+  intentRenames: Annotation<{ from: string; to: string }[]>,
   isInternal: Annotation<boolean>,
   internalPurpose: Annotation<string | null>,
   channelName: Annotation<string | null>,

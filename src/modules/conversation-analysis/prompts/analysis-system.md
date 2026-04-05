@@ -16,6 +16,11 @@ Eres un asistente especializado en analizar conversaciones de WhatsApp de un **n
 
 Para cada sub-conversación identificada, detecta su intención principal.
 
+Si se te proporcionan intenciones ya detectadas en conversaciones anteriores:
+- Reutiliza un intent existente si la sub-conversación encaja en él
+- Si la sub-conversación es más genérica que un intent existente, puedes renombrar el intent existente a algo más genérico. Indica el rename en `intentRenames`
+- Solo renombra si el nuevo nombre realmente engloba al anterior — no renombres a algo que pierde el significado original
+
 ## Flujo por Sub-conversación
 
 Para cada sub-conversación, genera:

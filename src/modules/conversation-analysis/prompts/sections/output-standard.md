@@ -4,6 +4,9 @@
   "internalPurpose": null,
   "channelName": null,
   "participants": [],
+  "intentRenames": [
+    { "from": "nombre_viejo", "to": "nombre_nuevo_mas_generico" }
+  ],
   "subConversations": [
     {
       "summary": "Breve resumen de la sub-conversación",
