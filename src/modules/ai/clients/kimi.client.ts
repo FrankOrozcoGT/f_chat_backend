@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ensureError } from '@common/utils/ensure-error';
 import { LlmResponse } from './interfaces/llm-response.interface';
 import { loadPrompt } from '@common/utils/load-prompt';
 import { join } from 'path';
@@ -214,11 +215,12 @@ export class KimiClient {
           costUsd,
           latencyMs,
         };
-      } catch (error) {
-        if (attempt === maxRetries || !(error instanceof KimiApiError)) {
+      } catch (e) {
+        if (attempt === maxRetries || !(e instanceof KimiApiError)) {
+          const error = ensureError(e);
           const latencyMs = Date.now() - startTime;
-          this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause?.message ?? error.cause} | type=${error.constructor?.name}`);
-          throw error;
+          this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause} | type=${error.constructor?.name}`);
+          throw e;
         }
       }
     }
@@ -267,13 +269,30 @@ export class KimiClient {
           },
           body,
         });
-      } catch (error) {
+      } catch (e) {
+        const error = ensureError(e);
         this.logger.error(`chatWithTools fetch failed at iter=${i}:`, error);
         throw new KimiApiError(error.message, error.cause);
       }
 
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('retry-after') ?? '', 10);
+        const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(3000 * Math.pow(2, i), 30000);
+        this.logger.warn(`chatWithTools 429 at iter=${i}, retrying in ${delayMs}ms`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        i--; // retry same iteration
+        continue;
+      }
+
       if (!response.ok) {
         const errorBody = await response.text();
+        const prevTools = conversationMessages
+          .filter((m) => m.role === 'tool')
+          .map((m) => m.tool_call_id)
+          .length;
+        this.logger.error(
+          `chatWithTools failed at iter=${i}, status=${response.status}, payload=${(body.length / 1024).toFixed(1)}KB, msgs=${conversationMessages.length}, toolCallsSoFar=${prevTools}, body=${errorBody}`,
+        );
         throw new KimiApiError(`Kimi API error ${response.status}: ${errorBody}`);
       }
 
@@ -317,6 +336,7 @@ export class KimiClient {
       for (const toolCall of toolCalls) {
         const fnName = toolCall.function?.name;
         const fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
+        this.logger.log(`chatWithTools iter=${i} tool=${fnName} args=${JSON.stringify(fnArgs).slice(0, 200)}`);
 
         try {
           const toolResult = await onToolCall(fnName, fnArgs);
