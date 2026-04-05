@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException, Logger } from '@nestjs/common';
 import { IsInt, Min, IsIn, IsOptional, IsString, IsArray, ArrayMinSize } from 'class-validator';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
@@ -43,6 +43,16 @@ class MergeIntentsDto {
   sourceIntentIds: string[];
 }
 
+class MergeAnalysesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  sourceIntents: string[];
+
+  @IsString()
+  targetIntent: string;
+}
+
 class ReviewInternalDto {
   @IsIn(['approved', 'rejected'])
   status: 'approved' | 'rejected';
@@ -62,6 +72,8 @@ interface AuthenticatedUser {
 @UseGuards(JwtAuthGuard, TenantRolesGuard)
 @TenantRoles(TenantRole.owner, TenantRole.tecnico)
 export class BatchAnalysisController {
+  private readonly logger = new Logger(BatchAnalysisController.name);
+
   constructor(
     private readonly batchAnalysisService: BatchAnalysisService,
     private readonly flowIntentRepo: FlowIntentRepository,
@@ -292,6 +304,34 @@ export class BatchAnalysisController {
     await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, dto.internalPurpose);
 
     return { clientId, channelName: dto.channelName, status: 'approved' };
+  }
+
+  @Get('intents')
+  async getIntents(@CurrentUser() user: AuthenticatedUser) {
+    const analyses = await this.conversationAnalysisRepo.findAllByTenantId(user.tenantId, false);
+    const grouped = new Map<string, number>();
+    for (const a of analyses) {
+      if (!a.intent) continue;
+      grouped.set(a.intent, (grouped.get(a.intent) ?? 0) + 1);
+    }
+    return Array.from(grouped.entries())
+      .map(([intent, count]) => ({ intent, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  @Post('intents/merge-analyses')
+  @HttpCode(200)
+  async mergeAnalyses(
+    @Body() dto: MergeAnalysesDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    let totalRenamed = 0;
+    for (const source of dto.sourceIntents) {
+      const result = await this.conversationAnalysisRepo.renameIntent(source, dto.targetIntent, user.tenantId);
+      totalRenamed += result.count;
+      this.logger.log(`mergeAnalyses: renamed ${result.count} analyses from "${source}" to "${dto.targetIntent}"`);
+    }
+    return { targetIntent: dto.targetIntent, totalRenamed };
   }
 
   @Post('intents/:targetIntentId/merge')

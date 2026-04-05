@@ -12,7 +12,6 @@ export interface FlowSnapshot {
 export interface DraftFlowSnapshot {
   nodes: { name: string; systemPrompt: string; todos: any; tools: any }[];
   transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[];
-  selectedCases?: { flowSummary: string; flowDiagram: string }[];
 }
 
 @Injectable()
@@ -48,6 +47,22 @@ export class FlowVersionRepository {
     });
 
     return { skipped: false };
+  }
+
+  async updateVersionNodes(
+    versionId: string,
+    snapshot: Prisma.InputJsonValue,
+    contentHash: string,
+    proposedTools?: Prisma.InputJsonValue,
+  ): Promise<void> {
+    await this.prisma.flowVersion.update({
+      where: { id: versionId },
+      data: {
+        nodesSnapshot: snapshot,
+        contentHash,
+        proposedTools: proposedTools ?? undefined,
+      },
+    });
   }
 
   async findByFlowId(flowId: string) {
