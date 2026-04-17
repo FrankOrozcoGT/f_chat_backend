@@ -25,8 +25,7 @@ import { RegisterMissingProductFn } from './functions/implementations/register-m
 import { SaveClientLocationFn } from './functions/implementations/save-client-location.fn';
 import { ExitFlowFn } from './functions/implementations/exit-flow.fn';
 import { SaveProductPriceFn } from './functions/implementations/save-product-price.fn';
-import { ForwardReceiptFn } from './functions/implementations/forward-receipt.fn';
-import { SendToVerificationFn } from './functions/implementations/send-to-verification.fn';
+import { SendToInternalChannelFn } from './functions/implementations/send-to-internal-channel.fn';
 import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
 import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
 import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
@@ -68,8 +67,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     ExitFlowFn,
     SaveClientLocationFn,
     SaveProductPriceFn,
-    ForwardReceiptFn,
-    SendToVerificationFn,
+    SendToInternalChannelFn,
     UpdateTodosFn,
     OutOfPathFn,
     GetMemoriesFn,
