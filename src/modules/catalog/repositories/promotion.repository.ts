@@ -74,4 +74,26 @@ export class PromotionRepository {
   async deleteById(id: string) {
     return this.prisma.promotion.delete({ where: { id } });
   }
+
+  async upsertByName(data: {
+    tenantId: string;
+    name: string;
+    description?: string;
+    specialPrice: number;
+    productIds: string[];
+  }) {
+    const existing = await this.prisma.promotion.findFirst({
+      where: { tenantId: data.tenantId, name: data.name },
+    });
+
+    if (existing) {
+      return this.updateById(existing.id, {
+        description: data.description,
+        specialPrice: data.specialPrice,
+        productIds: data.productIds,
+      });
+    }
+
+    return this.create(data);
+  }
 }

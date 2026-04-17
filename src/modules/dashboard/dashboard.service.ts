@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { RawMessageStats } from './repositories/dashboard.repository';
+import {
+  RawMessageStats,
+  IntentStat,
+  InternalChannel,
+  DraftFlow,
+  ConversationAnalysisSummary,
+} from './repositories/dashboard.repository';
 
 export interface DashboardMetrics {
   totalClients: number;
@@ -7,11 +13,21 @@ export interface DashboardMetrics {
   totalMessages: number;
   avgDaysPerClient: number;
   avgMessagesPerActiveDay: number;
+  intentStats: IntentStat[];
+  internalChannels: InternalChannel[];
+  draftFlows: DraftFlow[];
+  conversationAnalyses: ConversationAnalysisSummary[];
 }
 
 @Injectable()
 export class DashboardService {
-  calculateMetrics(stats: RawMessageStats[]): DashboardMetrics {
+  calculateMetrics(
+    stats: RawMessageStats[],
+    intentStats: IntentStat[],
+    internalChannels: InternalChannel[],
+    draftFlows: DraftFlow[],
+    conversationAnalyses: ConversationAnalysisSummary[],
+  ): DashboardMetrics {
     if (stats.length === 0) {
       return {
         totalClients: 0,
@@ -19,6 +35,10 @@ export class DashboardService {
         totalMessages: 0,
         avgDaysPerClient: 0,
         avgMessagesPerActiveDay: 0,
+        intentStats,
+        internalChannels,
+        draftFlows,
+        conversationAnalyses,
       };
     }
 
@@ -46,6 +66,10 @@ export class DashboardService {
       totalMessages,
       avgDaysPerClient,
       avgMessagesPerActiveDay,
+      intentStats,
+      internalChannels,
+      draftFlows,
+      conversationAnalyses,
     };
   }
 }

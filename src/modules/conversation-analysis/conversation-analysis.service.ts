@@ -11,6 +11,7 @@ export interface ConversationSplit {
   summary: string;
   messageIds: string[];
   intent: string | null;
+  intentDescription: string | null;
   flowDiagram: string | null;
   flowSummary: string | null;
 }
@@ -18,6 +19,7 @@ export interface ConversationSplit {
 export interface ConversationForAnalysis {
   id: string;
   phoneId: string;
+  groupJid?: string | null;
   phone: { id: string; tenantId: string };
   client: { id: string; phoneNumber: string; name: string | null } | null;
 }
@@ -29,6 +31,12 @@ export interface AnalysisResult {
   warnings: { messageId: string; type: string; message: string }[];
   remainingCount: number | null;
   lastMessageTranscription: string | null;
+  isInternal: boolean;
+  internalPurpose: string | null;
+  channelName: string | null;
+  detectedIntents: string[];
+  intentRenames: { from: string; to: string }[];
+  participants: { senderJid: string; channelName: string; internalPurpose: string }[];
 }
 
 @Injectable()
@@ -44,13 +52,20 @@ export class ConversationAnalysisService {
   async runAnalysis(
     conversation: ConversationForAnalysis,
     tenantId: string,
+    messageLimit?: number,
+    existingIntents: string[] = [],
+    knownInternal: boolean = false,
   ): Promise<AnalysisResult> {
-    const settings = await this.internalApi.getTenantSettings(tenantId);
+    let limit = messageLimit;
+    if (!limit) {
+      const settings = await this.internalApi.getTenantSettings(tenantId);
+      limit = settings.messageLimit;
+    }
     await this.limitsService.validateCredits(tenantId, 1);
 
     const rawMessages = await this.internalApi.findLastNUnanalyzed(
       conversation.id,
-      settings.messageLimit,
+      limit,
     );
 
     if (rawMessages.length === 0) {
@@ -61,6 +76,12 @@ export class ConversationAnalysisService {
         warnings: [{ messageId: '', type: 'no_messages', message: 'No hay mensajes nuevos por analizar' }],
         remainingCount: null,
         lastMessageTranscription: null,
+        isInternal: false,
+        internalPurpose: null,
+        channelName: null,
+        detectedIntents: [],
+        intentRenames: [],
+        participants: [],
       };
     }
 
@@ -72,17 +93,22 @@ export class ConversationAnalysisService {
       senderType: m.senderType,
       transcription: m.transcription,
       mediaUrl: m.mediaUrl,
+      metadata: m.metadata as Record<string, any> | null,
       createdAt: m.createdAt,
     }));
 
     const clientId = conversation.client?.id ?? null;
+    const isGroup = !!conversation.groupJid;
 
     const result = await this.analysisWorkflow.execute({
       conversationId: conversation.id,
       tenantId,
       phoneId: conversation.phoneId,
       clientId,
+      isGroup,
+      knownInternal,
       messages,
+      existingIntents,
     });
 
     if (!clientId) {
@@ -138,6 +164,14 @@ export class ConversationAnalysisService {
       warnings: result.warnings,
       remainingCount: remainingInActive.length,
       lastMessageTranscription: lastBatchMessage?.transcription ?? null,
+      isInternal: result.isInternal,
+      internalPurpose: result.internalPurpose,
+      channelName: result.channelName,
+      detectedIntents: result.subConversations
+        .map((s) => s.intent)
+        .filter((i): i is string => !!i),
+      intentRenames: result.intentRenames,
+      participants: result.participants,
     };
   }
 
@@ -168,6 +202,7 @@ export class ConversationAnalysisService {
         summary: sub.summary,
         messageIds,
         intent: sub.intent ?? null,
+        intentDescription: sub.intentDescription ?? null,
         flowDiagram: sub.flowDiagram ?? null,
         flowSummary: sub.flowSummary ?? null,
       };

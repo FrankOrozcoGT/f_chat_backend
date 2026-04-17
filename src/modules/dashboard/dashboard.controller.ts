@@ -43,13 +43,22 @@ export class DashboardController {
       `GET /api/dashboard - tenantId: ${user.tenantId}, from: ${from.toISOString()}, to: ${to.toISOString()}`,
     );
 
-    const rawStats = await this.dashboardRepository.getMessageStats(
-      user.tenantId,
-      from,
-      to,
-    );
+    const [rawStats, intentStats, internalChannels, draftFlows, conversationAnalyses] =
+      await Promise.all([
+        this.dashboardRepository.getMessageStats(user.tenantId, from, to),
+        this.dashboardRepository.getIntentStats(user.tenantId, from, to),
+        this.dashboardRepository.getInternalChannels(user.tenantId),
+        this.dashboardRepository.getDraftFlows(user.tenantId),
+        this.dashboardRepository.getConversationAnalyses(user.tenantId, from, to),
+      ]);
 
-    const metrics = this.dashboardService.calculateMetrics(rawStats);
+    const metrics = this.dashboardService.calculateMetrics(
+      rawStats,
+      intentStats,
+      internalChannels,
+      draftFlows,
+      conversationAnalyses,
+    );
 
     return new DashboardResponseDto({
       from: from.toISOString().split('T')[0],

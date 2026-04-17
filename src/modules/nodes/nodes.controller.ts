@@ -11,12 +11,14 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { MessageType } from '@prisma/client';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
 import { IntentRepository } from './repositories/intent.repository';
+import { FlowVersionRepository, FlowSnapshot, DraftFlowSnapshot } from './repositories/flow-version.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
@@ -53,6 +55,7 @@ export class NodesController {
     private readonly workflow: AiWorkflow,
     private readonly phoneRepo: PhoneRepository,
     private readonly redisService: RedisService,
+    private readonly flowVersionRepo: FlowVersionRepository,
   ) {}
 
   // ─── Functions ───────────────────────────────────────────────────────────────
@@ -65,8 +68,50 @@ export class NodesController {
   // ─── Flows ───────────────────────────────────────────────────────────────────
 
   @Get('flows')
-  getMyFlows(@CurrentUser() user: AuthUser) {
-    return this.nodeRepo.findAllFlowsByTenantId(user.tenantId);
+  async getMyFlows(@CurrentUser() user: AuthUser) {
+    const flows = await this.nodeRepo.findAllFlowsByTenantId(user.tenantId);
+
+    return Promise.all(flows.map(async (flow) => {
+      if (flow.nodes.length > 0) {
+        return { ...flow, source: 'active' as const };
+      }
+
+      const latestVersion = await this.flowVersionRepo.findLatestByFlowId(flow.id);
+      if (!latestVersion?.nodesSnapshot) {
+        return { ...flow, source: 'active' as const };
+      }
+
+      const snapshot = latestVersion.nodesSnapshot as any;
+      const snapshotNodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+
+      return {
+        ...flow,
+        source: 'version' as const,
+        versionId: latestVersion.id,
+        versionNumber: latestVersion.version,
+        diagramApproved: latestVersion.diagramApproved,
+        nodes: snapshotNodes.map((n: any, i: number) => ({
+          nodeId: `draft-${i}`,
+          flowId: flow.id,
+          node: {
+            id: `draft-${i}`,
+            name: n.name,
+            systemPrompt: n.systemPrompt,
+            tools: n.tools ?? null,
+            todos: n.todos ?? null,
+          },
+        })),
+        transitions: Array.isArray(snapshot.transitions) ? snapshot.transitions.map((t: any) => ({
+          id: `draft-t-${t.fromNodeIndex}-${t.toNodeIndex}`,
+          flowId: flow.id,
+          fromNodeId: `draft-${t.fromNodeIndex}`,
+          toNodeId: `draft-${t.toNodeIndex}`,
+          transitionCode: t.transitionCode,
+          fromNode: { id: `draft-${t.fromNodeIndex}`, name: snapshotNodes[t.fromNodeIndex]?.name ?? '' },
+          toNode: { id: `draft-${t.toNodeIndex}`, name: snapshotNodes[t.toNodeIndex]?.name ?? '' },
+        })) : [],
+      };
+    }));
   }
 
   @Get('flows/active-sessions')
@@ -75,6 +120,72 @@ export class NodesController {
     const flowIds = flows.map((f) => f.id);
     if (flowIds.length === 0) return {};
     return this.nodeSessionRepo.countActiveByNode(flowIds);
+  }
+
+  @Get('flows/:flowId/versions')
+  async getFlowVersions(@Param('flowId') flowId: string) {
+    const versions = await this.flowVersionRepo.findByFlowId(flowId);
+    return versions.map((v) => {
+      const snapshot = v.nodesSnapshot as any;
+      const nodeCount = Array.isArray(snapshot?.nodes) ? snapshot.nodes.length : 0;
+      const transitionCount = Array.isArray(snapshot?.transitions) ? snapshot.transitions.length : 0;
+      return {
+        id: v.id,
+        version: v.version,
+        nodeCount,
+        transitionCount,
+        hasDiagram: !!v.consolidatedDiagram,
+        diagramApproved: v.diagramApproved,
+        diagramModified: v.diagramModified,
+        isPromoted: v.isPromoted,
+        createdAt: v.createdAt,
+      };
+    });
+  }
+
+  @Get('flows/:flowId/versions/:versionId')
+  async getFlowVersion(@Param('flowId') flowId: string, @Param('versionId') versionId: string) {
+    const version = await this.flowVersionRepo.findById(versionId);
+    if (!version || version.flowId !== flowId) {
+      throw new NotFoundException(`Version ${versionId} not found for flow ${flowId}`);
+    }
+
+    const flow = await this.nodeRepo.findFlowById(flowId);
+    if (!flow) throw new NotFoundException(`Flow ${flowId} not found`);
+
+    const snapshot = version.nodesSnapshot as any;
+    const snapshotNodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+
+    return {
+      ...flow,
+      source: 'version' as const,
+      versionId: version.id,
+      versionNumber: version.version,
+      diagramApproved: version.diagramApproved,
+      consolidatedDiagram: version.consolidatedDiagram,
+      nodeCategories: version.nodeCategories,
+      internalQueues: version.internalQueues,
+      nodes: snapshotNodes.map((n: any, i: number) => ({
+        nodeId: `draft-${i}`,
+        flowId,
+        node: {
+          id: `draft-${i}`,
+          name: n.name,
+          systemPrompt: n.systemPrompt,
+          tools: n.tools ?? null,
+          todos: n.todos ?? null,
+        },
+      })),
+      transitions: Array.isArray(snapshot?.transitions) ? snapshot.transitions.map((t: any) => ({
+        id: `draft-t-${t.fromNodeIndex}-${t.toNodeIndex}`,
+        flowId,
+        fromNodeId: `draft-${t.fromNodeIndex}`,
+        toNodeId: `draft-${t.toNodeIndex}`,
+        transitionCode: t.transitionCode,
+        fromNode: { id: `draft-${t.fromNodeIndex}`, name: snapshotNodes[t.fromNodeIndex]?.name ?? '' },
+        toNode: { id: `draft-${t.toNodeIndex}`, name: snapshotNodes[t.toNodeIndex]?.name ?? '' },
+      })) : [],
+    };
   }
 
   @Post('flows')
@@ -90,6 +201,58 @@ export class NodesController {
   @Delete('flows/:id')
   deleteFlow(@Param('id') id: string) {
     return this.nodeRepo.deleteFlow(id);
+  }
+
+  // ─── Flow Versions ───────────────────────────────────────────────────────────
+
+  @Post('flows/:flowId/promote')
+  async promoteFlow(@Param('flowId') flowId: string) {
+    // Toma el último snapshot del historial y lo aplica al flow
+    const versions = await this.flowVersionRepo.findByFlowId(flowId);
+    if (versions.length === 0) throw new BadRequestException('No versions in history to promote');
+
+    const latest = versions[0]; // findByFlowId retorna desc por version
+    await this.applySnapshot(flowId, latest.nodesSnapshot as unknown as FlowSnapshot);
+    await this.flowVersionRepo.markAsPromoted(latest.id);
+    return { promoted: true, flowId, versionId: latest.id };
+  }
+
+  @Post('flows/:flowId/restore/:versionId')
+  async restoreFlowVersion(
+    @Param('flowId') flowId: string,
+    @Param('versionId') versionId: string,
+  ) {
+    const version = await this.flowVersionRepo.findById(versionId);
+    if (!version) throw new NotFoundException('Version not found');
+    if (version.flowId !== flowId) throw new BadRequestException('Version does not belong to this flow');
+
+    await this.applySnapshot(flowId, version.nodesSnapshot as unknown as FlowSnapshot);
+    return { restored: true, flowId, versionId };
+  }
+
+  private async applySnapshot(flowId: string, snap: FlowSnapshot | DraftFlowSnapshot): Promise<void> {
+    const firstNode = (snap.nodes[0] ?? {}) as any;
+    const isDraft = !('id' in firstNode) || firstNode.id === '';
+
+    if (isDraft) {
+      const draft = snap as DraftFlowSnapshot;
+      await this.nodeRepo.replaceFlowNodes(
+        flowId,
+        draft.nodes.map((n) => ({ id: '', ...n })),
+        draft.transitions,
+      );
+    } else {
+      const promoted = snap as FlowSnapshot;
+      const transitions = promoted.transitions.map((t) => {
+        const fromNodeIndex = promoted.nodes.findIndex((n) => n.id === t.fromNodeId);
+        const toNodeIndex = promoted.nodes.findIndex((n) => n.id === t.toNodeId);
+        if (fromNodeIndex === -1 || toNodeIndex === -1) {
+          throw new BadRequestException(`Snapshot has invalid transition: ${t.transitionCode}`);
+        }
+        return { fromNodeIndex, toNodeIndex, transitionCode: t.transitionCode };
+      });
+      await this.nodeRepo.replaceFlowNodes(flowId, promoted.nodes, transitions);
+    }
   }
 
   // ─── Transitions ─────────────────────────────────────────────────────────────
@@ -207,7 +370,7 @@ export class NodesController {
     let finalResult = result;
     const allNodeTransitions = [...(result.nodeTransitions ?? [])];
 
-    // Poll in loop — workflows can chain (forwardReceipt → sendToVerification → transitionToNode)
+    // Poll in loop — workflows can chain (sendToInternalChannel → transitionToNode)
     let currentSideEffects = result.sideEffects;
     while (currentSideEffects.some((se) => se.action === 'waitingQueue')) {
       const queueResult = await this.pollQueueResult(session.conversationId, 15000);

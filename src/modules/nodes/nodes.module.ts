@@ -25,14 +25,14 @@ import { RegisterMissingProductFn } from './functions/implementations/register-m
 import { SaveClientLocationFn } from './functions/implementations/save-client-location.fn';
 import { ExitFlowFn } from './functions/implementations/exit-flow.fn';
 import { SaveProductPriceFn } from './functions/implementations/save-product-price.fn';
-import { ForwardReceiptFn } from './functions/implementations/forward-receipt.fn';
-import { SendToVerificationFn } from './functions/implementations/send-to-verification.fn';
+import { SendToInternalChannelFn } from './functions/implementations/send-to-internal-channel.fn';
 import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
 import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
 import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
 import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
+import { FlowVersionRepository } from './repositories/flow-version.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { TestSessionService } from './services/test-session.service';
 import { TestQueueResultStore } from './services/test-queue-result.store';
@@ -67,16 +67,16 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     ExitFlowFn,
     SaveClientLocationFn,
     SaveProductPriceFn,
-    ForwardReceiptFn,
-    SendToVerificationFn,
+    SendToInternalChannelFn,
     UpdateTodosFn,
     OutOfPathFn,
     GetMemoriesFn,
     SecurityEventRepository,
+    FlowVersionRepository,
     TemplateRepository,
     TestSessionService,
     TestQueueResultStore,
   ],
-  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry, TestQueueResultStore],
+  exports: [NodeRepository, NodeSessionRepository, IntentRepository, NodeRunnerService, NodeFunctionRegistry, TestQueueResultStore, FlowVersionRepository],
 })
 export class NodesModule {}

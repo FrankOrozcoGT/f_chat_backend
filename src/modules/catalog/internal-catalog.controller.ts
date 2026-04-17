@@ -252,8 +252,8 @@ export class InternalCatalogController {
         product.name,
         {
           basePrice: existing
-            ? Math.max(existing.basePrice, product.price)
-            : product.price,
+            ? Math.max(existing.basePrice, product.price ?? 0)
+            : (product.price ?? 0),
           description: product.description,
         },
       );
@@ -281,10 +281,10 @@ export class InternalCatalogController {
           productName,
           { basePrice: 0 },
         );
-        productIds.push(product.id);
+        if (!productIds.includes(product.id)) productIds.push(product.id);
       }
 
-      const createdPromo = await this.promotionRepository.create({
+      const createdPromo = await this.promotionRepository.upsertByName({
         tenantId,
         name: promo.name,
         description: promo.description,
