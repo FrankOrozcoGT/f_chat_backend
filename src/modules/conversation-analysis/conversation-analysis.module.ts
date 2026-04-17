@@ -10,6 +10,9 @@ import { AnalysisInputRouterNode } from './langgraph/nodes/input-router.node';
 import { AnalysisNode } from './langgraph/nodes/analysis.node';
 import { FlowGeneratorNode } from './langgraph/nodes/flow-generator.node';
 import { DiagramConsolidatorNode } from './langgraph/nodes/diagram-consolidator.node';
+import { NodeContentGeneratorNode } from './langgraph/nodes/node-content-generator.node';
+import { IntentSplitterNode } from './langgraph/nodes/intent-splitter.node';
+import { MermaidParserModule } from '@modules/nodes/mermaid-parser/mermaid-parser.module';
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
@@ -22,6 +25,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
     AiModule,
     LimitsModule,
     FileStorageModule,
+    MermaidParserModule,
     forwardRef(() => NodesModule),
   ],
   controllers: [ConversationAnalysisController, BatchAnalysisController],
@@ -31,6 +35,8 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
     AnalysisInputRouterNode,
     AnalysisNode,
     FlowGeneratorNode,
+    NodeContentGeneratorNode,
+    IntentSplitterNode,
     DiagramConsolidatorNode,
     BatchAnalysisService,
     ClientLabelRepository,

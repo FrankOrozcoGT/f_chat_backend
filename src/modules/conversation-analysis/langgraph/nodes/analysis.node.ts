@@ -150,6 +150,7 @@ export class AnalysisNode {
           firstMessageId: s.firstMessageId,
           lastMessageId: s.lastMessageId,
           intent: s.intent ?? null,
+          intentDescription: s.intentDescription ?? null,
           flowSummary: s.flowSummary ?? null,
           flowDiagram: s.flowDiagram ?? null,
         })),

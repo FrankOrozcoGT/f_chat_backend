@@ -13,6 +13,7 @@
       "firstMessageId": "id del primer mensaje",
       "lastMessageId": "id del último mensaje",
       "intent": "venta",
+      "intentDescription": "Breve descripción de qué trata este intent",
       "flowSummary": "Descripción del flujo en texto",
       "flowDiagram": "flowchart TD\n    A[Inicio] --> B[Paso]"
     }

@@ -11,6 +11,7 @@ export interface ConversationSplit {
   summary: string;
   messageIds: string[];
   intent: string | null;
+  intentDescription: string | null;
   flowDiagram: string | null;
   flowSummary: string | null;
 }
@@ -201,6 +202,7 @@ export class ConversationAnalysisService {
         summary: sub.summary,
         messageIds,
         intent: sub.intent ?? null,
+        intentDescription: sub.intentDescription ?? null,
         flowDiagram: sub.flowDiagram ?? null,
         flowSummary: sub.flowSummary ?? null,
       };

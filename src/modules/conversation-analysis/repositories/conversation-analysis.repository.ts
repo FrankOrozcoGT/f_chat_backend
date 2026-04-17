@@ -8,6 +8,7 @@ export class ConversationAnalysisRepository {
   async upsert(data: {
     conversationId: string;
     intent: string | null;
+    intentDescription: string | null;
     flowDiagram: string | null;
     flowSummary: string | null;
     isInternal?: boolean;
@@ -18,6 +19,7 @@ export class ConversationAnalysisRepository {
       create: {
         conversationId: data.conversationId,
         intent: data.intent,
+        intentDescription: data.intentDescription,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
         isInternal: data.isInternal ?? false,
@@ -25,6 +27,7 @@ export class ConversationAnalysisRepository {
       },
       update: {
         intent: data.intent,
+        intentDescription: data.intentDescription,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
         isInternal: data.isInternal ?? false,
@@ -117,6 +120,7 @@ export class ConversationAnalysisRepository {
         id: true,
         conversationId: true,
         intent: true,
+        intentDescription: true,
         flowDiagram: true,
         flowSummary: true,
         isInternal: true,

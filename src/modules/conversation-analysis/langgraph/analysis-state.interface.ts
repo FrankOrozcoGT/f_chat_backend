@@ -17,6 +17,7 @@ export interface SubConversation {
   firstMessageId: string;
   lastMessageId: string;
   intent: string | null;
+  intentDescription: string | null;
   flowDiagram: string | null;
   flowSummary: string | null;
 }

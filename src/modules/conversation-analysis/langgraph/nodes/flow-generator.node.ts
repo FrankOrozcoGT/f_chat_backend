@@ -1,37 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@modules/ai/clients/kimi.client';
 import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
-import { loadPrompt } from '@common/utils/load-prompt';
+import { MermaidParser } from '@modules/nodes/mermaid-parser/mermaid-parser.service';
+import { GraphAnalyzer } from '@modules/nodes/mermaid-parser/graph-analyzer.service';
+import { CrossEdge, ParsedSubgraph, SubFlow } from '@modules/nodes/mermaid-parser/types';
+import { NodeContentGeneratorNode, ProposedTool } from './node-content-generator.node';
+import { IntentSplitterNode } from './intent-splitter.node';
 
-const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
-
-const AVAILABLE_TOOLS: { name: string; description: string }[] = [
-  { name: 'getMemories', description: 'Recupera valores almacenados en la memoria del tenant (info bancaria, horarios, métodos de pago, etc.)' },
-  { name: 'loadClientProducts', description: 'Carga los productos que el cliente ha comprado anteriormente' },
-  { name: 'searchProduct', description: 'Busca un producto en el catálogo por nombre o descripción' },
-  { name: 'calculateSale', description: 'Calcula el total de una venta con productos, cantidades y ubicación del cliente' },
-  { name: 'checkPromotions', description: 'Verifica si hay promociones aplicables a un producto específico' },
-  { name: 'saveProductPrice', description: 'Guarda o actualiza el precio de un producto en el catálogo' },
-  { name: 'registerMissingProduct', description: 'Registra un producto que el cliente busca pero no existe en el catálogo' },
-  { name: 'saveClientLocation', description: 'Guarda o actualiza la ubicación del cliente para calcular envío' },
-  { name: 'forwardReceipt', description: 'Reenvía un comprobante de pago al grupo de verificación con datos del cliente y pedido' },
-  { name: 'sendToVerification', description: 'Envía datos de pago al proceso de verificación (nombre, monto, resumen, messageId del comprobante)' },
-  { name: 'moveToNegotiation', description: 'Registra que el cliente quiere negociar precio de un producto' },
-  { name: 'salesRejection', description: 'Registra el rechazo de una venta con motivo y producto' },
-  { name: 'updateTodos', description: 'Marca o desmarca todos del nodo actual. Retorna los pendientes y los alternos disponibles' },
-  { name: 'transitionToNode', description: 'Transiciona a otro nodo del flow con un código de transición y resumen de progreso' },
-  { name: 'exitFlow', description: 'Sale del flujo actual cuando el cliente cambió de tema o pidió algo fuera del flujo' },
-  { name: 'switchToHitl', description: 'Transfiere la conversación a un agente humano cuando el cliente lo solicita' },
-  { name: 'closeSession', description: 'Cierra la conversación cuando el cliente se despide y hay historial previo' },
-];
-
-const AVAILABLE_TOOL_NAMES = AVAILABLE_TOOLS.map((t) => t.name);
-
-const SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'flow-generator-system.md').replace(
-  '{{AVAILABLE_TOOLS}}',
-  AVAILABLE_TOOLS.map((t) => `- **${t.name}**: ${t.description}`).join('\n'),
-);
+export interface InternalQueueEntry {
+  channelName: string;
+  nodeId: string;
+  queueType: string;
+  usage: string;
+}
 
 export interface GeneratedNode {
   name: string;
@@ -46,242 +26,320 @@ export interface GeneratedTransition {
   transitionCode: string;
 }
 
-export interface ProposedTool {
-  name: string;
-  description: string;
-}
+export type { ProposedTool };
 
-export interface FlowGeneratorOutput {
+export interface GeneratedFlow {
+  intentName: string;
+  isSplitChild: boolean;
   nodes: GeneratedNode[];
   transitions: GeneratedTransition[];
   proposedTools: ProposedTool[];
+  assignedAnalysisIds: string[];
+  costUsd: number;
 }
 
 export interface FlowGeneratorInput {
   intentName: string;
-  consolidatedDiagram: string | null;
-  nodeCategories: Record<string, string> | null;
-  internalQueues: { channelName: string; nodeId: string; queueType: string; usage: string }[] | null;
-  existingFlows: { name: string; nodes: { node: { name: string; systemPrompt: string } }[] }[];
+  consolidatedDiagram: string;
+  internalQueues: InternalQueueEntry[];
+  analyses: { id: string; flowSummary: string | null; flowDiagram: string | null }[];
 }
 
-const CREATE_NODE_TOOL: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'create_node',
-    description: 'Crea un nodo del flow con su nombre, systemPrompt, todos y tools.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Nombre del nodo' },
-        systemPrompt: { type: 'string', description: 'Instrucciones completas para el agente IA en este nodo' },
-        todos: {
-          type: 'array',
-          description: 'Tareas concretas que el nodo debe completar',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'ID snake_case único dentro del nodo' },
-              name: { type: 'string', description: 'Nombre corto legible' },
-              description: { type: 'string', description: 'Instrucciones detalladas' },
-              functions: { type: 'array', items: { type: 'string' }, description: 'Tools que usa este todo' },
-              transitions: { type: 'array', items: { type: 'string' }, description: 'Códigos de transición si es punto de salida' },
-            },
-            required: ['id', 'name', 'description', 'functions'],
-          },
-        },
-        tools: { type: 'array', items: { type: 'string' }, description: 'Herramientas disponibles para este nodo' },
-      },
-      required: ['name', 'systemPrompt', 'todos', 'tools'],
-    },
-  },
-};
-
-const CREATE_TRANSITION_TOOL: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'create_transition',
-    description: 'Crea una transición entre dos nodos.',
-    parameters: {
-      type: 'object',
-      properties: {
-        fromNodeIndex: { type: 'number', description: 'Índice del nodo origen (0 = primer nodo creado)' },
-        toNodeIndex: { type: 'number', description: 'Índice del nodo destino' },
-        transitionCode: { type: 'string', description: 'Código snake_case de la transición' },
-      },
-      required: ['fromNodeIndex', 'toNodeIndex', 'transitionCode'],
-    },
-  },
-};
-
-const PROPOSE_TOOL_DEF: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'propose_tool',
-    description: 'Propone una herramienta nueva que no existe en el listado disponible.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Nombre de la herramienta propuesta' },
-        description: { type: 'string', description: 'Qué haría esta herramienta' },
-      },
-      required: ['name', 'description'],
-    },
-  },
-};
-
-const SUBMIT_FLOW_TOOL: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'submit_flow',
-    description: 'Finaliza la generación del flow. Llamar cuando todos los nodos y transiciones estén creados.',
-    parameters: {
-      type: 'object',
-      properties: {},
-    },
-  },
-};
+export interface FlowGeneratorOutput {
+  flows: GeneratedFlow[];
+  totalCostUsd: number;
+}
 
 @Injectable()
 export class FlowGeneratorNode {
   private readonly logger = new Logger(FlowGeneratorNode.name);
 
-  constructor(private readonly kimiClient: KimiClient) {}
+  constructor(
+    private readonly mermaidParser: MermaidParser,
+    private readonly graphAnalyzer: GraphAnalyzer,
+    private readonly nodeContentGenerator: NodeContentGeneratorNode,
+    private readonly intentSplitter: IntentSplitterNode,
+  ) {}
 
   async generate(input: FlowGeneratorInput): Promise<FlowGeneratorOutput> {
-    const userPrompt = this.buildUserPrompt(input);
+    const parsed = this.mermaidParser.parse(input.consolidatedDiagram);
+    const graph = this.graphAnalyzer.analyze(parsed);
 
-    const nodes: GeneratedNode[] = [];
-    const transitions: GeneratedTransition[] = [];
-    const proposedTools: ProposedTool[] = [];
+    this.logger.log(
+      `FlowGenerator [${input.intentName}]: ${graph.subgraphs.length} nodes, ${graph.crossEdges.length} cross-edges, ` +
+      `${graph.entryPoints.length} entries, ${graph.terminals.length} terminals, ` +
+      `${graph.discardedClosureSubgraphs.length} closures discarded`,
+    );
 
-    const result = await this.kimiClient.chatWithTools({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      tools: [CREATE_NODE_TOOL, CREATE_TRANSITION_TOOL, PROPOSE_TOOL_DEF, SUBMIT_FLOW_TOOL],
-      maxTokens: 4000,
-      maxIterations: 30,
-      onToolCall: async (name, args) => {
-        if (name === 'submit_flow') {
-          throw new ToolTermination(name, args);
-        }
+    const isSplit = graph.subFlows.length > 1;
+    let intentNameBySubFlow = new Map<string, string>();
+    let analysisAssignments = new Map<string, string>();
+    let splitterCost = 0;
 
-        if (name === 'create_node') {
-          const node = this.validateNode(args, nodes.length);
-          nodes.push(node);
-          this.logger.log(`create_node [${input.intentName}]: "${node.name}" (index=${nodes.length - 1}, ${node.todos.length} todos)`);
-          return JSON.stringify({ ok: true, nodeIndex: nodes.length - 1, name: node.name });
-        }
+    if (isSplit) {
+      const subgraphById = new Map(graph.subgraphs.map((s) => [s.id, s]));
+      const result = await this.intentSplitter.split({
+        originalIntent: input.intentName,
+        subFlows: graph.subFlows.map((sf) => ({
+          entrySubgraph: sf.entrySubgraph,
+          entryNodeName: subgraphById.get(sf.entrySubgraph)?.name ?? sf.entrySubgraph,
+          reachableNodeNames: sf.subgraphIds.map((id) => subgraphById.get(id)?.name ?? id),
+        })),
+        analyses: input.analyses.map((a) => ({
+          analysisId: a.id,
+          flowSummary: a.flowSummary,
+          flowDiagram: a.flowDiagram,
+        })),
+      });
+      for (const s of result.splits) intentNameBySubFlow.set(s.entrySubgraph, s.newIntentName);
+      for (const a of result.assignments) analysisAssignments.set(a.analysisId, a.entrySubgraph);
+      splitterCost = result.costUsd;
+    } else {
+      intentNameBySubFlow.set(graph.subFlows[0].entrySubgraph, input.intentName);
+      for (const a of input.analyses) analysisAssignments.set(a.id, graph.subFlows[0].entrySubgraph);
+    }
 
-        if (name === 'create_transition') {
-          const transition = this.validateTransition(args, nodes.length);
-          transitions.push(transition);
-          this.logger.log(`create_transition [${input.intentName}]: ${transition.fromNodeIndex} → ${transition.toNodeIndex} (${transition.transitionCode})`);
-          return JSON.stringify({ ok: true });
-        }
+    const flows: GeneratedFlow[] = [];
+    let totalCostUsd = splitterCost;
 
-        if (name === 'propose_tool') {
-          const tool: ProposedTool = { name: args.name as string, description: args.description as string };
-          proposedTools.push(tool);
-          this.logger.log(`propose_tool [${input.intentName}]: "${tool.name}"`);
-          return JSON.stringify({ ok: true, name: tool.name });
-        }
-
-        return JSON.stringify({ error: `Unknown tool: ${name}` });
-      },
-    });
-
-    if (nodes.length === 0) {
-      throw new Error(`FlowGeneratorNode [${input.intentName}]: no nodes created after ${result.iterations} iterations`);
+    for (const subFlow of graph.subFlows) {
+      const flow = await this.generateSubFlow(subFlow, graph.subgraphs, graph.crossEdges, input, intentNameBySubFlow.get(subFlow.entrySubgraph)!, isSplit);
+      const assignedAnalysisIds = [...analysisAssignments.entries()]
+        .filter(([, entry]) => entry === subFlow.entrySubgraph)
+        .map(([id]) => id);
+      flow.assignedAnalysisIds = assignedAnalysisIds;
+      flows.push(flow);
+      totalCostUsd += flow.costUsd;
     }
 
     this.logger.log(
-      `FlowGeneratorNode [${input.intentName}]: ${nodes.length} nodos, ${transitions.length} transiciones, ${result.iterations} iterations, $${result.costUsd.toFixed(6)}`,
+      `FlowGenerator [${input.intentName}]: generated ${flows.length} flow(s), totalCost=$${totalCostUsd.toFixed(6)}`,
     );
 
-    return { nodes, transitions, proposedTools };
+    return { flows, totalCostUsd };
   }
 
-  private validateNode(args: Record<string, unknown>, currentIndex: number): GeneratedNode {
-    const name = args.name as string;
-    const systemPrompt = args.systemPrompt as string;
-    if (!name || !systemPrompt) {
-      throw new Error(`FlowGeneratorNode: node[${currentIndex}] missing name or systemPrompt`);
-    }
+  private async generateSubFlow(
+    subFlow: SubFlow,
+    allSubgraphs: ParsedSubgraph[],
+    allCrossEdges: CrossEdge[],
+    input: FlowGeneratorInput,
+    intentName: string,
+    isSplitChild: boolean,
+  ): Promise<GeneratedFlow> {
+    const subgraphById = new Map(allSubgraphs.map((s) => [s.id, s]));
+    const includedIds = new Set(subFlow.subgraphIds);
+    const orderedIds = this.orderSubgraphs(subFlow, allCrossEdges);
 
-    const rawTodos = args.todos as any[];
-    if (!Array.isArray(rawTodos) || rawTodos.length === 0) {
-      throw new Error(`FlowGeneratorNode: node[${currentIndex}] "${name}" missing todos`);
-    }
-
-    const todos: TodoDefinition[] = rawTodos.map((t, j) => {
-      if (!t.id || !t.name || !t.description) {
-        throw new Error(`FlowGeneratorNode: node[${currentIndex}].todos[${j}] missing id, name or description`);
+    const internalsByNodeId = new Map<string, InternalQueueEntry[]>();
+    for (const iq of input.internalQueues) {
+      const sgId = this.findSubgraphByNodeRef(iq.nodeId, subgraphById);
+      if (sgId && includedIds.has(sgId)) {
+        const arr = internalsByNodeId.get(sgId) ?? [];
+        arr.push(iq);
+        internalsByNodeId.set(sgId, arr);
       }
+    }
+
+    const outgoingBySubgraph = new Map<string, CrossEdge[]>();
+    for (const e of allCrossEdges) {
+      if (e.isInternal) continue;
+      if (!includedIds.has(e.fromSubgraph)) continue;
+      if (!e.goesToRouter && !includedIds.has(e.toSubgraph)) continue;
+      const arr = outgoingBySubgraph.get(e.fromSubgraph) ?? [];
+      arr.push(e);
+      outgoingBySubgraph.set(e.fromSubgraph, arr);
+    }
+
+    const nodeGenerations = await Promise.all(
+      orderedIds.map(async (sgId) => {
+        const sg = subgraphById.get(sgId)!;
+        const outgoing = outgoingBySubgraph.get(sgId) ?? [];
+        const isTerminal = outgoing.length === 0 || outgoing.every((e) => e.goesToRouter);
+
+        const content = await this.nodeContentGenerator.generate({
+          intentName,
+          nodeName: sg.name,
+          steps: sg.steps,
+          isTerminal,
+        });
+
+        return { sgId, sg, content, outgoing, isTerminal };
+      }),
+    );
+
+    const nameToIndex = new Map<string, number>();
+    orderedIds.forEach((id, i) => nameToIndex.set(subgraphById.get(id)!.name, i));
+
+    const nodes: GeneratedNode[] = nodeGenerations.map((g) => {
+      const enrichedTodos = this.buildFullTodos(
+        g.content.node.todos,
+        g.outgoing,
+        subgraphById,
+        internalsByNodeId.get(g.sgId) ?? [],
+        g.isTerminal,
+        g.content.node.isClosureNode,
+      );
+      const finalizingTools = this.collectFinalizingTools(g.outgoing, internalsByNodeId.get(g.sgId) ?? [], g.isTerminal, g.content.node.isClosureNode);
+      const allTools = [...new Set([...g.content.node.tools, ...finalizingTools])];
       return {
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        functions: (t.functions ?? []).filter((f: string) => AVAILABLE_TOOL_NAMES.includes(f)),
-        transitions: t.transitions,
+        name: g.sg.name,
+        systemPrompt: g.content.node.systemPrompt,
+        todos: enrichedTodos,
+        tools: allTools,
       };
     });
 
-    const tools: string[] = (args.tools as string[] ?? []).filter((t) => AVAILABLE_TOOL_NAMES.includes(t));
-
-    return { name, systemPrompt, todos, tools };
-  }
-
-  private validateTransition(args: Record<string, unknown>, nodeCount: number): GeneratedTransition {
-    const fromNodeIndex = args.fromNodeIndex as number;
-    const toNodeIndex = args.toNodeIndex as number;
-    const transitionCode = args.transitionCode as string;
-
-    if (fromNodeIndex === undefined || toNodeIndex === undefined || !transitionCode) {
-      throw new Error(`FlowGeneratorNode: transition missing required fields`);
-    }
-    if (fromNodeIndex >= nodeCount || toNodeIndex >= nodeCount) {
-      throw new Error(`FlowGeneratorNode: transition references out-of-bounds node index (from=${fromNodeIndex}, to=${toNodeIndex}, nodeCount=${nodeCount})`);
-    }
-
-    return { fromNodeIndex, toNodeIndex, transitionCode };
-  }
-
-  private buildUserPrompt(input: FlowGeneratorInput): string {
-    const parts: string[] = [];
-
-    parts.push(`## Intención a modelar: "${input.intentName}"`);
-
-    if (input.consolidatedDiagram) {
-      parts.push(`\n## Diagrama consolidado del intent:\n${input.consolidatedDiagram}`);
-    }
-
-    if (input.nodeCategories && Object.keys(input.nodeCategories).length > 0) {
-      parts.push(`\n## Categorías de nodos del diagrama:`);
-      for (const [nodeId, category] of Object.entries(input.nodeCategories)) {
-        parts.push(`- ${nodeId}: ${category}`);
+    const transitions: GeneratedTransition[] = [];
+    for (let i = 0; i < orderedIds.length; i++) {
+      const fromId = orderedIds[i];
+      const outgoing = outgoingBySubgraph.get(fromId) ?? [];
+      for (const e of outgoing) {
+        if (e.goesToRouter) continue;
+        const toIndex = nameToIndex.get(subgraphById.get(e.toSubgraph)!.name);
+        if (toIndex === undefined) continue;
+        transitions.push({
+          fromNodeIndex: i,
+          toNodeIndex: toIndex,
+          transitionCode: this.toTransitionCode(e.label),
+        });
       }
     }
 
-    if (input.internalQueues && input.internalQueues.length > 0) {
-      parts.push(`\n## Comunicación con canales internos en este flujo:`);
-      input.internalQueues.forEach((q) => {
-        parts.push(`- **${q.channelName}** en nodo ${q.nodeId} (cola: ${q.queueType}): ${q.usage}`);
+    const proposedTools: ProposedTool[] = [];
+    const seenToolNames = new Set<string>();
+    let costUsd = 0;
+    for (const g of nodeGenerations) {
+      costUsd += g.content.costUsd;
+      for (const p of g.content.proposedTools) {
+        if (!seenToolNames.has(p.name)) {
+          seenToolNames.add(p.name);
+          proposedTools.push(p);
+        }
+      }
+    }
+
+    return {
+      intentName,
+      isSplitChild,
+      nodes,
+      transitions,
+      proposedTools,
+      assignedAnalysisIds: [],
+      costUsd,
+    };
+  }
+
+  /** BFS desde el entry para ordenar los subgraphs; el primero siempre es el entry point */
+  private orderSubgraphs(subFlow: SubFlow, allCrossEdges: CrossEdge[]): string[] {
+    const included = new Set(subFlow.subgraphIds);
+    const ordered: string[] = [];
+    const visited = new Set<string>();
+    const queue: string[] = [subFlow.entrySubgraph];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      ordered.push(current);
+      for (const e of allCrossEdges) {
+        if (e.isInternal || e.goesToRouter) continue;
+        if (e.fromSubgraph !== current) continue;
+        if (!included.has(e.toSubgraph) || visited.has(e.toSubgraph)) continue;
+        queue.push(e.toSubgraph);
+      }
+    }
+    // Agregar los que no quedaron por ciclos raros
+    for (const id of subFlow.subgraphIds) {
+      if (!visited.has(id)) ordered.push(id);
+    }
+    return ordered;
+  }
+
+  private findSubgraphByNodeRef(
+    nodeRef: string,
+    subgraphById: Map<string, ParsedSubgraph>,
+  ): string | null {
+    // nodeRef puede ser el step id (Cx) o el subgraph id
+    for (const [id, sg] of subgraphById) {
+      if (id === nodeRef) return id;
+      if (sg.steps.some((s) => s.id === nodeRef)) return id;
+    }
+    return null;
+  }
+
+  private toTransitionCode(label: string | null): string {
+    if (!label) return 'default';
+    return label
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  /**
+   * Construye los todos finales del nodo: los internos que generó la IA + todos deterministas
+   * (uno por internal, uno por transición saliente, uno terminal si aplica).
+   */
+  private buildFullTodos(
+    internalTodos: TodoDefinition[],
+    outgoing: CrossEdge[],
+    subgraphById: Map<string, ParsedSubgraph>,
+    internals: InternalQueueEntry[],
+    isTerminal: boolean,
+    isClosureNode: boolean,
+  ): TodoDefinition[] {
+    const todos: TodoDefinition[] = [...internalTodos];
+
+    for (const internal of internals) {
+      todos.push({
+        id: `coordinate_${internal.channelName}`,
+        name: `Coordinar con ${internal.channelName}`,
+        description: `${internal.usage} Usa sendToInternalChannel con channelName="${internal.channelName}". Tipo de cola: ${internal.queueType}. La conversación se pausa esperando respuesta.`,
+        functions: ['sendToInternalChannel'],
       });
     }
 
-    if (input.existingFlows.length > 0) {
-      parts.push(`\n## Flows activos existentes (NO repetir, solo tomar como referencia de estilo):`);
-      input.existingFlows.forEach((f) => {
-        const nodeNames = f.nodes.map((n) => n.node.name).join(', ');
-        parts.push(`- "${f.name}": nodos [${nodeNames}]`);
+    for (const edge of outgoing) {
+      if (edge.goesToRouter) continue;
+      const toName = subgraphById.get(edge.toSubgraph)?.name ?? edge.toSubgraph;
+      const code = this.toTransitionCode(edge.label);
+      todos.push({
+        id: `transition_${code}`,
+        name: `Transicionar a ${toName}`,
+        description: `Cuando corresponda según la lógica del nodo, usa transitionToNode con transitionCode="${code}" para pasar al nodo "${toName}".${edge.label ? ` Condición: ${edge.label}.` : ''}`,
+        functions: ['transitionToNode'],
+        transitions: [code],
       });
     }
 
-    parts.push(`\nGenera el flow borrador para la intención "${input.intentName}".`);
+    if (isTerminal) {
+      const terminalTool = isClosureNode ? 'closeSession' : 'exitFlow';
+      todos.push({
+        id: 'finalize_flow',
+        name: isClosureNode ? 'Cerrar conversación' : 'Salir del flow',
+        description: isClosureNode
+          ? 'Cuando la interacción en este nodo termine, usa closeSession para despedirte y cerrar la conversación.'
+          : 'Cuando la tarea de este nodo esté completa, usa exitFlow para salir del flow al router.',
+        functions: [terminalTool],
+        transitions: ['finalize'],
+      });
+    }
 
-    return parts.join('\n');
+    return todos;
+  }
+
+  /** Tools que se añaden al nodo porque las añadimos deterministicamente en los todos */
+  private collectFinalizingTools(
+    outgoing: CrossEdge[],
+    internals: InternalQueueEntry[],
+    isTerminal: boolean,
+    isClosureNode: boolean,
+  ): string[] {
+    const tools: string[] = [];
+    if (internals.length > 0) tools.push('sendToInternalChannel');
+    if (outgoing.some((e) => !e.goesToRouter)) tools.push('transitionToNode');
+    if (isTerminal) tools.push(isClosureNode ? 'closeSession' : 'exitFlow');
+    return tools;
   }
 }
