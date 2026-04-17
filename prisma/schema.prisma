@@ -186,8 +186,9 @@ model Conversation {
 model ConversationAnalysis {
   id              String                    @id @default(uuid())
   conversationId  String                    @unique
-  intent          String?
-  flowDiagram     String?
+  intent             String?
+  intentDescription  String?
+  flowDiagram        String?
   flowSummary     String?
   isInternal      Boolean                   @default(false)
   internalPurpose String?
