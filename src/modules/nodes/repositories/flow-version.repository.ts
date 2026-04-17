@@ -20,9 +20,9 @@ export class FlowVersionRepository {
 
   async saveVersion(
     flowId: string,
-    snapshot: Prisma.InputJsonValue,
+    snapshot: DraftFlowSnapshot | FlowSnapshot,
     contentHash: string,
-    proposedTools?: Prisma.InputJsonValue,
+    proposedTools?: { name: string; description: string }[],
   ): Promise<{ skipped: boolean }> {
     const last = await this.prisma.flowVersion.findFirst({
       where: { flowId },
@@ -40,9 +40,9 @@ export class FlowVersionRepository {
       data: {
         flowId,
         version: nextVersion,
-        nodesSnapshot: snapshot,
+        nodesSnapshot: snapshot as unknown as Prisma.InputJsonValue,
         contentHash,
-        proposedTools: proposedTools ?? undefined,
+        proposedTools: (proposedTools ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
       },
     });
 
@@ -51,16 +51,16 @@ export class FlowVersionRepository {
 
   async updateVersionNodes(
     versionId: string,
-    snapshot: Prisma.InputJsonValue,
+    snapshot: DraftFlowSnapshot | FlowSnapshot,
     contentHash: string,
-    proposedTools?: Prisma.InputJsonValue,
+    proposedTools?: { name: string; description: string }[],
   ): Promise<void> {
     await this.prisma.flowVersion.update({
       where: { id: versionId },
       data: {
-        nodesSnapshot: snapshot,
+        nodesSnapshot: snapshot as unknown as Prisma.InputJsonValue,
         contentHash,
-        proposedTools: proposedTools ?? undefined,
+        proposedTools: (proposedTools ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
       },
     });
   }
