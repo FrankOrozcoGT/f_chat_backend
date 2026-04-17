@@ -132,7 +132,7 @@ export class InternalWebhooksController {
       phoneId: string;
       clientId: string;
       batchMessageIds: string[];
-      splits: Array<{ summary: string; messageIds: string[]; intent?: string | null; flowDiagram?: string | null; flowSummary?: string | null }>;
+      splits: Array<{ summary: string; messageIds: string[]; intent?: string | null; intentDescription?: string | null; flowDiagram?: string | null; flowSummary?: string | null }>;
       orphanMessageIds: string[];
     },
   ) {
@@ -203,6 +203,7 @@ export class InternalWebhooksController {
         await this.conversationAnalysisRepo.upsert({
           conversationId: subConvId,
           intent: split.intent ?? null,
+          intentDescription: split.intentDescription ?? null,
           flowDiagram: split.flowDiagram ?? null,
           flowSummary: split.flowSummary ?? null,
         });

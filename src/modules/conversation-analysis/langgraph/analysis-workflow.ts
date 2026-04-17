@@ -13,7 +13,10 @@ export interface AnalysisWorkflowInput {
   tenantId: string;
   phoneId: string;
   clientId: string | null;
+  isGroup: boolean;
+  knownInternal: boolean;
   messages: AnalysisMessage[];
+  existingIntents: string[];
 }
 
 @Injectable()
@@ -49,6 +52,8 @@ export class AnalysisWorkflow {
       tenantId: input.tenantId,
       phoneId: input.phoneId,
       clientId: input.clientId,
+      isGroup: input.isGroup,
+      knownInternal: input.knownInternal,
       messages: input.messages,
       processedMessages: [],
       warnings: [],
@@ -57,8 +62,12 @@ export class AnalysisWorkflow {
       subConversations: [],
       products: [],
       promotions: [],
+      existingIntents: input.existingIntents,
+      intentRenames: [],
       isInternal: false,
       internalPurpose: null,
+      channelName: null,
+      participants: [],
     };
 
     const result = await this.graph.invoke(initialState);

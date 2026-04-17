@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ensureError } from '@common/utils/ensure-error';
 import { LlmResponse } from './interfaces/llm-response.interface';
 import { loadPrompt } from '@common/utils/load-prompt';
 import { join } from 'path';
@@ -143,59 +144,88 @@ export class KimiClient {
   async rawChat(
     messages: ChatMessage[],
     maxTokens: number = 500,
+    maxRetries: number = 3,
   ): Promise<Omit<LlmResponse, 'intent'>> {
     const startTime = Date.now();
 
-    try {
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'kimi-k2.5',
-          messages,
-          max_tokens: maxTokens,
-          thinking: { type: 'disabled' },
-        }),
-      });
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'kimi-k2.5',
+            messages,
+            max_tokens: maxTokens,
+            thinking: { type: 'disabled' },
+          }),
+        });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        const errorHeaders = Object.fromEntries(response.headers.entries());
-        throw new KimiApiError(
-          `Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+        const rateHeaders = {
+          limitRequests: response.headers.get('x-ratelimit-limit-requests'),
+          remainingRequests: response.headers.get('x-ratelimit-remaining-requests'),
+          resetRequests: response.headers.get('x-ratelimit-reset-requests'),
+          limitTokens: response.headers.get('x-ratelimit-limit-tokens'),
+          remainingTokens: response.headers.get('x-ratelimit-remaining-tokens'),
+        };
+        if (rateHeaders.limitRequests) {
+          this.logger.debug(`Rate limits: ${rateHeaders.remainingRequests}/${rateHeaders.limitRequests} requests, ${rateHeaders.remainingTokens}/${rateHeaders.limitTokens} tokens, reset: ${rateHeaders.resetRequests}`);
+        }
+
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get('retry-after') ?? '', 10);
+          const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000 * Math.pow(2, attempt), 30000);
+          if (attempt < maxRetries) {
+            this.logger.warn(`LLM rate limited (429), retry ${attempt + 1}/${maxRetries} in ${delayMs}ms`);
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+        }
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          const errorHeaders = Object.fromEntries(response.headers.entries());
+          throw new KimiApiError(
+            `Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+          );
+        }
+
+        const data = await response.json();
+        const latencyMs = Date.now() - startTime;
+
+        const responseText = data.choices?.[0]?.message?.content || '';
+        const tokensInput = data.usage?.prompt_tokens || 0;
+        const tokensOutput = data.usage?.completion_tokens || 0;
+
+        const costUsd =
+          tokensInput * KimiClient.COST_PER_INPUT_TOKEN +
+          tokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+
+        this.logger.log(
+          `LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`,
         );
+
+        return {
+          response: responseText,
+          tokensInput,
+          tokensOutput,
+          costUsd,
+          latencyMs,
+        };
+      } catch (e) {
+        if (attempt === maxRetries || !(e instanceof KimiApiError)) {
+          const error = ensureError(e);
+          const latencyMs = Date.now() - startTime;
+          this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause} | type=${error.constructor?.name}`);
+          throw e;
+        }
       }
-
-      const data = await response.json();
-      const latencyMs = Date.now() - startTime;
-
-      const responseText = data.choices?.[0]?.message?.content || '';
-      const tokensInput = data.usage?.prompt_tokens || 0;
-      const tokensOutput = data.usage?.completion_tokens || 0;
-
-      const costUsd =
-        tokensInput * KimiClient.COST_PER_INPUT_TOKEN +
-        tokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
-
-      this.logger.log(
-        `LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`,
-      );
-
-      return {
-        response: responseText,
-        tokensInput,
-        tokensOutput,
-        costUsd,
-        latencyMs,
-      };
-    } catch (error) {
-      const latencyMs = Date.now() - startTime;
-      this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause?.message ?? error.cause} | type=${error.constructor?.name}`);
-      throw error;
     }
+
+    throw new KimiApiError('LLM failed: max retries exhausted');
   }
 
   async chatWithTools(params: {
@@ -239,13 +269,30 @@ export class KimiClient {
           },
           body,
         });
-      } catch (error) {
+      } catch (e) {
+        const error = ensureError(e);
         this.logger.error(`chatWithTools fetch failed at iter=${i}:`, error);
         throw new KimiApiError(error.message, error.cause);
       }
 
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('retry-after') ?? '', 10);
+        const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(3000 * Math.pow(2, i), 30000);
+        this.logger.warn(`chatWithTools 429 at iter=${i}, retrying in ${delayMs}ms`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        i--; // retry same iteration
+        continue;
+      }
+
       if (!response.ok) {
         const errorBody = await response.text();
+        const prevTools = conversationMessages
+          .filter((m) => m.role === 'tool')
+          .map((m) => m.tool_call_id)
+          .length;
+        this.logger.error(
+          `chatWithTools failed at iter=${i}, status=${response.status}, payload=${(body.length / 1024).toFixed(1)}KB, msgs=${conversationMessages.length}, toolCallsSoFar=${prevTools}, body=${errorBody}`,
+        );
         throw new KimiApiError(`Kimi API error ${response.status}: ${errorBody}`);
       }
 
@@ -289,6 +336,7 @@ export class KimiClient {
       for (const toolCall of toolCalls) {
         const fnName = toolCall.function?.name;
         const fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
+        this.logger.log(`chatWithTools iter=${i} tool=${fnName} args=${JSON.stringify(fnArgs).slice(0, 200)}`);
 
         try {
           const toolResult = await onToolCall(fnName, fnArgs);

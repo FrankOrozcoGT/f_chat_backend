@@ -281,10 +281,10 @@ export class InternalCatalogController {
           productName,
           { basePrice: 0 },
         );
-        productIds.push(product.id);
+        if (!productIds.includes(product.id)) productIds.push(product.id);
       }
 
-      const createdPromo = await this.promotionRepository.create({
+      const createdPromo = await this.promotionRepository.upsertByName({
         tenantId,
         name: promo.name,
         description: promo.description,

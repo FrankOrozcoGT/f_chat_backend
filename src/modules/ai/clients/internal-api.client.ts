@@ -173,6 +173,7 @@ export class InternalApiClient {
       direction: string;
       senderType: string;
       transcription: string | null;
+      metadata: Record<string, any> | null;
       createdAt: string;
     }>
   > {

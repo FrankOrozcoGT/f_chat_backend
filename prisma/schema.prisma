@@ -39,8 +39,9 @@ model Tenant {
   products          Product[]
   promotions        Promotion[]
   shippingLocations ShippingLocation[]
-  contactLabels     ContactLabel[]
-  templates         Template[]
+  contactLabels          ContactLabel[]
+  internalChannelReviews InternalChannelReview[]
+  templates              Template[]
   settings          TenantSettings?
   memory            TenantMemory?
 }
@@ -137,7 +138,8 @@ model Client {
   participations     ConversationParticipant[]
   discounts          Discount[]
   promotionDiscounts PromotionDiscount[]
-  contactLabels      ContactLabel[]
+  contactLabels          ContactLabel[]
+  internalChannelReviews InternalChannelReview[]
 
   @@index([phoneNumber])
 }
@@ -184,8 +186,9 @@ model Conversation {
 model ConversationAnalysis {
   id              String                    @id @default(uuid())
   conversationId  String                    @unique
-  intent          String?
-  flowDiagram     String?
+  intent             String?
+  intentDescription  String?
+  flowDiagram        String?
   flowSummary     String?
   isInternal      Boolean                   @default(false)
   internalPurpose String?
@@ -260,20 +263,43 @@ model Message {
 model Flow {
   id           String           @id @default(uuid())
   name         String
-  routerNodeId String
+  routerNodeId String?
   tenantId     String
   status       FlowStatus       @default(active)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
-  routerNode   Node             @relation("FlowRouter", fields: [routerNodeId], references: [id])
+  routerNode   Node?            @relation("FlowRouter", fields: [routerNodeId], references: [id])
   nodes        FlowNode[]
   nodeSessions NodeSession[]
   intents      Intent[]
   transitions  FlowTransition[]
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   analysisFlows ConversationAnalysisFlow[]
+  versions      FlowVersion[]
 
   @@index([tenantId])
+}
+
+model FlowVersion {
+  id               String   @id @default(uuid())
+  flowId           String
+  version          Int
+  nodesSnapshot    Json
+  contentHash      String
+  proposedTools    Json?
+  isPromoted       Boolean  @default(false)
+  consolidatedDiagram   String?
+  nodeMapping      Json?
+  nodeCategories   Json?
+  internalQueues   Json?
+  representativeCases Json?
+  diagramApproved  Boolean  @default(false)
+  diagramModified  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  flow             Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, version])
+  @@index([flowId])
 }
 
 model Node {
@@ -565,11 +591,18 @@ enum AnalysisMode {
 enum FlowStatus {
   active
   draft
+  archived
 }
 
 enum LabelStatus {
   active
   draft
+}
+
+enum InternalReviewStatus {
+  pending
+  approved
+  rejected
 }
 
 
@@ -675,6 +708,25 @@ model ContactLabel {
   client    Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, label])
+  @@index([tenantId])
+}
+
+model InternalChannelReview {
+  id               String               @id @default(uuid())
+  tenantId         String
+  clientId         String?
+  groupJid         String?
+  internalPurpose  String?
+  channelName      String?
+  status           InternalReviewStatus @default(pending)
+  modifiedPurpose  String?
+  reviewedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client           Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, clientId, groupJid])
   @@index([tenantId])
 }
 

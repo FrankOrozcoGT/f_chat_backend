@@ -8,6 +8,7 @@ export class ConversationAnalysisRepository {
   async upsert(data: {
     conversationId: string;
     intent: string | null;
+    intentDescription: string | null;
     flowDiagram: string | null;
     flowSummary: string | null;
     isInternal?: boolean;
@@ -18,6 +19,7 @@ export class ConversationAnalysisRepository {
       create: {
         conversationId: data.conversationId,
         intent: data.intent,
+        intentDescription: data.intentDescription,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
         isInternal: data.isInternal ?? false,
@@ -25,6 +27,7 @@ export class ConversationAnalysisRepository {
       },
       update: {
         intent: data.intent,
+        intentDescription: data.intentDescription,
         flowDiagram: data.flowDiagram,
         flowSummary: data.flowSummary,
         isInternal: data.isInternal ?? false,
@@ -57,9 +60,72 @@ export class ConversationAnalysisRepository {
     });
   }
 
+  async markAllAsInternalByClient(clientId: string, internalPurpose: string) {
+    await this.prisma.conversationAnalysis.updateMany({
+      where: { conversation: { participants: { some: { clientId } } } },
+      data: { isInternal: true, internalPurpose },
+    });
+  }
+
+  async markAllAsInternalByGroup(groupJid: string, internalPurpose: string) {
+    await this.prisma.conversationAnalysis.updateMany({
+      where: { conversation: { groupJid } },
+      data: { isInternal: true, internalPurpose },
+    });
+  }
+
   async findByConversationId(conversationId: string) {
     return this.prisma.conversationAnalysis.findUnique({
       where: { conversationId },
+    });
+  }
+
+  async renameIntent(fromIntent: string, toIntent: string, tenantId: string) {
+    return this.prisma.conversationAnalysis.updateMany({
+      where: {
+        intent: fromIntent,
+        conversation: { phone: { tenantId } },
+      },
+      data: { intent: toIntent },
+    });
+  }
+
+  async findAllByTenantId(tenantId: string, excludeInternalReviews = true) {
+    let excludedClientIds: string[] = [];
+
+    if (excludeInternalReviews) {
+      const reviews = await this.prisma.internalChannelReview.findMany({
+        where: { tenantId, status: { not: 'rejected' } },
+        select: { clientId: true },
+      });
+      excludedClientIds = reviews.map((r) => r.clientId).filter((id): id is string => !!id);
+    }
+
+    return this.prisma.conversationAnalysis.findMany({
+      where: {
+        conversation: {
+          phone: { tenantId },
+          ...(excludedClientIds.length > 0
+            ? { participants: { none: { clientId: { in: excludedClientIds } } } }
+            : {}),
+        },
+        isInternal: false,
+        intent: { not: null },
+        OR: [
+          { flowSummary: { not: null } },
+          { flowDiagram: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+        conversationId: true,
+        intent: true,
+        intentDescription: true,
+        flowDiagram: true,
+        flowSummary: true,
+        isInternal: true,
+        internalPurpose: true,
+      },
     });
   }
 }
