@@ -40,6 +40,7 @@ export interface RepresentativeCase {
 
 export interface DiagramConsolidatorInput {
   intentName: string;
+  intentDescription?: string | null;
   conversationFlows: ConversationFlow[];
   internals: InternalChannel[];
   currentDiagram?: string | null;
@@ -174,7 +175,11 @@ export class DiagramConsolidatorNode {
         validInternals.map((i) => `- **${i.channelName}**: ${i.internalPurpose}`).join('\n');
     }
 
-    const userPrompt = `Intención: **${input.intentName}**${currentSection}${internalsSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
+    const intentHeader = input.intentDescription
+      ? `Intención: **${input.intentName}** — ${input.intentDescription}`
+      : `Intención: **${input.intentName}**`;
+
+    const userPrompt = `${intentHeader}${currentSection}${internalsSection}\n\n## Flujos individuales a consolidar:\n\n${flowsText}`;
 
     // Build internals lookup for tool calls
     const internalsMap = new Map<string, InternalChannel>();
@@ -220,34 +225,33 @@ export class DiagramConsolidatorNode {
       if (!args.nodeMapping || typeof args.nodeMapping !== 'object') {
         throw new Error('DiagramConsolidator: submit_diagram missing nodeMapping field');
       }
+      if (!args.nodeCategories || typeof args.nodeCategories !== 'object') {
+        throw new Error('DiagramConsolidator: submit_diagram missing nodeCategories field');
+      }
+      if (!Array.isArray(args.internalQueues)) {
+        throw new Error('DiagramConsolidator: submit_diagram missing internalQueues field');
+      }
 
       this.logger.log(
         `DiagramConsolidator [${input.intentName}]: ${input.conversationFlows.length} flows consolidated, ` +
-        `${(args.internalQueues ?? []).length} internal queues, ` +
+        `${args.internalQueues.length} internal queues, ` +
         `${result.iterations} iterations, cost=$${result.costUsd.toFixed(6)}`,
       );
+      this.logger.log(`DiagramConsolidator [${input.intentName}] FULL DIAGRAM:\n${args.diagram}`);
+      this.logger.log(`DiagramConsolidator [${input.intentName}] nodeCategories: ${JSON.stringify(args.nodeCategories)}`);
 
       return {
         diagram: args.diagram,
-        nodeCategories: args.nodeCategories ?? {},
+        nodeCategories: args.nodeCategories,
         nodeMapping: args.nodeMapping,
-        representativeCases: args.representativeCases ?? [],
-        internalQueues: args.internalQueues ?? [],
+        representativeCases: args.representativeCases,
+        internalQueues: args.internalQueues,
         costUsd: result.costUsd,
       };
     }
 
-    // If we got a text response instead of submit_diagram, try to parse it as JSON fallback
-    if (result.textResponse) {
-      const parsed = this.parseResponseFallback(result.textResponse);
-      this.logger.warn(
-        `DiagramConsolidator [${input.intentName}]: fell back to text parsing (no submit_diagram tool call)`,
-      );
-      return { ...parsed, costUsd: result.costUsd };
-    }
-
     throw new Error(
-      `DiagramConsolidator [${input.intentName}]: no submit_diagram call and no text response after ${result.iterations} iterations`,
+      `DiagramConsolidator [${input.intentName}]: IA no llamó submit_diagram en ${result.iterations} iteraciones`,
     );
   }
 
@@ -332,32 +336,4 @@ export class DiagramConsolidatorNode {
     return `Últimos ${messages.length} mensajes de "${channelName}" (${type}):\n\n${formatted}`;
   }
 
-  private parseResponseFallback(response: string): {
-    diagram: string;
-    nodeCategories: Record<string, string>;
-    nodeMapping: Record<string, NodeMappingEntry[]>;
-    representativeCases: RepresentativeCase[];
-    internalQueues: InternalQueueEntry[];
-  } {
-    let cleaned = response.trim();
-    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
-    else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
-    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-    cleaned = cleaned.trim();
-
-    const parsed = JSON.parse(cleaned);
-    if (!parsed.diagram || typeof parsed.diagram !== 'string') {
-      throw new Error('DiagramConsolidator: LLM response missing diagram field');
-    }
-    if (!parsed.nodeMapping || typeof parsed.nodeMapping !== 'object') {
-      throw new Error('DiagramConsolidator: LLM response missing nodeMapping field');
-    }
-    return {
-      diagram: parsed.diagram,
-      nodeCategories: parsed.nodeCategories ?? {},
-      nodeMapping: parsed.nodeMapping,
-      representativeCases: parsed.representativeCases ?? [],
-      internalQueues: parsed.internalQueues ?? [],
-    };
-  }
 }
