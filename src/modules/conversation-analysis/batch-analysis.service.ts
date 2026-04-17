@@ -10,7 +10,7 @@ import { FlowGeneratorNode } from './langgraph/nodes/flow-generator.node';
 import { DiagramConsolidatorNode } from './langgraph/nodes/diagram-consolidator.node';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { FlowVersionRepository } from '@modules/nodes/repositories/flow-version.repository';
+import { FlowVersionRepository, DraftFlowSnapshot } from '@modules/nodes/repositories/flow-version.repository';
 import { createHash } from 'crypto';
 import { ensureError } from '@common/utils/ensure-error';
 
@@ -145,7 +145,11 @@ export class BatchAnalysisService {
 
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);
     const grouped = this.groupByIntent(analyses);
-    const intents = Array.from(grouped.entries()).map(([intent, items]) => ({ intent, count: items.length }));
+    const intents = Array.from(grouped.entries()).map(([intent, items]) => ({
+      intent,
+      description: items.find((a) => a.intentDescription)?.intentDescription ?? null,
+      count: items.length,
+    }));
 
     return { analyzed, internalsDetected, totalCostUsd, intents, internals };
   }
@@ -166,6 +170,7 @@ export class BatchAnalysisService {
 
     for (const [intentName, intentAnalyses] of grouped.entries()) {
       try {
+        const intentDescription = intentAnalyses.find((a) => a.intentDescription)?.intentDescription ?? null;
         let existingIntent = await this.intentRepo.findByTenantIdAndName(tenantId, intentName);
         let flowId: string;
 
@@ -211,6 +216,7 @@ export class BatchAnalysisService {
           if (firstBatch.length > 0) {
             const result = await this.diagramConsolidatorNode.consolidate({
               intentName,
+              intentDescription,
               conversationFlows: firstBatch,
               internals,
               currentDiagram: null,
@@ -231,6 +237,7 @@ export class BatchAnalysisService {
             const batch = remaining.slice(i, i + BATCH_SIZE);
             const result = await this.diagramConsolidatorNode.consolidate({
               intentName,
+              intentDescription,
               conversationFlows: batch,
               internals,
               currentDiagram,
@@ -253,8 +260,9 @@ export class BatchAnalysisService {
         }
 
         if (!currentDiagram) throw new Error(`no conversation flows to consolidate`);
+        if (!currentNodeMapping) throw new Error(`no nodeMapping generated for intent "${intentName}"`);
 
-        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
+        await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
         totalCostUsd += costUsd;
         diagramsGenerated++;
         flows.push({ flowId, intentName });
@@ -291,6 +299,7 @@ export class BatchAnalysisService {
     }
 
     const records = await this.flowIntentRepo.findByFlowId(flowId);
+    const intentDescription = records.find((r) => r.analysis.intentDescription)?.analysis.intentDescription ?? null;
     const conversationFlows = records
       .filter((r) => r.analysis.flowSummary || r.analysis.flowDiagram)
       .map((r) => ({
@@ -316,6 +325,7 @@ export class BatchAnalysisService {
     if (firstBatch.length > 0) {
       const result = await this.diagramConsolidatorNode.consolidate({
         intentName,
+        intentDescription,
         conversationFlows: firstBatch,
         internals,
         currentDiagram: null,
@@ -336,6 +346,7 @@ export class BatchAnalysisService {
         const batch = remaining.slice(i, i + BATCH_SIZE);
         const result = await this.diagramConsolidatorNode.consolidate({
           intentName,
+          intentDescription,
           conversationFlows: batch,
           internals,
           currentDiagram,
@@ -357,8 +368,9 @@ export class BatchAnalysisService {
     }
 
     if (!currentDiagram) throw new Error(`regenerateDiagram [${intentName}]: no diagram generated`);
+    if (!currentNodeMapping) throw new Error(`regenerateDiagram [${intentName}]: no nodeMapping generated`);
 
-    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping ?? {}, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
+    await this.flowVersionRepo.saveConsolidatedDiagram(flowId, currentDiagram, currentNodeMapping, currentNodeCategories, currentInternalQueues, currentRepresentativeCases);
     this.logger.log(`regenerateDiagram [${intentName}]: diagram saved for flowId=${flowId}`);
 
     return { flowId, intentName, costUsd, removedInternals };
@@ -457,6 +469,7 @@ export class BatchAnalysisService {
         const batch = newConversationFlows.slice(i, i + BATCH_SIZE);
         const result = await this.diagramConsolidatorNode.consolidate({
           intentName: target.name,
+          intentDescription: null,
           conversationFlows: batch,
           internals,
           currentDiagram: diagram,
@@ -482,11 +495,17 @@ export class BatchAnalysisService {
   }
 
   async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
-    const activeFlows = await this.nodeRepo.findAllFlowsByTenantId(tenantId).then((flows) =>
-      flows.filter((f) => f.status === 'active'),
-    );
+    const allIntents = await this.intentRepo.findActiveByTenantId(tenantId);
 
-    const intents = await this.intentRepo.findActiveByTenantId(tenantId);
+    // Filtrar solo intents con diagrama aprobado — los demás se ignoran silenciosamente
+    const intents: typeof allIntents = [];
+    for (const intent of allIntents) {
+      if (!intent.flowId) continue;
+      const version = await this.flowVersionRepo.findLatestWithDiagram(intent.flowId);
+      if (version?.diagramApproved && version.consolidatedDiagram) {
+        intents.push(intent);
+      }
+    }
 
     let flowsGenerated = 0;
     const flows: any[] = [];
@@ -494,34 +513,82 @@ export class BatchAnalysisService {
 
     for (const intent of intents) {
       try {
-        if (!intent.flowId) {
-          throw new ConflictException(`Intent "${intent.name}" has no flow — run generate-diagrams first`);
-        }
+        const flowId = intent.flowId!;
+        const latestVersion = (await this.flowVersionRepo.findLatestWithDiagram(flowId))!;
 
-        const flowId = intent.flowId;
-        const latestVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
-        if (!latestVersion?.diagramApproved) {
-          throw new ForbiddenException(`Intent "${intent.name}" diagram not approved — approve it before generating flows`);
-        }
+        const analyses = await this.flowIntentRepo.findByFlowId(flowId);
+        const analysesInput = analyses.map((link) => ({
+          id: link.analysis.id,
+          flowSummary: link.analysis.flowSummary,
+          flowDiagram: link.analysis.flowDiagram,
+        }));
 
         const generated = await this.flowGeneratorNode.generate({
           intentName: intent.name,
-          consolidatedDiagram: latestVersion.consolidatedDiagram,
-          nodeCategories: latestVersion.nodeCategories as Record<string, string> | null,
-          internalQueues: latestVersion.internalQueues as { channelName: string; nodeId: string; queueType: string; usage: string }[] | null,
-          existingFlows: activeFlows.map((f) => ({ name: f.name, nodes: f.nodes })),
+          consolidatedDiagram: latestVersion.consolidatedDiagram!,
+          internalQueues: (latestVersion.internalQueues as { channelName: string; nodeId: string; queueType: string; usage: string }[] | null) ?? [],
+          analyses: analysesInput,
         });
 
-        const snapshot: import('@modules/nodes/repositories/flow-version.repository').DraftFlowSnapshot = {
-          nodes: generated.nodes.map((n) => ({ name: n.name, systemPrompt: n.systemPrompt, todos: n.todos, tools: n.tools })),
-          transitions: generated.transitions,
-        };
-        const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
-        await this.flowVersionRepo.updateVersionNodes(latestVersion.id, snapshot as unknown as Prisma.InputJsonValue, hash, generated.proposedTools as unknown as Prisma.InputJsonValue);
+        if (generated.flows.length === 1) {
+          // No split — guardar en el flow existente
+          const gen = generated.flows[0];
+          const snapshot: DraftFlowSnapshot = {
+            nodes: gen.nodes.map((n) => ({ name: n.name, systemPrompt: n.systemPrompt, todos: n.todos, tools: n.tools })),
+            transitions: gen.transitions,
+          };
+          const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+          await this.flowVersionRepo.updateVersionNodes(
+            latestVersion.id,
+            snapshot,
+            hash,
+            gen.proposedTools,
+          );
 
-        flowsGenerated++;
-        flows.push({ id: flowId, name: intent.name });
-        this.logger.log(`Generated nodes for intent "${intent.name}": flowId=${flowId}`);
+          flowsGenerated++;
+          flows.push({ id: flowId, name: intent.name });
+          this.logger.log(`Generated nodes for intent "${intent.name}" (no split): flowId=${flowId}`);
+        } else {
+          // Split — crear N nuevos intents+flows, reasignar analyses, borrar intent+flow originales
+          this.logger.log(`Intent "${intent.name}" split into ${generated.flows.length} sub-intents`);
+          const createdFlowIds: { intentName: string; flowId: string }[] = [];
+
+          for (const gen of generated.flows) {
+            const newFlow = await this.nodeRepo.createDraftFlow({
+              name: `[Borrador] ${gen.intentName}`,
+              tenantId,
+            });
+            await this.intentRepo.create(tenantId, { name: gen.intentName, flowId: newFlow.id });
+
+            const snapshot: DraftFlowSnapshot = {
+              nodes: gen.nodes.map((n) => ({ name: n.name, systemPrompt: n.systemPrompt, todos: n.todos, tools: n.tools })),
+              transitions: gen.transitions,
+            };
+            const hash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+            await this.flowVersionRepo.saveVersion(
+              newFlow.id,
+              snapshot,
+              hash,
+              gen.proposedTools,
+            );
+
+            if (gen.assignedAnalysisIds.length > 0) {
+              await this.flowIntentRepo.linkAnalysesToFlow(gen.assignedAnalysisIds, newFlow.id);
+            }
+
+            createdFlowIds.push({ intentName: gen.intentName, flowId: newFlow.id });
+            flowsGenerated++;
+            flows.push({ id: newFlow.id, name: gen.intentName });
+          }
+
+          // Borrar intent+flow originales (cascade limpia flowIntent y flowVersions)
+          await this.intentRepo.deleteById(intent.id);
+          await this.nodeRepo.deleteFlow(flowId);
+
+          this.logger.log(
+            `Split completed: original intent "${intent.name}" deleted, new flows: ${createdFlowIds.map((c) => `${c.intentName}=${c.flowId}`).join(', ')}`,
+          );
+        }
       } catch (e) {
         const error = ensureError(e);
         this.logger.error(`generateDraftFlows failed for intent "${intent.name}": ${error.message}`);
@@ -533,7 +600,7 @@ export class BatchAnalysisService {
   }
 
   private groupByIntent(
-    analyses: { id: string; conversationId: string; intent: string | null; flowSummary: string | null; flowDiagram: string | null }[],
+    analyses: { id: string; conversationId: string; intent: string | null; intentDescription?: string | null; flowSummary: string | null; flowDiagram: string | null }[],
     normalizationMap?: Map<string, string>,
   ): Map<string, typeof analyses> {
     const map = new Map<string, typeof analyses>();
