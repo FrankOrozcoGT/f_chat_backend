@@ -33,6 +33,16 @@ export class NodeRepository {
     });
   }
 
+  async findFlowById(flowId: string) {
+    return this.prisma.flow.findUnique({
+      where: { id: flowId },
+      include: {
+        intents: { select: { id: true, name: true } },
+        _count: { select: { analysisFlows: true } },
+      },
+    });
+  }
+
   async findAllFlowsByTenantId(tenantId: string) {
     const flows = await this.prisma.flow.findMany({
       where: { tenantId },
