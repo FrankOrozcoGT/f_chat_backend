@@ -59,9 +59,9 @@ export class KimiClient {
   private readonly apiKey: string;
   private readonly apiUrl: string;
 
-  // Pricing per 1M tokens: $0.60 input, $2.50 output
-  private static readonly COST_PER_INPUT_TOKEN = 0.6 / 1_000_000;
-  private static readonly COST_PER_OUTPUT_TOKEN = 2.5 / 1_000_000;
+  // Pricing per 1M tokens: $0.95 input, $4.00 output
+  private static readonly COST_PER_INPUT_TOKEN = 0.95 / 1_000_000;
+  private static readonly COST_PER_OUTPUT_TOKEN = 4.0 / 1_000_000;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('KIMI_API_KEY', '');
@@ -157,7 +157,7 @@ export class KimiClient {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'kimi-k2.5',
+            model: 'kimi-k2.6',
             messages,
             max_tokens: maxTokens,
             thinking: { type: 'disabled' },
@@ -250,7 +250,7 @@ export class KimiClient {
 
     for (let i = 0; i < maxIterations; i++) {
       const body = JSON.stringify({
-        model: 'kimi-k2.5',
+        model: 'kimi-k2.6',
         messages: conversationMessages,
         tools,
         tool_choice: 'required',
