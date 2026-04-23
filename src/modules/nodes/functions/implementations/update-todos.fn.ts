@@ -17,13 +17,13 @@ export class UpdateTodosFn {
   @NodeFunction({
     code: 'updateTodos',
     name: 'Actualizar todos',
-    description: 'Marca o desmarca todos del nodo actual. Retorna los pendientes para el happy path y los alternos disponibles.',
+    description: 'Marca o desmarca requisitos del nodo actual. Retorna los requisitos pendientes y las transiciones disponibles.',
     toolDefinition: {
       type: 'function',
       function: {
         name: 'updateTodos',
         description:
-          'Actualiza el estado de los todos del nodo. Puedes marcar varios a la vez (true=completado, false=pendiente). Retorna qué todos faltan para el happy path y qué transiciones alternas ya están disponibles.',
+          'Actualiza el estado de los requisitos del nodo. Puedes marcar varios a la vez (true=completado, false=pendiente). Retorna qué requisitos faltan para continuar y qué transiciones alternas ya están disponibles.',
         parameters: {
           type: 'object',
           properties: {
@@ -98,9 +98,9 @@ export class UpdateTodosFn {
     const lines: string[] = ['Todos actualizados.'];
 
     if (pendingForHappyPath.length === 0) {
-      lines.push('Happy path COMPLETO — todas las tareas del nodo están listas.');
+      lines.push('Todos los requisitos completados — el nodo puede continuar.');
     } else {
-      lines.push(`Pendientes para el happy path:\n${pendingForHappyPath.join('\n')}`);
+      lines.push(`Requisitos pendientes:\n${pendingForHappyPath.join('\n')}`);
     }
 
     if (availableAlternates.length > 0) {

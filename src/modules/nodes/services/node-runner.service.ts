@@ -249,11 +249,11 @@ export class NodeRunnerService {
     });
 
     return (
-      '\n\n--- TAREAS DE ESTE NODO ---\n' +
+      '\n\n--- REQUISITOS DE ESTE NODO ---\n' +
       lines.join('\n') +
-      '\n\nUsa updateTodos({"id": true/false}) para marcar o corregir tareas. ' +
-      'Puedes actualizar varias a la vez. El sistema te dirá cuáles faltan para el happy path.\n' +
-      '--- FIN TAREAS ---'
+      '\n\nUsa updateTodos({"id": true/false}) para marcar o corregir requisitos. ' +
+      'Puedes actualizar varias a la vez. El sistema te dirá cuáles requisitos faltan para poder continuar.\n' +
+      '--- FIN REQUISITOS ---'
     );
   }
 
