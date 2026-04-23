@@ -31,10 +31,6 @@ export const WorkflowState = Annotation.Root({
   nodeSessionId: Annotation<string | null>,
   routerAction: Annotation<'responder' | 'closeSession' | 'findFlowForIntent' | 'exitFlow' | 'flowRouted' | 'outOfPath' | null>,
 
-  // Set by custom_node when outOfPath is called — consumed by flow_router
-  outOfPathReason: Annotation<string | null>,
-  outOfPathSummary: Annotation<string | null>,
-
   // After LLM / custom_node
   responseText: Annotation<string>,
   intent: Annotation<string>,

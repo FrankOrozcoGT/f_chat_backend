@@ -57,13 +57,12 @@ export class FlowRouterNode {
       .map((n) => `- ${n.id}: "${n.name}" — ${n.systemPrompt}`)
       .join('\n');
 
-    const outOfPathReason = state.outOfPathReason ?? '';
-    const outOfPathSummary = state.outOfPathSummary ?? '';
+    const session = nodeSessionId ? await sessionStore.findById(nodeSessionId) : null;
+    const outOfPathContext = session?.flowSummary ?? '';
 
     const systemPrompt =
       `Eres un router interno de flujo. El cliente está en el flujo "${flow.name}" y el nodo actual no puede manejar su solicitud.\n\n` +
-      `MOTIVO: ${outOfPathReason}\n` +
-      `PROGRESO ACTUAL: ${outOfPathSummary}\n\n` +
+      `CONTEXTO: ${outOfPathContext}\n\n` +
       `NODOS DISPONIBLES EN ESTE FLUJO:\n${flowNodesDescription}\n\n` +
       `DECIDE UNA ACCIÓN:\n` +
       `1. Si la solicitud del cliente es parte del intent de este flujo y hay un nodo que puede manejarlo → usa transitionToNode con el nodeId correcto.\n` +
@@ -83,12 +82,9 @@ export class FlowRouterNode {
     ctx.isTest = state.isTest ?? false;
     ctx.sessionStore = sessionStore;
 
-    if (nodeSessionId) {
-      const session = await sessionStore.findById(nodeSessionId);
-      if (session) {
-        ctx.nodeSession = session;
-        ctx.flow = flow;
-      }
+    if (session) {
+      ctx.nodeSession = session;
+      ctx.flow = flow;
     }
 
     try {
@@ -124,7 +120,7 @@ export class FlowRouterNode {
 
       const terminationTool = result.toolResult?.terminationTool ?? null;
 
-      this.logger.log(`FlowRouter: action=${terminationTool}, reason="${outOfPathReason?.substring(0, 60)}"`);
+      this.logger.log(`FlowRouter: action=${terminationTool}, context="${outOfPathContext?.substring(0, 60)}"`);
 
       if (terminationTool === 'exitFlow') {
         return {

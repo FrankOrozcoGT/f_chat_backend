@@ -14,7 +14,7 @@ export class OutOfPathFn {
       type: 'function',
       function: {
         name: 'outOfPath',
-        description: 'Llama esto cuando el cliente quiere algo fuera del happy path o transiciones de este nodo. El sistema decidirá si redirigir a otro nodo del flujo, transferir a un humano, o salir del flujo.',
+        description: 'Llama esto cuando el cliente pide algo fuera del objetivo de este nodo. El sistema decidirá si redirigir a otro nodo del flujo, transferir a un humano, o salir del flujo.',
         parameters: {
           type: 'object',
           properties: {
@@ -35,6 +35,12 @@ export class OutOfPathFn {
   async execute(ctx: NodeContext): Promise<string> {
     const reason = ctx.args?.reason as string;
     const summary = ctx.args?.summary as string;
+
+    // Guardar contexto en flowSummary para que el flow router lo use
+    if (ctx.nodeSession) {
+      const flowSummary = `${reason}${summary ? `\n${summary}` : ''}`;
+      await ctx.sessionStore.updateCurrentNode(ctx.nodeSession.id, ctx.nodeSession.currentNodeId ?? null, undefined, undefined, flowSummary);
+    }
 
     if (ctx.isTest) {
       ctx.sideEffects.push({

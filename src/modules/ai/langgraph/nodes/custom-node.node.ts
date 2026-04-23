@@ -224,8 +224,6 @@ export class CustomNode {
             responseText: lastResponse, intent: lastIntent, preferredFormat: lastPreferredFormat,
             sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
             nodeTransitions, routerAction: 'outOfPath',
-            outOfPathReason: result.toolResult?.terminationArgs?.reason as string ?? '',
-            outOfPathSummary: result.toolResult?.terminationArgs?.summary as string ?? '',
           };
         }
 

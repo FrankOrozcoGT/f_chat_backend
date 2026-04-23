@@ -129,8 +129,7 @@ export class AiWorkflow {
       isTest,
       fromHitl: payload.fromHitl ?? false,
       conversationSummary: payload.conversationSummary ?? null,
-      outOfPathReason: null,
-      outOfPathSummary: null,
+
       queueContext: payload.queueContext ?? null,
       error: undefined,
       currentNodeId: null,
