@@ -7,7 +7,10 @@ export class IntentRepository {
 
   async findByTenantId(tenantId: string) {
     return this.prisma.intent.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        OR: [{ flowId: null }, { flow: { status: 'active' } }],
+      },
       include: { flow: true },
     });
   }
