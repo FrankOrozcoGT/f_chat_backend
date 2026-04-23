@@ -39,6 +39,7 @@ export class ExitFlowFn {
 
     if (ctx.nodeSession) {
       await ctx.sessionStore.pauseFlow(ctx.nodeSession.id, summary);
+      await ctx.sessionStore.updateCompletedTodos(ctx.nodeSession.id, {});
     }
 
     if (ctx.isTest) {

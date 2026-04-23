@@ -110,7 +110,7 @@ export class TransitionToNodeFn {
       return 'hitl_wrong_transition_origin';
     }
 
-    // Actualizar currentNodeId en la sesión al nodo destino + guardar resumen (test y prod)
+    // Actualizar currentNodeId en la sesión al nodo destino + guardar resumen
     await ctx.sessionStore.updateCurrentNode(
       ctx.nodeSession.id,
       transition.toNodeId,
@@ -118,6 +118,9 @@ export class TransitionToNodeFn {
       undefined,
       summary ?? undefined,
     );
+
+    // Limpiar requisitos del nodo anterior — el nodo destino arranca sin estado previo
+    await ctx.sessionStore.updateCompletedTodos(ctx.nodeSession.id, {});
 
     if (ctx.isTest) {
       ctx.sideEffects.push({
