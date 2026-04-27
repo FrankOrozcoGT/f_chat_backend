@@ -37,16 +37,15 @@ export class IntentRepository {
     });
   }
 
-  async updateById(id: string, data: { name?: string; flowId?: string }) {
-    return this.prisma.intent.update({
-      where: { id },
-      data,
-      include: { flow: true },
-    });
+  async updateById(id: string, tenantId: string, data: { name?: string; flowId?: string }) {
+    const intent = await this.prisma.intent.findFirst({ where: { id, tenantId } });
+    if (!intent) return null;
+    return this.prisma.intent.update({ where: { id }, data, include: { flow: true } });
   }
 
-  async deleteById(id: string) {
-    return this.prisma.intent.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const result = await this.prisma.intent.deleteMany({ where: { id, tenantId } });
+    return result;
   }
 
   async delete(tenantId: string, name: string) {

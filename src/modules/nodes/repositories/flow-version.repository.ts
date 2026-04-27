@@ -65,9 +65,9 @@ export class FlowVersionRepository {
     });
   }
 
-  async findByFlowId(flowId: string) {
+  async findByFlowId(flowId: string, tenantId: string) {
     return this.prisma.flowVersion.findMany({
-      where: { flowId },
+      where: { flowId, flow: { tenantId } },
       orderBy: { version: 'desc' },
     });
   }
@@ -79,7 +79,10 @@ export class FlowVersionRepository {
     });
   }
 
-  async findById(id: string) {
+  async findById(id: string, tenantId?: string) {
+    if (tenantId) {
+      return this.prisma.flowVersion.findFirst({ where: { id, flow: { tenantId } } });
+    }
     return this.prisma.flowVersion.findUnique({ where: { id } });
   }
 
