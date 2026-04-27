@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Query,
   UseGuards,
@@ -169,6 +170,30 @@ export class ConversationsController {
         createdAt: c.createdAt,
       })),
     };
+  }
+
+  @Post(':id/close')
+  @UseGuards(JwtAuthGuard)
+  async closeConversation(@Param('id') id: string, @Req() req) {
+    const tenantId = req.user.tenantId;
+
+    const conversation = await this.conversationRepository.findWithMessagesById(id);
+    if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
+
+    this.conversationsService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+
+    if (!conversation.client || conversation.messages.length === 0) {
+      return { closed: true, movedMessages: 0 };
+    }
+
+    const messageIds = conversation.messages.map((m) => m.id);
+    const result = await this.conversationRepository.archiveMessages(
+      conversation.phoneId,
+      conversation.client.id,
+      messageIds,
+    );
+
+    return { closed: true, movedMessages: result.messageCount, subConversationId: result.subConversationId };
   }
 
   @Patch(':id/read')
