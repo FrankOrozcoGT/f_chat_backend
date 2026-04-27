@@ -7,8 +7,10 @@ import { TodoDefinition } from '@modules/nodes/functions/implementations/update-
 export class NodeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findById(id: string) {
-    return this.prisma.node.findUnique({ where: { id } });
+  async findById(id: string, tenantId?: string) {
+    return this.prisma.node.findFirst({
+      where: { id, ...(tenantId !== undefined && { tenantId }) },
+    });
   }
 
   async findFlowWithNodes(flowId: string) {
@@ -63,7 +65,9 @@ export class NodeRepository {
     return this.prisma.node.create({ data });
   }
 
-  async updateNode(id: string, data: Prisma.NodeUpdateInput) {
+  async updateNode(id: string, tenantId: string, data: Prisma.NodeUpdateInput) {
+    const node = await this.prisma.node.findFirst({ where: { id, tenantId } });
+    if (!node) return null;
     return this.prisma.node.update({ where: { id }, data });
   }
 
@@ -94,17 +98,21 @@ export class NodeRepository {
     });
   }
 
-  async updateFlow(id: string, data: { name?: string; routerNodeId?: string }) {
+  async updateFlow(id: string, tenantId: string, data: { name?: string; routerNodeId?: string }) {
+    const flow = await this.prisma.flow.findFirst({ where: { id, tenantId } });
+    if (!flow) return null;
     return this.prisma.flow.update({ where: { id }, data });
   }
 
-  async deleteFlow(id: string) {
+  async deleteFlow(id: string, tenantId: string) {
+    const flow = await this.prisma.flow.findFirst({ where: { id, tenantId } });
+    if (!flow) return null;
     return this.prisma.flow.delete({ where: { id } });
   }
 
-  async findTransitionsByFlowId(flowId: string) {
+  async findTransitionsByFlowId(flowId: string, tenantId: string) {
     return this.prisma.flowTransition.findMany({
-      where: { flowId },
+      where: { flowId, flow: { tenantId } },
       include: { fromNode: true, toNode: true },
     });
   }
@@ -116,8 +124,11 @@ export class NodeRepository {
     });
   }
 
-  async deleteTransition(id: string) {
-    return this.prisma.flowTransition.delete({ where: { id } });
+  async deleteTransition(id: string, tenantId: string) {
+    const result = await this.prisma.flowTransition.deleteMany({
+      where: { id, flow: { tenantId } },
+    });
+    return result;
   }
 
   async setFlowStatus(id: string, status: $Enums.FlowStatus) {
@@ -130,6 +141,8 @@ export class NodeRepository {
     transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[],
   ) {
     return this.prisma.$transaction(async (tx) => {
+      const flow = await tx.flow.findUnique({ where: { id: flowId }, select: { tenantId: true } });
+
       // Eliminar transiciones y FlowNodes actuales (los nodos huérfanos se limpian aparte)
       await tx.flowTransition.deleteMany({ where: { flowId } });
       await tx.flowNode.deleteMany({ where: { flowId } });
@@ -139,6 +152,7 @@ export class NodeRepository {
         nodes.map((n) =>
           tx.node.create({
             data: {
+              tenantId: flow?.tenantId,
               name: n.name,
               systemPrompt: n.systemPrompt,
               todos: (n.todos ?? []) as any,
@@ -191,6 +205,7 @@ export class NodeRepository {
         data.nodes.map((n) =>
           tx.node.create({
             data: {
+              tenantId: data.tenantId,
               name: n.name,
               systemPrompt: n.systemPrompt,
               todos: (n.todos ?? []) as any,

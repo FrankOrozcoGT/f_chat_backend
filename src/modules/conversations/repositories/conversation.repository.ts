@@ -357,6 +357,22 @@ export class ConversationRepository {
     });
   }
 
+  async archiveMessages(
+    phoneId: string,
+    clientId: string,
+    messageIds: string[],
+    summary?: string,
+  ): Promise<{ subConversationId: string; messageCount: number }> {
+    const subConv = await this.createWithParticipant({ phoneId, clientId, summary, isActive: false });
+
+    await this.prisma.message.updateMany({
+      where: { id: { in: messageIds } },
+      data: { conversationId: subConv.id, analyzedAt: new Date() },
+    });
+
+    return { subConversationId: subConv.id, messageCount: messageIds.length };
+  }
+
   async createWithParticipant(data: {
     phoneId: string;
     clientId: string;
@@ -383,4 +399,5 @@ export class ConversationRepository {
       return conversation;
     });
   }
+
 }
