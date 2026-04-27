@@ -98,9 +98,13 @@ export class NodeRunnerService {
             const fnResult = await handler.instance[handler.method](ctx);
             ctx.args = undefined;
             this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
+            if (handler.meta.isOutput) {
+              throw new ToolTermination(name, args);
+            }
             return fnResult;
           } catch (toolError) {
             ctx.args = undefined;
+            if (toolError instanceof ToolTermination) throw toolError;
             const errorMsg = `ERROR: ${toolError.message}`;
             this.logger.warn(`Tool "${name}" error returned to LLM: ${toolError.message}`);
             return errorMsg;
