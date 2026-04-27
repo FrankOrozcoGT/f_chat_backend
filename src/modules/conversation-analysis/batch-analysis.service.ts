@@ -582,8 +582,8 @@ export class BatchAnalysisService {
           }
 
           // Borrar intent+flow originales (cascade limpia flowIntent y flowVersions)
-          await this.intentRepo.deleteById(intent.id);
-          await this.nodeRepo.deleteFlow(flowId);
+          await this.intentRepo.deleteById(intent.id, tenantId);
+          await this.nodeRepo.deleteFlow(flowId, tenantId);
 
           this.logger.log(
             `Split completed: original intent "${intent.name}" deleted, new flows: ${createdFlowIds.map((c) => `${c.intentName}=${c.flowId}`).join(', ')}`,
