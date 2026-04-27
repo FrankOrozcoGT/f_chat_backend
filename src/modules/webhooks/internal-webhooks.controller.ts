@@ -154,7 +154,7 @@ export class InternalWebhooksController {
     const remainingIds = remaining.map((m) => m.id);
 
     if (remainingIds.length > 0) {
-      const result = await this.archiveMessages(
+      const result = await this.conversationRepository.archiveMessages(
         phoneId, clientId, remainingIds,
         'Mensajes históricos anteriores al análisis',
       );
@@ -168,7 +168,7 @@ export class InternalWebhooksController {
 
     // 2. Si hay huérfanos del batch (msgs antes del primer split)
     if (orphanMessageIds.length > 0) {
-      const result = await this.archiveMessages(
+      const result = await this.conversationRepository.archiveMessages(
         phoneId, clientId, orphanMessageIds,
         'Mensajes anteriores sin clasificar',
       );
@@ -186,7 +186,7 @@ export class InternalWebhooksController {
       let messageCount: number;
 
       if (split.messageIds.length > 0) {
-        const result = await this.archiveMessages(
+        const result = await this.conversationRepository.archiveMessages(
           phoneId, clientId, split.messageIds, split.summary,
         );
         subConvId = result.subConversationId;
@@ -238,7 +238,7 @@ export class InternalWebhooksController {
     }
 
     const messageIds = messages.map((m) => m.id);
-    const result = await this.archiveMessages(
+    const result = await this.conversationRepository.archiveMessages(
       conversation.phoneId,
       conversation.client.id,
       messageIds,
@@ -260,25 +260,4 @@ export class InternalWebhooksController {
     return this.clientRepository.updateName(id, name);
   }
 
-  /**
-   * Crea sub-conversación (isActive: false), mueve mensajes ahí, y los marca como analizados.
-   */
-  private async archiveMessages(
-    phoneId: string,
-    clientId: string,
-    messageIds: string[],
-    summary?: string,
-  ): Promise<{ subConversationId: string; messageCount: number }> {
-    const subConv = await this.conversationRepository.createWithParticipant({
-      phoneId,
-      clientId,
-      summary,
-      isActive: false,
-    });
-
-    await this.messageRepository.updateConversationId(messageIds, subConv.id);
-    await this.messageRepository.markAsAnalyzed(messageIds);
-
-    return { subConversationId: subConv.id, messageCount: messageIds.length };
-  }
 }
