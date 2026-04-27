@@ -36,6 +36,7 @@ model Tenant {
   phones            Phone[]
   flows             Flow[]
   intents           Intent[]
+  nodes             Node[]
   products          Product[]
   promotions        Promotion[]
   shippingLocations ShippingLocation[]
@@ -304,6 +305,7 @@ model FlowVersion {
 
 model Node {
   id                   String        @id @default(uuid())
+  tenantId             String?
   name                 String
   systemPrompt         String
   tools                Json?
@@ -315,11 +317,14 @@ model Node {
   onError              NodeOnError   @default(hitl)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
+  tenant               Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   routerForFlows       Flow[]             @relation("FlowRouter")
   flowNodes            FlowNode[]
   currentNodeSessions  NodeSession[]      @relation("CurrentNode")
   transitionsFrom      FlowTransition[]   @relation("TransitionFrom")
   transitionsTo        FlowTransition[]   @relation("TransitionTo")
+
+  @@index([tenantId])
 }
 
 model FlowNode {
