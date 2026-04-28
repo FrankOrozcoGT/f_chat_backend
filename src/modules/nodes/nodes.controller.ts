@@ -35,6 +35,7 @@ import { UpdateFlowDto } from './dto/update-flow.dto';
 import { CreateTransitionDto } from './dto/create-transition.dto';
 import { CreateIntentDto } from './dto/create-intent.dto';
 import { UpdateIntentDto } from './dto/update-intent.dto';
+import { TemplateRepository } from './repositories/template.repository';
 import { Prisma } from '@prisma/client';
 
 interface AuthUser {
@@ -56,6 +57,7 @@ export class NodesController {
     private readonly phoneRepo: PhoneRepository,
     private readonly redisService: RedisService,
     private readonly flowVersionRepo: FlowVersionRepository,
+    private readonly templateRepo: TemplateRepository,
   ) {}
 
   // ─── Functions ───────────────────────────────────────────────────────────────
@@ -450,6 +452,24 @@ export class NodesController {
       throw new BadRequestException('No steps to go back to');
     }
     return result;
+  }
+
+  // ─── Templates ───────────────────────────────────────────────────────────────
+
+  @Get('templates/:code')
+  async getTemplate(@Param('code') code: string, @CurrentUser() user: AuthUser) {
+    const content = await this.templateRepo.findByCode(code, user.tenantId);
+    return { code, content };
+  }
+
+  @Put('templates/:code')
+  async upsertTemplate(
+    @Param('code') code: string,
+    @Body() body: { content: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.templateRepo.upsert(code, user.tenantId, body.content);
+    return { code, content: body.content };
   }
 
   @Post('test/stop')
