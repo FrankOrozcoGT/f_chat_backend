@@ -19,7 +19,6 @@ export class ResponderFn {
     code: 'responder',
     name: 'Responder al cliente',
     description: 'Envía un mensaje de texto al cliente.',
-    isOutput: true,
     toolDefinition: {
       type: 'function',
       function: {

@@ -25,11 +25,6 @@ export interface NodeFunctionMeta {
    * Se inyecta en la tool "output" para que el LLM sepa qué datos enviar.
    */
   outputSchema?: Record<string, unknown>;
-  /**
-   * Si true, la tool se ejecuta y luego termina el loop (no regresa al LLM).
-   * Uso: tools de output como "responder" que envían un mensaje y deben detenerse.
-   */
-  isOutput?: boolean;
 }
 
 export function NodeFunction(meta: NodeFunctionMeta): MethodDecorator {

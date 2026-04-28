@@ -40,7 +40,7 @@ export class QueueResumeService {
 
     const clientPhone = conversation.participants[0]?.client?.phoneNumber ?? null;
 
-    const queueContext = `Respuesta del supervisor (${queueRequest.label}): ${queueRequest.responseMessage}`;
+    const queueContext = `[RESPUESTA DE COLA - ${queueRequest.label}]: ${queueRequest.responseMessage}`;
 
     this.eventEmitter.emit('ai.incoming.message', {
       messageId: `${QUEUE_RESUME_MESSAGE_PREFIX}${queueRequest.id}`,

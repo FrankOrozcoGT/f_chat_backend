@@ -4,9 +4,8 @@ export class CreateLabelDto {
   @IsString()
   label: string;
 
-  @IsOptional()
   @IsString()
-  clientId?: string;
+  clientId: string;
 
   @IsOptional()
   @IsString()
