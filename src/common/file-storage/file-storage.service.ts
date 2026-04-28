@@ -242,23 +242,9 @@ export class FileStorageService {
     return `${backendUrl}${relativePath}`;
   }
 
-  /**
-   * Construye URL accesible desde Docker (Evolution API)
-   * Usa BACKEND_URL_FOR_DOCKER si existe, sino usa BACKEND_URL
-   * @param relativePath - Path relativo (ej: /storage/conversations/...)
-   * @returns URL completa accesible desde containers
-   */
   buildDockerAccessibleUrl(relativePath: string): string {
-    const dockerUrl = this.configService.get<string>('BACKEND_URL_FOR_DOCKER');
     const backendUrl = this.configService.get<string>('BACKEND_URL');
-    const baseUrl = dockerUrl || backendUrl;
-    const fullUrl = `${baseUrl}${relativePath}`;
-
-    this.logger.log(
-      `Building Docker URL - BACKEND_URL_FOR_DOCKER: ${dockerUrl}, BACKEND_URL: ${backendUrl}, Final URL: ${fullUrl}`,
-    );
-
-    return fullUrl;
+    return `${backendUrl}${relativePath}`;
   }
 
   /**
