@@ -146,18 +146,22 @@ export class InputRouterNode {
       let imageUrl: string | null = null;
 
       if (mediaRelativePath) {
-        const rawBuffer = await this.fileStorageService.readFile(mediaRelativePath.replace(/^\//, ''));
-        const originalMimeType = mediaMetadata?.mimeType || 'image/jpeg';
-        const { buffer: imageBuffer, mimeType } = await this.imageService.compressForLlm(rawBuffer, originalMimeType);
-        const base64 = imageBuffer.toString('base64');
-        imageUrl = `data:${mimeType};base64,${base64}`;
-        this.logger.log(
-          `InputRouter: image → ${Math.round(base64.length / 1024)}KB, caption="${caption.substring(0, 80)}"`,
-        );
+        try {
+          const rawBuffer = await this.fileStorageService.readFile(mediaRelativePath.replace(/^\//, ''));
+          const originalMimeType = mediaMetadata?.mimeType || 'image/jpeg';
+          const { buffer: imageBuffer, mimeType } = await this.imageService.compressForLlm(rawBuffer, originalMimeType);
+          const base64 = imageBuffer.toString('base64');
+          imageUrl = `data:${mimeType};base64,${base64}`;
+          this.logger.log(
+            `InputRouter: image → ${Math.round(base64.length / 1024)}KB, caption="${caption.substring(0, 80)}"`,
+          );
+        } catch (err) {
+          this.logger.warn(`InputRouter: image not found (${mediaRelativePath}): ${err.message}`);
+        }
       }
 
       return {
-        transcription: caption || 'El usuario envió una imagen.',
+        transcription: imageUrl ? (caption || 'El usuario envió una imagen.') : (caption || '[imagen no disponible]'),
         imageUrl,
         sessionStore,
         apiCalls,

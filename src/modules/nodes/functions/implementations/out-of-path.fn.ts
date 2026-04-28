@@ -18,39 +18,33 @@ export class OutOfPathFn {
         parameters: {
           type: 'object',
           properties: {
-            reason: {
-              type: 'string',
-              description: 'Qué quiere el cliente que no puedes manejar en este nodo',
-            },
             summary: {
               type: 'string',
-              description: 'Resumen del progreso actual: qué se logró y qué falta en este nodo',
+              description: 'Qué quiere el cliente y resumen del progreso: qué se logró y qué falta en este nodo',
             },
           },
-          required: ['reason', 'summary'],
+          required: ['summary'],
         },
       },
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.args?.reason as string;
     const summary = ctx.args?.summary as string;
 
     // Guardar contexto en flowSummary para que el flow router lo use
     if (ctx.nodeSession) {
-      const flowSummary = `${reason}${summary ? `\n${summary}` : ''}`;
-      await ctx.sessionStore.updateCurrentNode(ctx.nodeSession.id, ctx.nodeSession.currentNodeId ?? null, undefined, undefined, flowSummary);
+      await ctx.sessionStore.updateCurrentNode(ctx.nodeSession.id, ctx.nodeSession.currentNodeId ?? null, undefined, undefined, summary);
     }
 
     if (ctx.isTest) {
       ctx.sideEffects.push({
         action: 'outOfPath',
-        args: { reason, summary },
+        args: { summary },
       });
     }
 
     this.logger.log(
-      `outOfPath: reason="${reason}" summary="${summary?.substring(0, 80)}"${ctx.isTest ? ' [TEST]' : ''}`,
+      `outOfPath: summary="${summary?.substring(0, 80)}"${ctx.isTest ? ' [TEST]' : ''}`,
     );
 
     return 'out_of_path';

@@ -41,7 +41,12 @@ export class QueueRequestService {
       currentNodeId: params.currentNodeId,
       instanceName: params.instanceName,
       label,
-      destinationPhone: resolved.isGroup ? (resolved.clientPhone ?? '') : resolved.remoteJid.replace('@s.whatsapp.net', ''),
+      destinationPhone: resolved.isGroup
+        ? (() => {
+            if (!resolved.clientPhone) throw new Error(`ContactLabel "${label}" tiene grupo pero no tiene usuario asignado`);
+            return resolved.clientPhone;
+          })()
+        : resolved.remoteJid.replace('@s.whatsapp.net', ''),
       groupJid: resolved.isGroup ? resolved.remoteJid : null,
       outgoingMessage: message,
       imageUrl: params.imageUrl ?? null,
