@@ -44,7 +44,11 @@ export class MessagesService {
 
     return messages.map((message) => ({
       ...message,
-      mediaUrl: message.mediaUrl ? `${backendUrl}${message.mediaUrl}` : null,
+      mediaUrl: message.mediaUrl
+        ? message.mediaUrl.startsWith('http')
+          ? message.mediaUrl
+          : `${backendUrl}${message.mediaUrl}`
+        : null,
     }));
   }
 
