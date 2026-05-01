@@ -7,7 +7,12 @@ import {
   Body,
   Param,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { R2Service } from '@common/r2/r2.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { ProductRepository } from './repositories/product.repository';
@@ -35,13 +40,18 @@ export class CatalogController {
     private readonly promotionRepository: PromotionRepository,
     private readonly shippingLocationRepository: ShippingLocationRepository,
     private readonly discountRepository: DiscountRepository,
+    private readonly r2Service: R2Service,
   ) {}
 
   // ─── Products ────────────────────────────────────────────────────────────────
 
   @Get('products')
-  getProducts(@CurrentUser() user: AuthUser) {
-    return this.productRepository.findByTenantId(user.tenantId);
+  async getProducts(@CurrentUser() user: AuthUser) {
+    const products = await this.productRepository.findByTenantId(user.tenantId);
+    return products.map((p) => ({
+      ...p,
+      imageUrl: p.imageKey ? this.r2Service.buildUrl(p.imageKey) : null,
+    }));
   }
 
   @Post('products')
@@ -52,6 +62,27 @@ export class CatalogController {
   @Put('products/:id')
   updateProduct(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productRepository.updateById(id, dto);
+  }
+
+  @Put('products/:id/image')
+  @UseInterceptors(FileInterceptor('image'))
+  async uploadProductImage(
+    @Param('id') id: string,
+    @UploadedFile() file: { buffer: Buffer; mimetype: string },
+  ) {
+    if (!file) throw new BadRequestException('image file is required');
+
+    const product = await this.productRepository.findById(id);
+    if (!product) throw new BadRequestException('product not found');
+
+    if (product.imageKey) {
+      await this.r2Service.deleteImage(product.imageKey);
+    }
+
+    const key = await this.r2Service.uploadImage('products', id, file.buffer, file.mimetype);
+    await this.productRepository.updateImageKey(id, key);
+
+    return { imageUrl: this.r2Service.buildUrl(key) };
   }
 
   @Delete('products/:id')

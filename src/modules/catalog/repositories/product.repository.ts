@@ -59,6 +59,17 @@ export class ProductRepository {
     });
   }
 
+  async updateImageKey(id: string, imageKey: string | null) {
+    return this.prisma.product.update({
+      where: { id },
+      data: { imageKey },
+    });
+  }
+
+  async findById(id: string) {
+    return this.prisma.product.findUnique({ where: { id } });
+  }
+
   async deleteById(id: string) {
     return this.prisma.product.delete({ where: { id } });
   }
