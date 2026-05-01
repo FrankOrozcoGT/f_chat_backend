@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
+import { R2Module } from '@common/r2/r2.module';
 import { UsersModule } from '@modules/users/users.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { HealthModule } from '@modules/health/health.module';
@@ -38,6 +39,7 @@ import { DashboardModule } from '@modules/dashboard/dashboard.module';
     QueueModule,
     PrismaModule,
     FileStorageModule,
+    R2Module,
     EvolutionModule,
     WebSocketModule,
     LangSmithModule,
