@@ -71,6 +71,7 @@ export class SearchProductFn {
       .map((p) => {
         let line = `- ${p.name}: Q${p.basePrice}`;
         if (p.description) line += ` — ${p.description}`;
+        if (p.imageUrl) line += ` [imageUrl: ${p.imageUrl}]`;
         return line;
       })
       .join('\n');

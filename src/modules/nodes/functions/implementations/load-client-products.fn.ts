@@ -56,6 +56,7 @@ Ubicación default del cliente: Guatemala ciudad`;
         : '';
       result += `- ${p.name}: Q${price}${priceNote}`;
       if (p.description) result += ` — ${p.description}`;
+      if (p.imageUrl) result += ` [imageUrl: ${p.imageUrl}]`;
       result += '\n';
     }
 
