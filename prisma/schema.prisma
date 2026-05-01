@@ -631,6 +631,7 @@ model Product {
   name              String
   basePrice         Float
   description       String?
+  imageKey          String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
