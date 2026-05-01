@@ -12,6 +12,7 @@ import { PromotionDiscountRepository } from './repositories/promotion-discount.r
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
 import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant-settings.repository';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { R2Service } from '@common/r2/r2.service';
 
 @Controller('internal/catalog')
 @UseGuards(InternalGuard)
@@ -24,6 +25,7 @@ export class InternalCatalogController {
     private readonly shippingLocationRepository: ShippingLocationRepository,
     private readonly tenantSettingsRepository: TenantSettingsRepository,
     private readonly prisma: PrismaService,
+    private readonly r2Service: R2Service,
   ) {}
 
   @Post('products/upsert')
@@ -87,6 +89,7 @@ export class InternalCatalogController {
       name: p.name,
       basePrice: p.basePrice,
       description: p.description,
+      imageUrl: p.imageKey ? this.r2Service.buildUrl(p.imageKey) : null,
       discounts: p.discounts.filter(
         (d) => d.clientId === body.clientId || d.clientId === null,
       ),
@@ -127,11 +130,16 @@ export class InternalCatalogController {
   ) {
     const products = await this.productRepository.findByTenantId(body.tenantId);
     const queryLower = body.query.toLowerCase();
-    const matches = products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(queryLower) ||
-        (p.description && p.description.toLowerCase().includes(queryLower)),
-    );
+    const matches = products
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(queryLower) ||
+          (p.description && p.description.toLowerCase().includes(queryLower)),
+      )
+      .map((p) => ({
+        ...p,
+        imageUrl: p.imageKey ? this.r2Service.buildUrl(p.imageKey) : null,
+      }));
     return { matches };
   }
 

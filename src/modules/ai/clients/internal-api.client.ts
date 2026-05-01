@@ -297,6 +297,7 @@ export class InternalApiClient {
       name: string;
       basePrice: number;
       description: string | null;
+      imageUrl: string | null;
       discounts: Array<{ discountPrice: number; clientId: string | null }>;
     }>;
     promotions: Array<{
@@ -328,6 +329,7 @@ export class InternalApiClient {
       name: string;
       basePrice: number;
       description: string | null;
+      imageUrl: string | null;
     }>;
   }> {
     return this.request('POST', '/catalog/search-product', { tenantId, query });
