@@ -28,39 +28,13 @@ export class QueueRequestRepository {
     return this.prisma.queueRequest.findUnique({ where: { id } });
   }
 
-  async findPendingSent(instanceName: string, destinationPhone: string) {
+  async findBySentWhatsappMessageId(messageId: string) {
     return this.prisma.queueRequest.findFirst({
-      where: {
-        instanceName,
-        destinationPhone,
-        status: 'sent',
-      },
-      orderBy: { createdAt: 'asc' },
+      where: { sentWhatsappMessageId: messageId, status: 'sent' },
     });
   }
 
-  async findPendingByDestination(destinationPhone: string) {
-    return this.prisma.queueRequest.findFirst({
-      where: {
-        destinationPhone,
-        status: 'sent',
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-  }
-
-  async findPendingByGroup(groupJid: string, senderPhone?: string) {
-    return this.prisma.queueRequest.findFirst({
-      where: {
-        groupJid,
-        status: 'sent',
-        ...(senderPhone ? { destinationPhone: senderPhone } : {}),
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-  }
-
-  async updateStatus(id: string, status: QueueRequestStatus, extra?: { responseMessage?: string; sentAt?: Date; respondedAt?: Date }) {
+  async updateStatus(id: string, status: QueueRequestStatus, extra?: { responseMessage?: string; sentWhatsappMessageId?: string; sentAt?: Date; respondedAt?: Date }) {
     return this.prisma.queueRequest.update({
       where: { id },
       data: { status, ...extra },

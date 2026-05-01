@@ -243,11 +243,13 @@ export class WebhookProcessorService {
 
     // Si es mensaje entrante de grupo, verificar si hay un QueueRequest pendiente para ese grupo+sender
     if (!fromMe && isGroup) {
+      const quotedMessageId = (message.metadata as any)?.quotedMessageId ?? undefined;
       const queueRequest = await this.queueRequestService.handleResponse(
         instanceName,
         senderPhone,
         message.content,
         remoteJid,
+        quotedMessageId,
       );
       if (queueRequest) {
         this.eventEmitter.emit('queue.response.received', {
@@ -265,10 +267,13 @@ export class WebhookProcessorService {
 
       if (isLabeled) {
         // Contactos etiquetados NUNCA van al flujo normal — su respuesta va al queue system
+        const quotedMessageId = (message.metadata as any)?.quotedMessageId ?? undefined;
         const queueRequest = await this.queueRequestService.handleResponse(
           instanceName,
           clientPhone,
           message.content,
+          undefined,
+          quotedMessageId,
         );
         if (queueRequest) {
           this.eventEmitter.emit('queue.response.received', {

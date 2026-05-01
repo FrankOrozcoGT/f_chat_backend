@@ -67,7 +67,6 @@ export class UserQueueManager implements OnModuleInit {
     );
 
     worker.on('failed', (job, err) => {
-      if (err.message === 'FIFO_WAIT') return; // expected retry
       this.logger.error(`[${queueName}] Job ${job?.id} failed: ${err.message}`);
     });
 
@@ -107,21 +106,11 @@ export class UserQueueManager implements OnModuleInit {
       return;
     }
 
-    // Check FIFO: is there another sent (awaiting response) for this destination?
-    const existingSent = queueRequest.groupJid
-      ? await this.queueRequestRepo.findPendingByGroup(queueRequest.groupJid)
-      : await this.queueRequestRepo.findPendingSent(queueRequest.instanceName, queueRequest.destinationPhone);
-
-    if (existingSent) {
-      const dest = queueRequest.groupJid ?? queueRequest.destinationPhone;
-      this.logger.log(`[process] Another request ${existingSent.id} waiting response for ${dest}, re-queuing`);
-      throw new Error('FIFO_WAIT');
-    }
-
     // Send WhatsApp message
     const remoteJid = queueRequest.groupJid ?? `${queueRequest.destinationPhone}@s.whatsapp.net`;
+    let sentResponse;
     if (queueRequest.imageUrl) {
-      await this.evolutionService.sendMediaMessage(
+      sentResponse = await this.evolutionService.sendMediaMessage(
         queueRequest.instanceName,
         remoteJid,
         queueRequest.imageUrl,
@@ -129,7 +118,7 @@ export class UserQueueManager implements OnModuleInit {
         queueRequest.outgoingMessage,
       );
     } else {
-      await this.evolutionService.sendTextMessage(
+      sentResponse = await this.evolutionService.sendTextMessage(
         queueRequest.instanceName,
         remoteJid,
         queueRequest.outgoingMessage,
@@ -138,6 +127,7 @@ export class UserQueueManager implements OnModuleInit {
 
     await this.queueRequestRepo.updateStatus(queueRequest.id, 'sent', {
       sentAt: new Date(),
+      sentWhatsappMessageId: sentResponse?.key?.id ?? null,
     });
 
     this.logger.log(`[process] Sent message to ${remoteJid} for QueueRequest ${queueRequest.id}`);

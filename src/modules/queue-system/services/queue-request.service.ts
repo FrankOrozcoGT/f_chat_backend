@@ -63,20 +63,18 @@ export class QueueRequestService {
     return { queueRequest };
   }
 
-  async handleResponse(instanceName: string, senderPhone: string, responseMessage: string, groupJid?: string) {
-    // Find the pending sent request — by groupJid if from a group, otherwise by individual phone
-    const queueRequest = groupJid
-      ? await this.queueRequestRepo.findPendingByGroup(groupJid, senderPhone || undefined)
-      : await this.queueRequestRepo.findPendingByDestination(senderPhone);
+  async handleResponse(instanceName: string, senderPhone: string, responseMessage: string, groupJid?: string, quotedMessageId?: string) {
+    if (!quotedMessageId) return null;
+
+    const queueRequest = await this.queueRequestRepo.findBySentWhatsappMessageId(quotedMessageId);
     if (!queueRequest) return null;
 
-    // Update request with response
     await this.queueRequestRepo.updateStatus(queueRequest.id, 'responded', {
       responseMessage,
       respondedAt: new Date(),
     });
 
-    this.logger.log(`[handleResponse] QueueRequest ${queueRequest.id} responded by ${senderPhone}${groupJid ? ` in group ${groupJid}` : ''}`);
+    this.logger.log(`[handleResponse] QueueRequest ${queueRequest.id} responded by ${senderPhone}${groupJid ? ` in group ${groupJid}` : ''} (quoted=${quotedMessageId})`);
 
     return queueRequest;
   }
