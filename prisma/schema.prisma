@@ -751,16 +751,17 @@ model QueueRequest {
   isTest           Boolean            @default(false)
   responseMessage  String?
   toolName         String
-  toolContext       Json?
-  status           QueueRequestStatus @default(pending)
-  sentAt           DateTime?
-  respondedAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  toolContext           Json?
+  status                QueueRequestStatus @default(pending)
+  sentWhatsappMessageId String?
+  sentAt                DateTime?
+  respondedAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   @@index([nodeSessionId])
   @@index([destinationPhone, status])
-  @@index([instanceName, destinationPhone, status])
+  @@index([sentWhatsappMessageId])
 }
 
 enum QueueRequestStatus {
