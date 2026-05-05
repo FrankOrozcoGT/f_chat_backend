@@ -21,9 +21,28 @@ export class CloseSessionFn {
     code: 'closeSession',
     name: 'Cerrar sesión',
     description: 'Cierra la conversacion cuando el cliente se despide y HAY historial previo en la conversacion. Envia un mensaje de despedida y cierra la sesion.',
+    toolDefinition: {
+      type: 'function',
+      function: {
+        name: 'closeSession',
+        description: 'Cierra la conversación. Envía mensaje de despedida y cierra la sesión. Usa el parámetro message para agregar información personalizada (ej: datos de envío) que se concatena ANTES del mensaje de despedida template.',
+        parameters: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'Mensaje personalizado que se antepone al mensaje de despedida template. Úsalo para incluir información específica del cierre (dirección de envío, empresa, guía, etc.).',
+            },
+          },
+          required: [],
+        },
+      },
+    },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const farewell = await this.templateRepo.findByCode('farewell', ctx.tenantId);
+    const customMessage = ctx.args?.message as string | undefined;
+    const farewellTemplate = await this.templateRepo.findByCode('farewell', ctx.tenantId);
+    const farewell = customMessage ? `${customMessage}\n\n${farewellTemplate}` : farewellTemplate;
 
     if (!ctx.nodeSession) {
       throw new Error(
