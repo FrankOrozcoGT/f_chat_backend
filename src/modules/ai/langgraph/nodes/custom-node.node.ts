@@ -162,7 +162,7 @@ export class CustomNode {
           {
             role: 'user',
             content: imageUrl
-              ? `${transcription} [imagen: ${imageUrl}]`
+              ? `${transcription} [imagen: ${imageUrl}] [messageId:${messageId}]`
               : transcription,
           },
         ];

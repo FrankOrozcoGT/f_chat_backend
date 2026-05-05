@@ -293,6 +293,20 @@ export class WebhookProcessorService {
 
       // Si mode=AI, emitir evento para AI agent
       if (conversation.mode === 'AI') {
+        let aiContent = message.content;
+
+        const quotedKeyId = (message.metadata as any)?.quotedMessageId ?? null;
+        if (quotedKeyId) {
+          const quotedMsg = await this.messageRepository.findByMetadataKeyId(quotedKeyId);
+          if (quotedMsg) {
+            const hasImage = !!quotedMsg.mediaUrl;
+            const quotedDesc = hasImage
+              ? `imagen${quotedMsg.content ? `: "${quotedMsg.content}"` : ''} [messageId:${quotedMsg.id}]`
+              : `"${quotedMsg.content ?? ''}" [messageId:${quotedMsg.id}]`;
+            aiContent = `${aiContent ?? ''}\n[El cliente está citando el mensaje: ${quotedDesc}]`.trim();
+          }
+        }
+
         this.eventEmitter.emit('ai.incoming.message', {
           messageId: message.id,
           conversationId: conversation.id,
@@ -300,7 +314,7 @@ export class WebhookProcessorService {
           clientPhone,
           tenantId: phone.tenantId,
           messageType: message.type,
-          content: message.content,
+          content: aiContent,
           mediaRelativePath: mediaData?.relativePath || null,
           mediaMetadata: mediaData
             ? { fileName: mediaData.fileName, mimeType: mediaData.mimeType }
