@@ -165,7 +165,7 @@ model Conversation {
   groupJid           String?              @unique
   groupName          String?
   groupPictureUrl    String?
-  mode               ConversationMode     @default(HITL)
+  mode               ConversationMode     @default(AI)
   lastMessageAt      DateTime             @default(now())
   lastMessagePreview String?
   isActive           Boolean              @default(true)
