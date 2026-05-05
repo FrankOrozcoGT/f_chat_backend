@@ -18,6 +18,8 @@ import { ProductRepository } from '@modules/catalog/repositories/product.reposit
 import { DiscountRepository } from '@modules/catalog/repositories/discount.repository';
 import { PromotionRepository } from '@modules/catalog/repositories/promotion.repository';
 import { PromotionDiscountRepository } from '@modules/catalog/repositories/promotion-discount.repository';
+import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { QueueRequestRepository } from '@modules/queue-system/repositories/queue-request.repository';
 
 @Controller('api/conversations')
 export class ConversationsController {
@@ -30,6 +32,8 @@ export class ConversationsController {
     private readonly discountRepository: DiscountRepository,
     private readonly promotionRepository: PromotionRepository,
     private readonly promotionDiscountRepository: PromotionDiscountRepository,
+    private readonly nodeSessionRepository: NodeSessionRepository,
+    private readonly queueRequestRepository: QueueRequestRepository,
   ) {}
 
   @Get()
@@ -192,6 +196,13 @@ export class ConversationsController {
       conversation.client.id,
       messageIds,
     );
+
+    const activeSession = await this.nodeSessionRepository.findActiveOrWaitingByConversationId(id);
+    if (activeSession) {
+      await this.nodeSessionRepository.close(activeSession.id);
+    }
+
+    await this.queueRequestRepository.cancelByConversationId(id);
 
     return { closed: true, movedMessages: result.messageCount, subConversationId: result.subConversationId };
   }

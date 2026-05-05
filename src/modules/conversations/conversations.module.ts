@@ -6,9 +6,11 @@ import { PrismaModule } from '@common/prisma/prisma.module';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { CatalogModule } from '@modules/catalog/catalog.module';
+import { NodesModule } from '@modules/nodes/nodes.module';
+import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [PrismaModule, EvolutionModule, CatalogModule],
+  imports: [PrismaModule, EvolutionModule, CatalogModule, NodesModule, QueueSystemModule],
   controllers: [ConversationsController, InternalConversationsController],
   providers: [ConversationsService, ConversationRepository],
   exports: [ConversationRepository],
