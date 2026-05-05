@@ -3,6 +3,7 @@ import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
+import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
 
 @Injectable()
 export class SendToInternalChannelFn {
@@ -11,6 +12,7 @@ export class SendToInternalChannelFn {
   constructor(
     private readonly queueRequestService: QueueRequestService,
     private readonly fileStorageService: FileStorageService,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   @NodeFunction({
@@ -35,9 +37,9 @@ export class SendToInternalChannelFn {
               type: 'string',
               description: 'Mensaje a enviar al canal interno. Debe ser claro y contener el contexto necesario para que responda.',
             },
-            attachCurrentImage: {
-              type: 'boolean',
-              description: 'Si es true, adjunta la imagen del mensaje actual del cliente (solo válido cuando el mensaje actual es una imagen).',
+            imageMessageId: {
+              type: 'string',
+              description: 'ID del mensaje que contiene la imagen a adjuntar. Cada mensaje con imagen muestra [messageId:xxx] en su contenido — tanto en el historial como en el mensaje actual. Copia ese ID exacto aquí cuando necesites reenviar la imagen al canal interno.',
             },
           },
           required: ['channelName', 'message'],
@@ -48,18 +50,19 @@ export class SendToInternalChannelFn {
   async execute(ctx: NodeContext): Promise<string> {
     const channelName = ctx.args?.channelName as string;
     const message = ctx.args?.message as string;
-    const attachCurrentImage = ctx.args?.attachCurrentImage === true;
+    const imageMessageId = ctx.args?.imageMessageId as string | undefined;
 
     if (!channelName) throw new Error('sendToInternalChannel: falta channelName');
     if (!message) throw new Error('sendToInternalChannel: falta message');
     if (!ctx.nodeSession) throw new Error('sendToInternalChannel: no hay nodeSession activa');
 
     let imageUrl: string | undefined;
-    if (attachCurrentImage) {
-      if (!ctx.mediaRelativePath) {
-        throw new Error('sendToInternalChannel: attachCurrentImage=true pero el mensaje actual no contiene imagen');
+    if (imageMessageId) {
+      const msg = await this.internalApi.getMessageById(imageMessageId);
+      if (!msg?.mediaUrl) {
+        return `No se encontró imagen en el mensaje ${imageMessageId}. Verifica el messageId correcto en el historial.`;
       }
-      imageUrl = this.fileStorageService.buildDockerAccessibleUrl(ctx.mediaRelativePath);
+      imageUrl = this.fileStorageService.buildDockerAccessibleUrl(msg.mediaUrl);
     }
 
     await this.queueRequestService.enqueue({
@@ -73,7 +76,7 @@ export class SendToInternalChannelFn {
       imageUrl,
       isTest: ctx.isTest,
       toolName: 'sendToInternalChannel',
-      toolContext: { channelName, attachCurrentImage },
+      toolContext: { channelName, imageMessageId },
     });
 
     await ctx.sessionStore.updateStatus(ctx.nodeSession.id, 'waiting_queue');
