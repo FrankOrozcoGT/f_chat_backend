@@ -41,6 +41,13 @@ export class QueueRequestRepository {
     });
   }
 
+  async cancelByConversationId(conversationId: string) {
+    return this.prisma.queueRequest.updateMany({
+      where: { conversationId, status: { in: ['pending', 'sent'] } },
+      data: { status: 'cancelled' },
+    });
+  }
+
   async findExpiredSent(olderThanHours: number) {
     const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
     return this.prisma.queueRequest.findMany({
