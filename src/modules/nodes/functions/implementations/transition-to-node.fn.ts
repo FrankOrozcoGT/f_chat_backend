@@ -29,11 +29,11 @@ export class TransitionToNodeFn {
           properties: {
             transitionCode: {
               type: 'string',
-              description: 'Código de la transición configurada (ej: "venta_confirmada")',
+              description: 'Código de la transición. Debe estar configurado en el flujo — nunca lo inventes.',
             },
             summary: {
               type: 'string',
-              description: 'Resumen breve del progreso hasta ahora para que el siguiente nodo tenga contexto (ej: "Cliente pidió 3 cajas de leche, total Q110, envío a Guatemala ciudad")',
+              description: 'Resumen breve del progreso hasta ahora para que el siguiente nodo tenga contexto.',
             },
           },
           required: ['transitionCode', 'summary'],
