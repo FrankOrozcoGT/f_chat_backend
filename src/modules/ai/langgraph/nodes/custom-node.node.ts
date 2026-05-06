@@ -68,6 +68,10 @@ export class CustomNode {
         if (session?.status === 'waiting_queue' && transcription?.startsWith('[RESPUESTA DE COLA')) {
           await sessionStore.updateStatus(nodeSessionId, 'active');
           session = { ...session, status: 'active' };
+        } else if (session?.status === 'waiting_queue') {
+          // Client sent a message while waiting for queue — ignore, don't run LLM
+          this.logger.log(`CustomNode: session waiting_queue, ignoring client message for ${conversationId}`);
+          return { responseText: '', intent: 'waiting_queue', sideEffects: allSideEffects, apiCalls, totalCost, nodeTransitions };
         }
       }
 

@@ -1,10 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { MessageType } from '@prisma/client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { PostCodeRetryError } from '../node-function.errors';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { EvolutionService } from '@common/evolution/evolution.service';
+import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 
 @Injectable()
 export class SendToInternalChannelFn {
@@ -14,6 +17,7 @@ export class SendToInternalChannelFn {
     private readonly queueRequestService: QueueRequestService,
     private readonly fileStorageService: FileStorageService,
     private readonly internalApi: InternalApiClient,
+    private readonly evolutionService: EvolutionService,
   ) {}
 
   @NodeFunction({
@@ -40,7 +44,11 @@ export class SendToInternalChannelFn {
             },
             imageMessageId: {
               type: 'string',
-              description: 'ID del mensaje que contiene la imagen a adjuntar. Cada mensaje con imagen muestra [messageId:xxx] en su contenido — tanto en el historial como en el mensaje actual. Copia ese ID exacto aquí cuando necesites reenviar la imagen al canal interno.',
+              description: 'ID del mensaje que contiene la imagen a adjuntar. El ID aparece como [messageId:XXX] en el contenido del mensaje actual o en el historial. Usa únicamente el valor XXX (sin el prefijo "messageId:").',
+            },
+            clientMessage: {
+              type: 'string',
+              description: 'Mensaje opcional para enviar al cliente antes de pausar la conversación. Úsalo para informarle que su solicitud está siendo procesada.',
             },
           },
           required: ['channelName', 'message'],
@@ -52,6 +60,7 @@ export class SendToInternalChannelFn {
     const channelName = ctx.args?.channelName as string;
     const message = ctx.args?.message as string;
     const imageMessageId = ctx.args?.imageMessageId as string | undefined;
+    const clientMessage = ctx.args?.clientMessage as string | undefined;
 
     if (!channelName) throw new Error('sendToInternalChannel: falta channelName');
     if (!message) throw new Error('sendToInternalChannel: falta message');
@@ -69,6 +78,36 @@ export class SendToInternalChannelFn {
       }
       imageUrl = this.fileStorageService.buildDockerAccessibleUrl(msg.mediaUrl);
       this.logger.log(`sendToInternalChannel: imageUrl="${imageUrl}"`);
+    }
+
+    // Enviar mensaje informativo al cliente antes de pausar (si se proporcionó)
+    if (clientMessage && !ctx.isTest) {
+      const evoResponse = await this.evolutionService.sendTextMessage(
+        ctx.instanceName,
+        ctx.clientPhone,
+        clientMessage,
+      );
+      const messageData = buildOutgoingMessageData(
+        ctx.conversationId,
+        MessageType.text,
+        clientMessage,
+        'pending',
+        null,
+        evoResponse.key.id,
+        null,
+        null,
+        null,
+        'bot',
+      );
+      await this.internalApi.sendMessageTransaction(
+        ctx.conversationId,
+        ctx.tenantId,
+        messageData,
+        { lastMessageAt: new Date(), lastMessagePreview: clientMessage.substring(0, 100) },
+      );
+      this.logger.log(`sendToInternalChannel: client notified — "${clientMessage.substring(0, 60)}"`);
+    } else if (clientMessage && ctx.isTest) {
+      ctx.sideEffects.push({ action: 'notifyClient', args: { message: clientMessage } });
     }
 
     await this.queueRequestService.enqueue({
