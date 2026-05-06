@@ -8,6 +8,7 @@ import {
 } from '../../ai/clients/kimi.client';
 import { NodeFunctionRegistry } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
+import { PostCodeRetryError } from '../functions/node-function.errors';
 import { SessionLifecycleService } from '../../ai/services/session-lifecycle.service';
 
 export interface NodeRunInput {
@@ -84,31 +85,7 @@ export class NodeRunnerService {
     const result = await this.kimiClient.chatWithTools({
       messages,
       tools: toolDefinitions,
-      onToolCall: async (name, args) => {
-        // Si es postCode → terminar el loop
-        if (terminationNames.has(name)) {
-          throw new ToolTermination(name, args);
-        }
-
-        // Tool cíclica → ejecutar y devolver resultado a Kimi
-        const handler = toolHandlers.get(name);
-        if (handler) {
-          ctx.args = args;
-          try {
-            const fnResult = await handler.instance[handler.method](ctx);
-            ctx.args = undefined;
-            this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
-            return fnResult;
-          } catch (toolError) {
-            ctx.args = undefined;
-            const errorMsg = `ERROR: ${toolError.message}`;
-            this.logger.warn(`Tool "${name}" error returned to LLM: ${toolError.message}`);
-            return errorMsg;
-          }
-        }
-        this.logger.warn(`Unknown tool called: "${name}"`);
-        return `Tool "${name}" no reconocida.`;
-      },
+      onToolCall: this.buildOnToolCall(toolHandlers, terminationNames, ctx),
     });
 
     let response: string;
@@ -232,7 +209,45 @@ export class NodeRunnerService {
           this.logger.log(`Running postCode: "${toolName}"`);
           ctx.args = result.toolResult.terminationArgs ?? undefined;
           ctx.llmResult = result.toolResult;
-          await handler.instance[handler.method](ctx);
+          try {
+            await handler.instance[handler.method](ctx);
+          } catch (err) {
+            ctx.args = undefined;
+            if (err instanceof PostCodeRetryError) {
+              this.logger.warn(`PostCode "${toolName}" retry: ${err.message}`);
+              const retryMessages = [
+                ...(result.toolResult.messagesAtTermination ?? []),
+                { role: 'tool', content: err.message, tool_call_id: result.toolResult.terminationCallId ?? undefined },
+              ];
+              const retryResult = await this.kimiClient.chatWithTools({
+                messages: retryMessages,
+                tools: allDefinitions,
+                onToolCall: this.buildOnToolCall(toolHandlers, resolvedPostCode.terminationNames, ctx),
+              });
+              // Ejecutar postCode del retry si terminó con uno
+              if (retryResult.terminationTool) {
+                const retryHandler = resolvedPostCode.handlers.get(retryResult.terminationTool);
+                if (retryHandler) {
+                  ctx.args = retryResult.terminationArgs ?? undefined;
+                  ctx.llmResult = retryResult;
+                  await retryHandler.instance[retryHandler.method](ctx);
+                  ctx.args = undefined;
+                }
+              }
+              const combinedTokensIn = result.tokensInput + retryResult.tokensInput;
+              const combinedTokensOut = result.tokensOutput + retryResult.tokensOutput;
+              const combinedCost = result.costUsd + retryResult.costUsd;
+              return {
+                ...result,
+                tokensInput: combinedTokensIn,
+                tokensOutput: combinedTokensOut,
+                costUsd: combinedCost,
+                toolResult: retryResult,
+                preCodeContext: systemPromptExtra || undefined,
+              };
+            }
+            throw err;
+          }
           ctx.args = undefined;
         }
       }
@@ -242,6 +257,35 @@ export class NodeRunnerService {
       this.logger.error(`Node "${activeNode.name}" failed: ${error.message}`);
       throw error;
     }
+  }
+
+  private buildOnToolCall(
+    toolHandlers: Map<string, { meta: any; instance: any; method: string }>,
+    terminationNames: Set<string>,
+    ctx: NodeContext,
+  ) {
+    return async (name: string, args: Record<string, unknown>): Promise<string> => {
+      if (terminationNames.has(name)) {
+        throw new ToolTermination(name, args);
+      }
+      const handler = toolHandlers.get(name);
+      if (handler) {
+        ctx.args = args;
+        try {
+          const fnResult = await handler.instance[handler.method](ctx);
+          ctx.args = undefined;
+          this.logger.log(`Tool "${name}": result="${String(fnResult).substring(0, 80)}"`);
+          return fnResult;
+        } catch (toolError) {
+          ctx.args = undefined;
+          const errorMsg = `ERROR: ${toolError.message}`;
+          this.logger.warn(`Tool "${name}" error returned to LLM: ${toolError.message}`);
+          return errorMsg;
+        }
+      }
+      this.logger.warn(`Unknown tool called: "${name}"`);
+      return `Tool "${name}" no reconocida.`;
+    };
   }
 
   private buildTodosSection(

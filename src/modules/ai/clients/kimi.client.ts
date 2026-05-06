@@ -45,6 +45,8 @@ export class ToolTermination {
 export interface ToolChatResult {
   terminationTool: string | null;
   terminationArgs: Record<string, unknown> | null;
+  terminationCallId: string | null;
+  messagesAtTermination: ChatMessage[] | null;
   textResponse: string | null;
   tokensInput: number;
   tokensOutput: number;
@@ -324,6 +326,8 @@ export class KimiClient {
         return {
           terminationTool: null,
           terminationArgs: null,
+          terminationCallId: null,
+          messagesAtTermination: null,
           textResponse: assistantMessage.content || '',
           tokensInput: totalTokensInput,
           tokensOutput: totalTokensOutput,
@@ -359,6 +363,8 @@ export class KimiClient {
             return {
               terminationTool: e.toolName,
               terminationArgs: e.args,
+              terminationCallId: toolCall.id,
+              messagesAtTermination: [...conversationMessages],
               textResponse: null,
               tokensInput: totalTokensInput,
               tokensOutput: totalTokensOutput,
@@ -384,6 +390,8 @@ export class KimiClient {
     return {
       terminationTool: null,
       terminationArgs: null,
+      terminationCallId: null,
+      messagesAtTermination: null,
       textResponse: null,
       tokensInput: totalTokensInput,
       tokensOutput: totalTokensOutput,

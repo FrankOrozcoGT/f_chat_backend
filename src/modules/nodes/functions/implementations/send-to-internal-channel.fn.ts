@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { PostCodeRetryError } from '../node-function.errors';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
@@ -58,11 +59,16 @@ export class SendToInternalChannelFn {
 
     let imageUrl: string | undefined;
     if (imageMessageId) {
+      this.logger.log(`sendToInternalChannel: buscando imagen messageId="${imageMessageId}"`);
       const msg = await this.internalApi.getMessageById(imageMessageId);
+      this.logger.log(`sendToInternalChannel: getMessageById result=${JSON.stringify(msg)}`);
       if (!msg?.mediaUrl) {
-        return `No se encontró imagen en el mensaje ${imageMessageId}. Verifica el messageId correcto en el historial.`;
+        throw new PostCodeRetryError(
+          `No se encontró imagen con messageId="${imageMessageId}". Revisa el historial y usa el messageId correcto del mensaje que contiene la imagen del comprobante.`,
+        );
       }
       imageUrl = this.fileStorageService.buildDockerAccessibleUrl(msg.mediaUrl);
+      this.logger.log(`sendToInternalChannel: imageUrl="${imageUrl}"`);
     }
 
     await this.queueRequestService.enqueue({
