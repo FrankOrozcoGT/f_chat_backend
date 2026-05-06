@@ -72,10 +72,13 @@ export class NodeRunnerService {
 
     const userContent = imageUrl
       ? [
-          { type: 'text', text: transcription },
+          { type: 'text', text: `${transcription} [messageId:${ctx.messageId}]` },
           { type: 'image_url', image_url: { url: imageUrl } },
         ]
       : transcription;
+    if (imageUrl) {
+      this.logger.log(`run: image message — messageId=${ctx.messageId} imageUrl=${imageUrl.substring(0, 60)}`);
+    }
 
     const messages = [
       { role: 'system', content: systemPrompt + historyText },
