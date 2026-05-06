@@ -42,6 +42,11 @@ export class QueueResumeService {
 
     const queueContext = `[RESPUESTA DE COLA - ${queueRequest.label}]: ${queueRequest.responseMessage}`;
 
+    await this.prisma.nodeSession.update({
+      where: { id: queueRequest.nodeSessionId },
+      data: { status: 'active' },
+    });
+
     this.eventEmitter.emit('ai.incoming.message', {
       messageId: `${QUEUE_RESUME_MESSAGE_PREFIX}${queueRequest.id}`,
       conversationId: queueRequest.conversationId,
