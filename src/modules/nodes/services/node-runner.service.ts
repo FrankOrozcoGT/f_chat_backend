@@ -156,22 +156,28 @@ export class NodeRunnerService {
           ? JSON.parse(String(activeNode.todos))
           : null;
 
-    // 1. preCode
-    let systemPromptExtra = '';
+    // 1. Inyectar datos del cliente siempre (disponibles desde custom-node)
+    let systemPromptExtra =
+      '\n\n--- DATOS DEL CLIENTE ---\n' +
+      `Nombre: ${ctx.clientName ?? 'No registrado'}\n` +
+      `Teléfono: ${ctx.clientPhone}\n` +
+      '--- FIN DATOS ---';
+
+    // 2. preCode
     const preCodePipeline = this.parsePreCodeArray(activeNode.preCode);
     if (preCodePipeline.length > 0) {
       const labels = preCodePipeline.map((e) => (typeof e === 'string' ? e : e.code));
       this.logger.log(`Running preCode: [${labels.join(', ')}]`);
-      systemPromptExtra = await this.fnRegistry.executePreCode(preCodePipeline, ctx);
+      systemPromptExtra += await this.fnRegistry.executePreCode(preCodePipeline, ctx);
     }
 
-    // 1b. Inyectar todos en el system prompt si el nodo los tiene definidos
+    // 2b. Inyectar todos en el system prompt si el nodo los tiene definidos
     const completedTodos = (ctx.nodeSession?.completedTodos as Record<string, boolean> | null) ?? {};
     if (nodeTodos && nodeTodos.length > 0) {
       systemPromptExtra += this.buildTodosSection(nodeTodos, completedTodos);
     }
 
-    // 2. Resolver tools cíclicas + agregar updateTodos si hay todos
+    // 3. Resolver tools cíclicas + agregar updateTodos si hay todos
     const toolCodes = this.parseJsonArray(activeNode.tools);
     if (nodeTodos && nodeTodos.length > 0 && !toolCodes.includes('updateTodos')) {
       toolCodes.push('updateTodos');
@@ -180,11 +186,11 @@ export class NodeRunnerService {
       ? this.fnRegistry.resolveTools(toolCodes)
       : null;
 
-    // 3. Resolver postCode (terminación)
+    // 4. Resolver postCode (terminación)
     const postCodes = this.fnRegistry.mergePostCode(activeNode.postCode);
     const resolvedPostCode = this.fnRegistry.resolvePostCode(postCodes);
 
-    // 4. Verificar no haya duplicados entre tools y postCode
+    // 5. Verificar no haya duplicados entre tools y postCode
     const toolDefs = resolvedTools?.definitions || [];
     const toolHandlers = resolvedTools?.handlers || new Map();
     for (const postDef of resolvedPostCode.definitions) {
@@ -196,10 +202,10 @@ export class NodeRunnerService {
       }
     }
 
-    // 5. Merge definitions (tools + postCode)
+    // 6. Merge definitions (tools + postCode)
     const allDefinitions = [...toolDefs, ...resolvedPostCode.definitions];
 
-    // 6. Ejecutar LLM
+    // 7. Ejecutar LLM
     try {
       const result = await this.run({
         node: activeNode,
@@ -218,7 +224,7 @@ export class NodeRunnerService {
         `Node "${activeNode.name}" completed: intent=${result.intent}, ${result.tokensInput}+${result.tokensOutput} tokens`,
       );
 
-      // 7. Si terminó por postCode, ejecutar la función
+      // 8. Si terminó por postCode, ejecutar la función
       if (result.toolResult?.terminationTool) {
         const toolName = result.toolResult.terminationTool;
         const handler = resolvedPostCode.handlers.get(toolName);

@@ -16,6 +16,8 @@ export class NodeContext {
   history: { role: string; content: string }[];
   instanceName: string;
   clientPhone: string;
+  clientName: string | null = null;
+  clientId: string | null = null;
   imageUrl: string | null = null;
   mediaRelativePath: string | null = null;
 

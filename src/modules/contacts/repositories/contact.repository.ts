@@ -17,6 +17,18 @@ export class ContactRepository {
     });
   }
 
+  async updateName(tenantId: string, clientId: string, name: string) {
+    return this.prisma.client.updateMany({
+      where: {
+        id: clientId,
+        participations: {
+          some: { conversation: { phone: { tenantId } } },
+        },
+      },
+      data: { name },
+    });
+  }
+
   async searchWithConversations(tenantId: string, search: string) {
     return this.prisma.client.findMany({
       where: {

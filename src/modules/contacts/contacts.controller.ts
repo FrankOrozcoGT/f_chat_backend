@@ -1,6 +1,9 @@
 import {
   Controller,
   Get,
+  Patch,
+  Param,
+  Body,
   Query,
   UseGuards,
   Req,
@@ -21,6 +24,22 @@ export class ContactsController {
   @UseGuards(JwtAuthGuard)
   async getSelect(@Req() req) {
     return this.contactRepository.findAllSelect(req.user.tenantId);
+  }
+
+  @Patch(':id/name')
+  @UseGuards(JwtAuthGuard)
+  async updateName(
+    @Req() req,
+    @Param('id') id: string,
+    @Body('name') name: string,
+  ) {
+    if (!name || !name.trim()) {
+      throw new BadRequestException('name is required');
+    }
+    const result = await this.contactRepository.updateName(req.user.tenantId, id, name.trim());
+    if (result.count === 0) {
+      throw new BadRequestException('Contact not found or does not belong to this tenant');
+    }
   }
 
   @Get()

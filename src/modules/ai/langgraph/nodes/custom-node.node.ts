@@ -97,6 +97,19 @@ export class CustomNode {
         );
       }
 
+      // Load contact info once on first iteration
+      let clientName: string | null = null;
+      let clientId: string | null = null;
+      if (iteration === 0) {
+        try {
+          const conv = await this.internalApi.getConversationFull(conversationId);
+          clientName = conv.client?.name ?? null;
+          clientId = conv.client?.id ?? null;
+        } catch {
+          // non-fatal — continue without client info
+        }
+      }
+
       // Load history — skip on internal transitions (iteration > 0)
       // because the new node gets context via flowSummary in systemPrompt
       let history: { role: string; content: string }[] = [];
@@ -131,6 +144,8 @@ export class CustomNode {
       ctx.history = history;
       ctx.instanceName = instanceName;
       ctx.clientPhone = clientPhone;
+      ctx.clientName = clientName;
+      ctx.clientId = clientId;
       ctx.imageUrl = imageUrl;
       ctx.mediaRelativePath = state.mediaRelativePath ?? null;
       ctx.node = activeNode;
