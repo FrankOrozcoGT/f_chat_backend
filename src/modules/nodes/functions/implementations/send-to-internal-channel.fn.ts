@@ -30,7 +30,7 @@ export class SendToInternalChannelFn {
       function: {
         name: 'sendToInternalChannel',
         description:
-          'Envía un mensaje al canal interno del negocio (ej: técnico, vendedor, supervisor). La conversación queda pausada esperando la respuesta del canal. Usa channelName exactamente como aparece en la lista de internals del nodo. Si el cliente acaba de enviar una imagen y necesitas reenviarla, pon attachCurrentImage=true.',
+          'Envía un mensaje al canal interno del negocio (ej: supervisor, grupo_verificacion). La conversación queda pausada esperando respuesta del canal. Para adjuntar una imagen, usa imageMessageId con el valor XXX que aparece como [messageId:XXX] en el mensaje. Usa clientMessage para informar al cliente que su solicitud está siendo procesada antes de pausar.',
         parameters: {
           type: 'object',
           properties: {
