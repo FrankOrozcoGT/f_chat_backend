@@ -8,8 +8,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  Conversation,
-  Phone,
   Message,
   MessageType,
   MessageDirection,
@@ -24,6 +22,8 @@ import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SendWithFileDto } from './dto/send-with-file.dto';
+import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
+import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
 
 @Injectable()
 export class MessagesService {
@@ -38,22 +38,6 @@ export class MessagesService {
     private readonly fileStorageService: FileStorageService,
     private readonly evolutionService: EvolutionService,
   ) {}
-
-  /**
-   * Valida que el usuario sea dueño de la conversación (vía phone)
-   * @throws ForbiddenException si el usuario no es dueño
-   */
-  checkTenantOwnsConversation(
-    conversation: Conversation,
-    phone: Phone,
-    tenantId: string,
-  ): void {
-    if (phone.tenantId !== tenantId) {
-      throw new ForbiddenException(
-        'You do not have permission to access this conversation',
-      );
-    }
-  }
 
   /**
    * Construye URLs completas para los mediaUrl de los mensajes
@@ -95,41 +79,6 @@ export class MessagesService {
         'Media caption exceeds maximum length of 1024 characters',
       );
     }
-  }
-
-  /**
-   * Construye los datos de un mensaje saliente (outgoing)
-   */
-  buildOutgoingMessageData(
-    conversationId: string,
-    type: MessageType,
-    content: string,
-    status: MessageStatus,
-    mediaUrl?: string | null,
-    evolutionKeyId?: string,
-    fileName?: string | null,
-    fileSize?: number | null,
-    mimeType?: string | null,
-    senderType: 'agent' | 'bot' | 'system' = 'agent',
-    quotedMessageId?: string,
-  ) {
-    const metadata: Record<string, any> = {};
-    if (evolutionKeyId) metadata.keyId = evolutionKeyId;
-    if (quotedMessageId) metadata.quotedMessageId = quotedMessageId;
-
-    return {
-      conversationId,
-      type,
-      content,
-      mediaUrl: mediaUrl || null,
-      fileName: fileName || null,
-      fileSize: fileSize || null,
-      mimeType: mimeType || null,
-      direction: 'outgoing' as const,
-      senderType,
-      status,
-      metadata: Object.keys(metadata).length > 0 ? metadata : null,
-    };
   }
 
   /**
@@ -218,7 +167,7 @@ export class MessagesService {
       );
     }
 
-    this.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     const messages = conversation.messages;
 
@@ -470,7 +419,7 @@ export class MessagesService {
       );
     }
 
-    this.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     if (conversation.mode !== 'HITL') {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
@@ -509,7 +458,7 @@ export class MessagesService {
         throw new BadRequestException('mediaUrl is required for multimedia messages');
       }
 
-      const messageData = this.buildOutgoingMessageData(
+      const messageData = buildOutgoingMessageData(
         dto.conversationId,
         dto.tipo,
         dto.contenido,
@@ -592,7 +541,7 @@ export class MessagesService {
       );
     }
 
-    this.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     if (conversation.mode !== 'HITL') {
       throw new ForbiddenException('Cannot send message: conversation is in AI mode. Take control first.');
@@ -644,7 +593,7 @@ export class MessagesService {
       );
       const evolutionKeyId = response.key.id;
 
-      const messageData = this.buildOutgoingMessageData(
+      const messageData = buildOutgoingMessageData(
         dto.conversationId,
         dto.tipo,
         dto.contenido || '',

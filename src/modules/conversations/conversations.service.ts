@@ -1,28 +1,9 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Client, Phone, ConversationMode } from '@prisma/client';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 
 @Injectable()
 export class ConversationsService {
-  /**
-   * Valida que el usuario sea dueño de la conversación (vía phone)
-   * @param conversation - Conversación a validar
-   * @param phone - Teléfono asociado a la conversación
-   * @param userId - ID del usuario autenticado
-   * @throws ForbiddenException si el usuario no es dueño
-   */
-  checkTenantOwnsConversation(
-    conversation: { id: string; phoneId: string },
-    phone: Phone,
-    tenantId: string,
-  ): void {
-    if (phone.tenantId !== tenantId) {
-      throw new ForbiddenException(
-        'You do not have permission to access this conversation',
-      );
-    }
-  }
-
   /**
    * Construye el response de detalle de conversación
    * @param conversation - Conversación

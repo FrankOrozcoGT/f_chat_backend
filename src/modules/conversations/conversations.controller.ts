@@ -13,13 +13,13 @@ import {
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
-import { ConversationsService } from './conversations.service';
 import { ProductRepository } from '@modules/catalog/repositories/product.repository';
 import { DiscountRepository } from '@modules/catalog/repositories/discount.repository';
 import { PromotionRepository } from '@modules/catalog/repositories/promotion.repository';
 import { PromotionDiscountRepository } from '@modules/catalog/repositories/promotion-discount.repository';
 import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { QueueRequestRepository } from '@modules/queue-system/repositories/queue-request.repository';
+import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
 
 @Controller('api/conversations')
 export class ConversationsController {
@@ -27,7 +27,6 @@ export class ConversationsController {
 
   constructor(
     private readonly conversationRepository: ConversationRepository,
-    private readonly conversationsService: ConversationsService,
     private readonly productRepository: ProductRepository,
     private readonly discountRepository: DiscountRepository,
     private readonly promotionRepository: PromotionRepository,
@@ -114,12 +113,8 @@ export class ConversationsController {
       throw new NotFoundException(`Conversation with id ${id} not found`);
     }
 
-    // 2. Validar permisos (Service - lógica pura)
-    this.conversationsService.checkTenantOwnsConversation(
-      conversation,
-      conversation.phone,
-      tenantId,
-    );
+    // 2. Validar permisos
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     // 3. Datos del cliente
     const clientId = conversation.client?.id;
@@ -184,7 +179,7 @@ export class ConversationsController {
     const conversation = await this.conversationRepository.findWithMessagesById(id);
     if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
 
-    this.conversationsService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     if (!conversation.client || conversation.messages.length === 0) {
       return { closed: true, movedMessages: 0 };
@@ -215,7 +210,7 @@ export class ConversationsController {
     const conversation = await this.conversationRepository.findByIdWithRelations(id);
     if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
 
-    this.conversationsService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
 
     await this.conversationRepository.resetUnread(id);
     return { ok: true };
