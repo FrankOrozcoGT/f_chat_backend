@@ -93,7 +93,7 @@ export class ConversationAnalysisService {
       senderType: m.senderType,
       transcription: m.transcription,
       mediaUrl: m.mediaUrl,
-      metadata: m.metadata as Record<string, any> | null,
+      metadata: m.metadata,
       createdAt: m.createdAt,
     }));
 

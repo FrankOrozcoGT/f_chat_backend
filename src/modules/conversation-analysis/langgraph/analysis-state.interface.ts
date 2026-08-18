@@ -1,4 +1,5 @@
 import { Annotation } from '@langchain/langgraph';
+import { MessageMetadata } from '@common/messaging/types/message-metadata';
 
 export interface AnalysisMessage {
   id: string;
@@ -8,7 +9,7 @@ export interface AnalysisMessage {
   senderType: string;
   transcription: string | null;
   mediaUrl: string | null;
-  metadata: Record<string, any> | null;
+  metadata: MessageMetadata | null;
   createdAt: string;
 }
 

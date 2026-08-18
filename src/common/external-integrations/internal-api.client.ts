@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MessageMetadata } from '@common/messaging/types/message-metadata';
 
 @Injectable()
 export class InternalApiClient {
@@ -173,7 +174,7 @@ export class InternalApiClient {
       direction: string;
       senderType: string;
       transcription: string | null;
-      metadata: Record<string, any> | null;
+      metadata: MessageMetadata | null;
       createdAt: string;
     }>
   > {

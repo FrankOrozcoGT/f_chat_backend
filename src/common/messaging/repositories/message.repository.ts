@@ -7,6 +7,7 @@ import {
   MessageStatus,
   Prisma,
 } from '@prisma/client';
+import { MessageMetadata, parseMessageMetadata } from '../types/message-metadata';
 
 @Injectable()
 export class MessageRepository {
@@ -16,13 +17,17 @@ export class MessageRepository {
   /**
    * Últimos N mensajes de una conversación, orden descendente (más reciente primero).
    */
-  async findRecentByConversationId(conversationId: string, take: number) {
-    return this.prisma.message.findMany({
+  async findRecentByConversationId(
+    conversationId: string,
+    take: number,
+  ): Promise<{ content: string; direction: MessageDirection; senderType: MessageSenderType; createdAt: Date; metadata: MessageMetadata | null }[]> {
+    const rows = await this.prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
       take,
       select: { content: true, direction: true, senderType: true, createdAt: true, metadata: true },
     });
+    return rows.map((r) => ({ ...r, metadata: parseMessageMetadata(r.metadata) }));
   }
 
   /**

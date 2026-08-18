@@ -4,6 +4,7 @@ import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-in
 import { loadPrompt } from '@common/utils/load-prompt';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
+import { MessageMetadata } from '@common/messaging/types/message-metadata';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
 const SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'diagram-consolidator-system.md');
@@ -309,14 +310,13 @@ export class DiagramConsolidatorNode {
   }
 
   private formatMessages(
-    messages: { content: string; direction: string; senderType: string; createdAt: Date; metadata?: unknown }[],
+    messages: { content: string; direction: string; senderType: string; createdAt: Date; metadata?: MessageMetadata | null }[],
     channelName: string,
     type: string,
   ): string {
     const formatted = messages.map((m) => {
       const sender = m.direction === 'outgoing' ? 'Negocio' : channelName;
-      const metadata = m.metadata as Record<string, unknown> | null | undefined;
-      const senderJid = typeof metadata?.senderJid === 'string' ? ` (${metadata.senderJid})` : '';
+      const senderJid = m.metadata?.senderJid ? ` (${m.metadata.senderJid})` : '';
       return `[${sender}${senderJid}]: ${m.content}`;
     }).join('\n');
 
