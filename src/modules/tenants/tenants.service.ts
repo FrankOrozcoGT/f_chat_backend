@@ -61,19 +61,19 @@ export class TenantsService {
   }
 
   async updateTenant(id: string, dto: UpdateTenantDto, user: AuthenticatedUser) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
     const tenant = await this.tenantRepository.updateName(id, dto.name);
     return new TenantResponseDto(tenant);
   }
 
   async getMembers(id: string, user: AuthenticatedUser) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
     const members = await this.tenantRepository.findMembers(id);
     return members.map((m) => new MemberResponseDto(m));
   }
 
   async inviteMember(id: string, dto: InviteMemberDto, user: AuthenticatedUser) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
 
     const tenant = await this.tenantRepository.findById(id);
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -112,7 +112,7 @@ export class TenantsService {
   }
 
   async cancelInvitation(id: string, invitationId: string, user: AuthenticatedUser) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
 
     const invitation = await this.invitationRepository.findById(invitationId);
     if (!invitation) throw new NotFoundException('Invitation not found');
@@ -176,7 +176,7 @@ export class TenantsService {
     dto: UpdateMemberRoleDto,
     user: AuthenticatedUser,
   ) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
     if (targetUserId === user.id) throw new BadRequestException('Cannot change your own role');
 
     const member = await this.tenantRepository.findMember(id, targetUserId);
@@ -187,7 +187,7 @@ export class TenantsService {
   }
 
   async removeMember(id: string, targetUserId: string, user: AuthenticatedUser) {
-    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
+    this.assertCurrentTenant(id, user);
     if (targetUserId === user.id) throw new BadRequestException('Cannot remove yourself from tenant');
 
     const member = await this.tenantRepository.findMember(id, targetUserId);
@@ -195,5 +195,9 @@ export class TenantsService {
 
     await this.tenantRepository.removeMember(id, targetUserId);
     return { message: 'Member removed' };
+  }
+
+  private assertCurrentTenant(id: string, user: AuthenticatedUser): void {
+    if (user.tenantId !== id) throw new ForbiddenException('Not your current tenant');
   }
 }
