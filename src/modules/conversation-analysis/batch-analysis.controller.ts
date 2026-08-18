@@ -1,6 +1,5 @@
 import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException, Logger } from '@nestjs/common';
 import { IsInt, Min, IsIn, IsOptional, IsString, IsArray, ArrayMinSize } from 'class-validator';
-import { PrismaService } from '@common/prisma/prisma.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
@@ -81,7 +80,6 @@ export class BatchAnalysisController {
     private readonly clientLabelRepo: ClientLabelRepository,
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
     private readonly flowVersionRepo: FlowVersionRepository,
-    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -247,52 +245,7 @@ export class BatchAnalysisController {
     @Query('limit') limit?: string,
   ) {
     const msgLimit = parseInt(limit ?? '100', 10);
-    const conversations = await this.prisma.conversation.findMany({
-      where: { participants: { some: { clientId } } },
-      orderBy: { lastMessageAt: 'desc' },
-      select: {
-        id: true,
-        groupJid: true,
-        isActive: true,
-        lastMessageAt: true,
-      },
-    });
-
-    const conversationIds = conversations.map((c) => c.id);
-    const messages = await this.prisma.message.findMany({
-      where: { conversationId: { in: conversationIds } },
-      orderBy: { createdAt: 'desc' },
-      take: msgLimit,
-      select: {
-        id: true,
-        conversationId: true,
-        content: true,
-        transcription: true,
-        direction: true,
-        type: true,
-        createdAt: true,
-      },
-    });
-
-    const analysis = await this.prisma.conversationAnalysis.findMany({
-      where: { conversationId: { in: conversationIds } },
-      select: {
-        conversationId: true,
-        isInternal: true,
-        internalPurpose: true,
-        intent: true,
-      },
-    });
-
-    const analysisMap = new Map(analysis.map((a) => [a.conversationId, a]));
-
-    return conversations.map((c) => ({
-      ...c,
-      analysis: analysisMap.get(c.id) ?? null,
-      messages: messages
-        .filter((m) => m.conversationId === c.id)
-        .reverse(),
-    }));
+    return this.conversationAnalysisRepo.findClientConversationsWithMessages(clientId, msgLimit);
   }
 
   @Post('clients/:clientId/mark-internal')

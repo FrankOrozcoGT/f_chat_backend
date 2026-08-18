@@ -90,6 +90,57 @@ export class ConversationAnalysisRepository {
     });
   }
 
+  /**
+   * Conversaciones de un cliente con sus últimos N mensajes y análisis, para
+   * la pantalla de revisión de canal interno.
+   */
+  async findClientConversationsWithMessages(clientId: string, messageLimit: number) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: { participants: { some: { clientId } } },
+      orderBy: { lastMessageAt: 'desc' },
+      select: {
+        id: true,
+        groupJid: true,
+        isActive: true,
+        lastMessageAt: true,
+      },
+    });
+
+    const conversationIds = conversations.map((c) => c.id);
+    const messages = await this.prisma.message.findMany({
+      where: { conversationId: { in: conversationIds } },
+      orderBy: { createdAt: 'desc' },
+      take: messageLimit,
+      select: {
+        id: true,
+        conversationId: true,
+        content: true,
+        transcription: true,
+        direction: true,
+        type: true,
+        createdAt: true,
+      },
+    });
+
+    const analysis = await this.prisma.conversationAnalysis.findMany({
+      where: { conversationId: { in: conversationIds } },
+      select: {
+        conversationId: true,
+        isInternal: true,
+        internalPurpose: true,
+        intent: true,
+      },
+    });
+
+    const analysisMap = new Map(analysis.map((a) => [a.conversationId, a]));
+
+    return conversations.map((c) => ({
+      ...c,
+      analysis: analysisMap.get(c.id) ?? null,
+      messages: messages.filter((m) => m.conversationId === c.id).reverse(),
+    }));
+  }
+
   async findAllByTenantId(tenantId: string, excludeInternalReviews = true) {
     let excludedClientIds: string[] = [];
 
