@@ -7,6 +7,10 @@ import { join } from 'path';
 import {
   AnalysisStateType,
   AnalysisLlmOutput,
+  SubConversation,
+  AnalysisProduct,
+  AnalysisPromotion,
+  InternalParticipant,
 } from '../analysis-state.interface';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
@@ -123,7 +127,7 @@ export class AnalysisNode {
     cleaned = cleaned.trim();
 
     try {
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
       if (!parsed.subConversations || !Array.isArray(parsed.subConversations)) {
         throw new Error('Response missing subConversations array');
       }
@@ -133,35 +137,41 @@ export class AnalysisNode {
         throw new Error('LLM response missing required field: isInternal');
       }
 
-      const participants = Array.isArray(parsed.participants)
-        ? parsed.participants
-            .filter((p: any) => p.senderJid && p.channelName && p.internalPurpose)
-            .map((p: any) => ({
+      const rawParticipants = parsed.participants as Record<string, unknown>[] | undefined;
+      const participants: InternalParticipant[] = Array.isArray(rawParticipants)
+        ? rawParticipants
+            .filter((p): p is Record<string, string> => !!(p.senderJid && p.channelName && p.internalPurpose))
+            .map((p) => ({
               senderJid: p.senderJid,
               channelName: p.channelName,
               internalPurpose: p.internalPurpose,
             }))
         : [];
 
+      const rawSubConversations = parsed.subConversations as Record<string, unknown>[];
+      const subConversations: SubConversation[] = rawSubConversations.map((s) => ({
+        summary: s.summary as string,
+        firstMessageId: s.firstMessageId as string,
+        lastMessageId: s.lastMessageId as string,
+        intent: (s.intent as string) ?? null,
+        intentDescription: (s.intentDescription as string) ?? null,
+        flowSummary: (s.flowSummary as string) ?? null,
+        flowDiagram: (s.flowDiagram as string) ?? null,
+      }));
+
+      const rawIntentRenames = parsed.intentRenames as { from: string; to: string }[] | undefined;
+
       return {
-        realName: parsed.realName ?? null,
-        subConversations: parsed.subConversations.map((s: any) => ({
-          summary: s.summary,
-          firstMessageId: s.firstMessageId,
-          lastMessageId: s.lastMessageId,
-          intent: s.intent ?? null,
-          intentDescription: s.intentDescription ?? null,
-          flowSummary: s.flowSummary ?? null,
-          flowDiagram: s.flowDiagram ?? null,
-        })),
-        products: parsed.products ?? [],
-        promotions: parsed.promotions ?? [],
+        realName: (parsed.realName as string) ?? null,
+        subConversations,
+        products: (parsed.products as AnalysisProduct[]) ?? [],
+        promotions: (parsed.promotions as AnalysisPromotion[]) ?? [],
         isInternal,
-        internalPurpose: parsed.internalPurpose ?? null,
-        channelName: parsed.channelName ?? null,
+        internalPurpose: (parsed.internalPurpose as string) ?? null,
+        channelName: (parsed.channelName as string) ?? null,
         participants,
-        intentRenames: Array.isArray(parsed.intentRenames)
-          ? parsed.intentRenames.filter((r: { from: string; to: string }) => r.from && r.to && r.from !== r.to)
+        intentRenames: Array.isArray(rawIntentRenames)
+          ? rawIntentRenames.filter((r) => r.from && r.to && r.from !== r.to)
           : [],
       };
     } catch (error) {
