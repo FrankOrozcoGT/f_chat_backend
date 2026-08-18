@@ -56,7 +56,7 @@ export class UpdateTodosFn {
     // Persist
     const updated = await ctx.sessionStore.updateCompletedTodos(session.id, merged);
     // Update in-memory so subsequent calls in the same turn see fresh state
-    (ctx.nodeSession as any).completedTodos = merged;
+    ctx.nodeSession.completedTodos = merged;
 
     this.logger.log(
       `updateTodos [${session.id}]: ${JSON.stringify(updates)} → completedTodos=${JSON.stringify(merged)}`,
@@ -67,7 +67,8 @@ export class UpdateTodosFn {
     }
 
     // Build response: what's missing for happy path + available alternates
-    const nodeTodos: TodoDefinition[] = (ctx.node as any).todos ?? [];
+    const rawTodos = ctx.node.todos;
+    const nodeTodos: TodoDefinition[] = Array.isArray(rawTodos) ? (rawTodos as unknown as TodoDefinition[]) : [];
 
     if (nodeTodos.length === 0) {
       return 'Todos actualizados. Este nodo no tiene todos definidos.';
@@ -79,20 +80,21 @@ export class UpdateTodosFn {
 
     // Check transitions from current node to find available alternates
     // Transitions with all requiredTodos met (excluding the happy path = last transition)
-    const flow = ctx.flow as any;
+    // ctx.flow puede venir plano (sin `transitions`) cuando la sesión está cacheada
+    const flow = ctx.flow;
     let availableAlternates: string[] = [];
 
-    if (flow?.transitions) {
+    if (flow && 'transitions' in flow) {
       const fromCurrentNode = flow.transitions.filter(
-        (tr: any) => tr.fromNodeId === ctx.node.id,
+        (tr) => tr.fromNodeId === ctx.node.id,
       );
 
       availableAlternates = fromCurrentNode
-        .filter((tr: any) => {
-          const required: string[] = tr.requiredTodos ?? [];
+        .filter((tr) => {
+          const required = (tr.requiredTodos as string[] | null) ?? [];
           return required.length > 0 && required.every((id) => merged[id]);
         })
-        .map((tr: any) => `- ${tr.transitionCode} (requiere: ${(tr.requiredTodos ?? []).join(', ')})`);
+        .map((tr) => `- ${tr.transitionCode} (requiere: ${((tr.requiredTodos as string[] | null) ?? []).join(', ')})`);
     }
 
     const lines: string[] = ['Todos actualizados.'];

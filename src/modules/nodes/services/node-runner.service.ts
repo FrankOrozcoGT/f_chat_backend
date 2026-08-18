@@ -6,7 +6,7 @@ import {
   ToolDefinition,
   ToolTermination,
 } from '@common/external-integrations/kimi.client';
-import { NodeFunctionRegistry } from '../functions/node-function.registry';
+import { NodeFunctionRegistry, RegisteredFunction } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 import { PostCodeRetryError } from '../functions/node-function.errors';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
@@ -18,7 +18,7 @@ export interface NodeRunInput {
   history: { role: string; content: string }[];
   systemPromptExtra?: string;
   toolDefinitions: ToolDefinition[];
-  toolHandlers: Map<string, { meta: any; instance: any; method: string }>;
+  toolHandlers: Map<string, RegisteredFunction>;
   terminationNames: Set<string>;
   fnRegistry: NodeFunctionRegistry;
   ctx: NodeContext;
@@ -263,7 +263,7 @@ export class NodeRunnerService {
   }
 
   private buildOnToolCall(
-    toolHandlers: Map<string, { meta: any; instance: any; method: string }>,
+    toolHandlers: Map<string, RegisteredFunction>,
     terminationNames: Set<string>,
     ctx: NodeContext,
   ) {

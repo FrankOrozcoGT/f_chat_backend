@@ -8,9 +8,9 @@ import {
 import { NodeContext } from './node-function.context';
 import { ToolDefinition } from '@common/external-integrations/kimi.client';
 
-interface RegisteredFunction {
+export interface RegisteredFunction {
   meta: NodeFunctionMeta;
-  instance: any;
+  instance: Record<string, (ctx: NodeContext) => string | Promise<string>>;
   method: string;
 }
 
