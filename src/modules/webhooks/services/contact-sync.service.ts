@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { ClientRepository } from '../repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import type { EvolutionWebhookEvent, EvolutionContactUpsert } from '../types/evolution-webhook.types';
 
 @Injectable()
 export class ContactSyncService {
@@ -24,9 +25,9 @@ export class ContactSyncService {
   async syncContacts(
     phoneId: string,
     tenantId: string,
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<EvolutionContactUpsert[]>,
   ) {
-    const raw: Array<{ remoteJid?: string; pushName?: string; profilePicUrl?: string | null }> =
+    const raw: EvolutionContactUpsert[] =
       Array.isArray(webhookData?.data) ? webhookData.data : [];
 
     const contacts = raw.filter((c) =>

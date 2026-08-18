@@ -3,6 +3,10 @@ import { ClientRepository } from '../repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { EvolutionService } from '@common/evolution/evolution.service';
+import type {
+  EvolutionWebhookEvent,
+  EvolutionGroupUpsert,
+} from '../types/evolution-webhook.types';
 
 @Injectable()
 export class GroupSyncService {
@@ -21,9 +25,11 @@ export class GroupSyncService {
   async syncGroup(
     phoneId: string,
     instanceName: string,
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<EvolutionGroupUpsert[] | EvolutionGroupUpsert>,
   ) {
-    const groups: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [webhookData?.data];
+    const groups: EvolutionGroupUpsert[] = Array.isArray(webhookData?.data)
+      ? webhookData.data
+      : [webhookData?.data];
     const validGroups = groups.filter((g) => g?.id);
 
     // Bulk delete comunidades que chats.set pudo haber creado

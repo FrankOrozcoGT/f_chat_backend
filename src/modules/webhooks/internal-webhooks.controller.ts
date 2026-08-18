@@ -13,6 +13,7 @@ import { MessageRepository } from './repositories/message.repository';
 import { ClientRepository } from './repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { ConversationAnalysisRepository } from '@modules/conversation-analysis/repositories/conversation-analysis.repository';
+import { MessageType, MessageDirection, MessageSenderType, MessageStatus, Prisma } from '@prisma/client';
 
 @Controller('internal/messages')
 @UseGuards(InternalGuard)
@@ -30,7 +31,18 @@ export class InternalWebhooksController {
     body: {
       conversationId: string;
       userId: string;
-      messageData: any;
+      messageData: {
+        type: MessageType;
+        content: string;
+        mediaUrl: string | null;
+        fileName?: string | null;
+        fileSize?: number | null;
+        mimeType?: string | null;
+        direction: MessageDirection;
+        senderType: MessageSenderType;
+        status: MessageStatus;
+        metadata?: Prisma.InputJsonValue;
+      };
       conversationUpdate: { lastMessageAt: string; lastMessagePreview: string };
     },
   ) {

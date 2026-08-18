@@ -6,6 +6,13 @@ import { ContactSyncService } from '../services/contact-sync.service';
 import { GroupSyncService } from '../services/group-sync.service';
 import { ChatSyncService } from '../services/chat-sync.service';
 import { WebhookJobData } from '../services/phone-queue.service';
+import type {
+  EvolutionWebhookEvent,
+  EvolutionContactUpsert,
+  EvolutionGroupUpsert,
+  EvolutionChatSet,
+} from '../types/evolution-webhook.types';
+import type { EvolutionMessage } from '@common/evolution/evolution.service';
 
 @Processor('phone-webhooks', { concurrency: 1 })
 export class PhoneQueueProcessor extends WorkerHost {
@@ -29,19 +36,34 @@ export class PhoneQueueProcessor extends WorkerHost {
 
     switch (type) {
       case 'process-message':
-        await this.messageProcessor.processMessage(phoneId, instanceName, webhookData);
+        await this.messageProcessor.processMessage(
+          phoneId,
+          instanceName,
+          webhookData as EvolutionWebhookEvent<EvolutionMessage & { profilePicUrl?: string | null }>,
+        );
         break;
 
       case 'sync-contacts':
-        await this.contactSyncService.syncContacts(phoneId, tenantId, webhookData);
+        await this.contactSyncService.syncContacts(
+          phoneId,
+          tenantId,
+          webhookData as EvolutionWebhookEvent<EvolutionContactUpsert[]>,
+        );
         break;
 
       case 'sync-group':
-        await this.groupSyncService.syncGroup(phoneId, instanceName, webhookData);
+        await this.groupSyncService.syncGroup(
+          phoneId,
+          instanceName,
+          webhookData as EvolutionWebhookEvent<EvolutionGroupUpsert[] | EvolutionGroupUpsert>,
+        );
         break;
 
       case 'sync-chats':
-        await this.chatSyncService.syncChats(phoneId, webhookData);
+        await this.chatSyncService.syncChats(
+          phoneId,
+          webhookData as EvolutionWebhookEvent<EvolutionChatSet[]>,
+        );
         break;
 
       default:

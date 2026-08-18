@@ -5,6 +5,7 @@ import {
   MessageDirection,
   MessageSenderType,
   MessageStatus,
+  Prisma,
 } from '@prisma/client';
 
 @Injectable()
@@ -42,7 +43,7 @@ export class MessageRepository {
       direction: MessageDirection;
       senderType: MessageSenderType;
       status: MessageStatus;
-      metadata?: any;
+      metadata?: Prisma.InputJsonValue | null;
       createdAt?: Date;
     },
     messageId?: string,
@@ -60,7 +61,7 @@ export class MessageRepository {
         direction: data.direction,
         senderType: data.senderType,
         status: data.status,
-        metadata: data.metadata,
+        metadata: data.metadata === null ? Prisma.JsonNull : data.metadata,
         createdAt: data.createdAt,
       },
     });
@@ -89,7 +90,7 @@ export class MessageRepository {
       direction: MessageDirection;
       senderType: MessageSenderType;
       status: MessageStatus;
-      metadata?: any;
+      metadata?: Prisma.InputJsonValue | null;
     },
     conversationUpdate: {
       lastMessageAt: Date;
@@ -113,7 +114,7 @@ export class MessageRepository {
           direction: messageData.direction,
           senderType: messageData.senderType,
           status: messageData.status,
-          metadata: messageData.metadata,
+          metadata: messageData.metadata === null ? Prisma.JsonNull : messageData.metadata,
         },
       });
 
@@ -166,10 +167,15 @@ export class MessageRepository {
       direction: MessageDirection;
       senderType: MessageSenderType;
       status: MessageStatus;
-      metadata?: any;
+      metadata?: Prisma.InputJsonValue | null;
     }>,
   ) {
-    return this.prisma.message.createMany({ data });
+    return this.prisma.message.createMany({
+      data: data.map((d) => ({
+        ...d,
+        metadata: d.metadata === null ? Prisma.JsonNull : d.metadata,
+      })),
+    });
   }
 
   /**
@@ -188,11 +194,17 @@ export class MessageRepository {
       direction: MessageDirection;
       senderType: MessageSenderType;
       status: MessageStatus;
-      metadata?: any;
+      metadata?: Prisma.InputJsonValue | null;
       createdAt?: Date;
     }>,
   ) {
-    return this.prisma.message.createMany({ data, skipDuplicates: true });
+    return this.prisma.message.createMany({
+      data: data.map((d) => ({
+        ...d,
+        metadata: d.metadata === null ? Prisma.JsonNull : d.metadata,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   async countByConversationId(conversationId: string): Promise<number> {

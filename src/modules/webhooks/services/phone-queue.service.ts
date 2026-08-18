@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import type { EvolutionWebhookEvent } from '../types/evolution-webhook.types';
 
 export interface WebhookJobData {
   type: 'process-message' | 'sync-contacts' | 'sync-group' | 'sync-chats';
   phoneId: string;
   tenantId: string;
   instanceName: string;
-  webhookData: any;
+  webhookData: EvolutionWebhookEvent;
   attempt?: number;
 }
 

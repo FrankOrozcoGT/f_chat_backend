@@ -5,7 +5,12 @@ import {
   MessageSenderType,
   MessageStatus,
 } from '@prisma/client';
-import { EvolutionService } from '@common/evolution/evolution.service';
+import { EvolutionService, EvolutionMessage } from '@common/evolution/evolution.service';
+import type {
+  EvolutionWebhookEvent,
+  ConnectionUpdateData,
+  QrCodeUpdateData,
+} from './types/evolution-webhook.types';
 
 @Injectable()
 export class WebhooksService {
@@ -17,7 +22,7 @@ export class WebhooksService {
    * @param webhookData - Datos del webhook
    * @returns Estado del teléfono
    */
-  parseConnectionStatus(webhookData: any): { status: PhoneStatus } {
+  parseConnectionStatus(webhookData: EvolutionWebhookEvent<ConnectionUpdateData>): { status: PhoneStatus } {
     const state = webhookData?.data?.state;
 
     let status: PhoneStatus;
@@ -41,7 +46,7 @@ export class WebhooksService {
    * @param webhookData - Datos del webhook
    * @returns Código QR en base64
    */
-  parseQrCode(webhookData: any): string {
+  parseQrCode(webhookData: EvolutionWebhookEvent<QrCodeUpdateData>): string {
     return webhookData?.data?.qrcode || webhookData?.data?.qr || '';
   }
 
@@ -52,7 +57,7 @@ export class WebhooksService {
    * @returns Datos del cliente (phoneNumber, name)
    */
   buildClientData(
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<EvolutionMessage & { profilePicUrl?: string | null }>,
     fromMe: boolean,
   ): { phoneNumber: string; name: string; profilePicUrl?: string | null } {
     const remoteJid = webhookData?.data?.key?.remoteJid || '';
@@ -100,7 +105,7 @@ export class WebhooksService {
    * @param webhookData - Datos del webhook
    * @returns true si hay media
    */
-  hasMedia(webhookData: any): boolean {
+  hasMedia(webhookData: EvolutionWebhookEvent<EvolutionMessage>): boolean {
     const messageData = webhookData?.data?.message || {};
     return !!(
       messageData.imageMessage ||
@@ -118,7 +123,7 @@ export class WebhooksService {
    * @returns Datos del mensaje entrante
    */
   buildIncomingMessageData(
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<EvolutionMessage>,
     conversationId: string,
     mediaData?: {
       relativePath: string;
@@ -135,7 +140,7 @@ export class WebhooksService {
     const keyId = webhookData?.data?.key?.id;
     const topLevelContextInfo = webhookData?.data?.contextInfo || null;
     const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
-    const metadata: Record<string, any> = {};
+    const metadata: Record<string, string> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
     if (groupMeta?.senderJid) metadata.senderJid = groupMeta.senderJid;
@@ -165,7 +170,7 @@ export class WebhooksService {
    * @returns Datos del mensaje saliente
    */
   buildOutgoingMessageFromWebhook(
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<EvolutionMessage>,
     conversationId: string,
     mediaData?: {
       relativePath: string;
@@ -181,7 +186,7 @@ export class WebhooksService {
     const keyId = webhookData?.data?.key?.id;
     const topLevelContextInfo = webhookData?.data?.contextInfo || null;
     const quotedStanzaId = this.extractQuotedStanzaId(messageData, topLevelContextInfo);
-    const metadata: Record<string, any> = {};
+    const metadata: Record<string, string> = {};
     if (keyId) metadata.keyId = keyId;
     if (quotedStanzaId) metadata.quotedMessageId = quotedStanzaId;
 
@@ -203,16 +208,20 @@ export class WebhooksService {
   /**
    * Extrae el stanzaId del mensaje citado (reply) desde contextInfo
    */
-  extractQuotedStanzaId(messageData: Record<string, any>, topLevelContextInfo?: Record<string, any> | null): string | null {
+  extractQuotedStanzaId(
+    messageData: NonNullable<EvolutionMessage['message']>,
+    topLevelContextInfo?: { stanzaId?: string } | null,
+  ): string | null {
     const msgTypes = [
       'extendedTextMessage',
       'imageMessage',
       'videoMessage',
       'audioMessage',
       'documentMessage',
-    ];
+    ] as const;
     for (const msgType of msgTypes) {
-      const stanzaId = messageData[msgType]?.contextInfo?.stanzaId;
+      const stanzaId = (messageData[msgType] as { contextInfo?: { stanzaId?: string } } | undefined)
+        ?.contextInfo?.stanzaId;
       if (stanzaId) return stanzaId;
     }
     if (topLevelContextInfo?.stanzaId) return topLevelContextInfo.stanzaId;

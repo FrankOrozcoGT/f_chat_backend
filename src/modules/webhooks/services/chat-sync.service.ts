@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
+import type { EvolutionWebhookEvent, EvolutionChatSet } from '../types/evolution-webhook.types';
 
 @Injectable()
 export class ChatSyncService {
@@ -12,9 +13,11 @@ export class ChatSyncService {
   /**
    * Procesa chats.set — sync inicial de grupos con nombre
    */
-  async syncChats(phoneId: string, webhookData: any) {
-    const chats: any[] = Array.isArray(webhookData?.data) ? webhookData.data : [];
-    const groups = chats.filter((c) => c.remoteJid?.endsWith('@g.us'));
+  async syncChats(phoneId: string, webhookData: EvolutionWebhookEvent<EvolutionChatSet[]>) {
+    const chats: EvolutionChatSet[] = Array.isArray(webhookData?.data) ? webhookData.data : [];
+    const groups = chats.filter(
+      (c): c is EvolutionChatSet & { remoteJid: string } => !!c.remoteJid?.endsWith('@g.us'),
+    );
     this.logger.log(`[chats.set] total=${chats.length} groups=${groups.length}`);
     if (groups.length === 0) return;
 

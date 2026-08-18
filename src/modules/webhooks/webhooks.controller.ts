@@ -6,6 +6,14 @@ import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { PhoneQueueService } from './services/phone-queue.service';
+import type {
+  EvolutionWebhookEvent,
+  ConnectionUpdateData,
+  QrCodeUpdateData,
+  MessagesSetData,
+  MessagesUpdateData,
+  ContactUpdateEntry,
+} from './types/evolution-webhook.types';
 
 @Controller('whatsapp/webhook')
 export class WebhooksController {
@@ -23,7 +31,7 @@ export class WebhooksController {
 
   @Post()
   @HttpCode(200)
-  async handleWebhook(@Body() webhookData: any) {
+  async handleWebhook(@Body() webhookData: EvolutionWebhookEvent) {
     const event = webhookData.event;
     const instanceId = webhookData.instance;
 
@@ -99,23 +107,38 @@ export class WebhooksController {
 
     switch (event) {
       case 'qrcode.updated':
-        await this.handleQrCodeUpdated(phone.id, webhookData);
+        await this.handleQrCodeUpdated(
+          phone.id,
+          webhookData as EvolutionWebhookEvent<QrCodeUpdateData>,
+        );
         break;
 
       case 'connection.update':
-        await this.handleConnectionUpdate(phone.id, webhookData);
+        await this.handleConnectionUpdate(
+          phone.id,
+          webhookData as EvolutionWebhookEvent<ConnectionUpdateData>,
+        );
         break;
 
       case 'messages.update':
-        await this.handleMessagesUpdate(phone.id, instanceId, webhookData);
+        await this.handleMessagesUpdate(
+          phone.id,
+          instanceId,
+          webhookData as EvolutionWebhookEvent<MessagesUpdateData>,
+        );
         break;
 
       case 'messages.set':
-        await this.handleMessagesSet(phone.id, webhookData);
+        await this.handleMessagesSet(
+          phone.id,
+          webhookData as EvolutionWebhookEvent<MessagesSetData>,
+        );
         break;
 
       case 'contacts.update':
-        await this.handleContactsUpdate(webhookData);
+        await this.handleContactsUpdate(
+          webhookData as EvolutionWebhookEvent<ContactUpdateEntry | ContactUpdateEntry[]>,
+        );
         break;
 
       default:
@@ -128,7 +151,10 @@ export class WebhooksController {
   /**
    * Maneja evento QRCODE_UPDATED
    */
-  private async handleQrCodeUpdated(phoneId: string, webhookData: any) {
+  private async handleQrCodeUpdated(
+    phoneId: string,
+    webhookData: EvolutionWebhookEvent<QrCodeUpdateData>,
+  ) {
     const qrCode = this.webhooksService.parseQrCode(webhookData);
 
     const phone = await this.phoneRepository.findById(phoneId);
@@ -153,7 +179,10 @@ export class WebhooksController {
   /**
    * Maneja evento CONNECTION_UPDATE
    */
-  private async handleConnectionUpdate(phoneId: string, webhookData: any) {
+  private async handleConnectionUpdate(
+    phoneId: string,
+    webhookData: EvolutionWebhookEvent<ConnectionUpdateData>,
+  ) {
     const { status } = this.webhooksService.parseConnectionStatus(webhookData);
 
     const lastConnected = status === 'connected' ? new Date() : undefined;
@@ -194,7 +223,10 @@ export class WebhooksController {
    * Maneja evento MESSAGES_SET
    * Notifica al frontend el progreso de sincronización del historial
    */
-  private async handleMessagesSet(phoneId: string, webhookData: any) {
+  private async handleMessagesSet(
+    phoneId: string,
+    webhookData: EvolutionWebhookEvent<MessagesSetData>,
+  ) {
     const isLatest: boolean = webhookData?.data?.isLatest ?? false;
     const progress: number = webhookData?.data?.progress ?? 0;
     this.logger.log(
@@ -222,7 +254,7 @@ export class WebhooksController {
   private async handleMessagesUpdate(
     phoneId: string,
     instanceName: string,
-    webhookData: any,
+    webhookData: EvolutionWebhookEvent<MessagesUpdateData>,
   ) {
     const data = webhookData?.data;
 
@@ -310,8 +342,10 @@ export class WebhooksController {
    * Maneja evento CONTACTS_UPDATE
    * Actualiza profilePicUrl en nuestra DB solo si el cliente ya existe
    */
-  private async handleContactsUpdate(webhookData: any) {
-    const contacts = Array.isArray(webhookData?.data)
+  private async handleContactsUpdate(
+    webhookData: EvolutionWebhookEvent<ContactUpdateEntry | ContactUpdateEntry[]>,
+  ) {
+    const contacts: ContactUpdateEntry[] = Array.isArray(webhookData?.data)
       ? webhookData.data
       : [webhookData?.data];
 
