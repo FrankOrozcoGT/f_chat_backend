@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AiAgentService } from './ai-agent.service';
 import { AiWorkflow } from './langgraph/workflow';
 import { InputRouterNode } from './langgraph/nodes/input-router.node';
@@ -33,7 +33,7 @@ import { ImageModule } from '@common/image/image.module';
     ExternalIntegrationsModule,
     ConversationSessionModule,
     PhonesModule,
-    forwardRef(() => NodesModule),
+    NodesModule,
   ],
   controllers: [FlowTestController],
   providers: [
