@@ -8,8 +8,8 @@ import {
 import { EvolutionService, EvolutionMessage } from '@common/evolution/evolution.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
-import { ClientRepository } from './repositories/client.repository';
-import { MessageRepository } from './repositories/message.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { PhoneQueueService } from './services/phone-queue.service';
 import type {
   EvolutionWebhookEvent,

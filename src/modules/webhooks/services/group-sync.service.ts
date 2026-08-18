@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ClientRepository } from '../repositories/client.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { EvolutionService } from '@common/evolution/evolution.service';

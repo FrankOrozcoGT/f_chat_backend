@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WebhooksService } from '../webhooks.service';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { ClientRepository } from '../repositories/client.repository';
-import { MessageRepository } from '../repositories/message.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';

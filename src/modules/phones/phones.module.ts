@@ -6,8 +6,8 @@ import { UsersModule } from '@modules/users/users.module';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { PhonesController } from '@modules/phones/phones.controller';
 import { PhonesService } from '@modules/phones/phones.service';
-import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
-import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { PrismaModule } from '@common/prisma/prisma.module';
 

@@ -14,9 +14,9 @@ import { PhoneResponseDto } from './dto/phone-response.dto';
 import { ContactResponseDto } from './dto/contact-response.dto';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { LimitsService } from '@common/services/limits.service';
-import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
-import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 
 @Injectable()

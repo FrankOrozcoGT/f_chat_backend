@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MessageType, MessageDirection, MessageSenderType, MessageStatus, Prisma } from '@prisma/client';
-import { MessageRepository } from './repositories/message.repository';
-import { ClientRepository } from './repositories/client.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { ConversationAnalysisRepository } from '@modules/conversation-analysis/repositories/conversation-analysis.repository';
 

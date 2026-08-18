@@ -14,9 +14,9 @@ import {
   MessageSenderType,
   MessageStatus,
 } from '@prisma/client';
-import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
-import { ClientRepository } from '@modules/webhooks/repositories/client.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';

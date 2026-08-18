@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { ClientRepository } from '../repositories/client.repository';
+import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import type { EvolutionWebhookEvent, EvolutionContactUpsert } from '../types/evolution-webhook.types';
 
