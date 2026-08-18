@@ -2,23 +2,39 @@
 
 Backend API for F-Chat - WhatsApp Business messaging platform built with NestJS, Prisma, and Evolution API.
 
+## Related repos
+
+This is the backend of a two-repo project. To run the full app, also clone the frontend:
+
+```bash
+git clone https://github.com/FrankOrozcoGT/f_chat.git
+```
+
+See [f_chat](https://github.com/FrankOrozcoGT/f_chat) for the React frontend.
+
 ## 🚀 Features
 
 - **Authentication**: Google OAuth 2.0 with JWT
+- **Multi-tenant**: tenant/team management, roles, invitations
 - **WhatsApp Integration**: Evolution API for Business messaging
+- **AI conversation flows**: node-based flow engine (LangChain/LangGraph) with tenant memory and conversation analysis
+- **Catalog**: products, promotions, shipping locations
 - **Real-time**: WebSocket (Socket.io) for live updates
+- **Queues**: Redis + BullMQ for async/background processing
 - **File Upload**: Multipart file upload with automatic conversion (webm→ogg)
 - **Media Storage**: Local file storage with Docker volume support
 - **Anti-Duplication**: In-memory cache with TTL for sent messages
 - **Database**: PostgreSQL with Prisma ORM
 - **Webhooks**: Real-time message status updates from Evolution API
-- **Health Check**: `/health` endpoint for monitoring
+- **Health Check**: `/health` endpoint plus admin-only external API monitoring
 
 ## 📦 Tech Stack
 
 - **Framework**: NestJS 11
 - **Runtime**: Node.js 24 LTS
 - **Database**: PostgreSQL 16 + Prisma ORM
+- **Queues/Cache**: Redis + BullMQ
+- **AI**: LangChain / LangGraph
 - **WebSocket**: Socket.io
 - **File Conversion**: ffmpeg (audio webm→ogg)
 - **Validation**: class-validator + class-transformer
@@ -37,13 +53,24 @@ src/
 │   ├── file-storage/         # File I/O and conversion
 │   └── websocket/            # Socket.io gateway
 └── modules/                   # Feature modules
-    ├── auth/                 # Google OAuth + JWT
-    ├── users/                # User management
-    ├── phones/               # WhatsApp phone instances
-    ├── conversations/        # Conversation management
-    ├── messages/             # Message CRUD + sending
-    ├── webhooks/             # Evolution API webhooks
-    └── health/               # Health check endpoint
+    ├── auth/                    # Google OAuth + JWT
+    ├── users/                   # User management
+    ├── tenants/                 # Tenant/team management
+    ├── tenant-settings/         # Tenant-level settings
+    ├── tenant-memory/           # AI flow memory per tenant
+    ├── phones/                  # WhatsApp phone instances
+    ├── conversations/           # Conversation management
+    ├── conversation-analysis/   # AI-driven conversation analysis
+    ├── messages/                # Message CRUD + sending
+    ├── nodes/                   # AI conversation flow engine
+    ├── catalog/                 # Products, promotions, shipping
+    ├── contacts/                # Contact management
+    ├── hitl/                    # Human-in-the-loop handoff
+    ├── queue-system/            # BullMQ queue processing
+    ├── dashboard/                # Aggregated stats
+    ├── admin/                    # Super-admin endpoints (costs, health)
+    ├── webhooks/                 # Evolution API webhooks
+    └── health/                   # Health check endpoint
 ```
 
 ## 🐳 Quick Start (Docker - Recommended)
@@ -257,13 +284,17 @@ npm run format            # Format with Prettier
 - [Evolution API Documentation](https://doc.evolution-api.com)
 - [Docker Setup Guide](./DOCKER.md)
 
+## 📌 Project Status
+
+This project doesn't receive active development from me anymore, but it's available as a reference and starting point for anyone who wants to continue it. If you use it and want to keep improving it, or just want to tell me what you thought, feel free to open an issue or a PR — forks welcome.
+
 ## 📄 License
 
 [MIT License](LICENSE)
 
 ## 🤝 Contributing
 
-Contributions welcome! Please open an issue first to discuss changes.
+Contributions welcome! Please open an issue first to discuss changes. This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ---
 
