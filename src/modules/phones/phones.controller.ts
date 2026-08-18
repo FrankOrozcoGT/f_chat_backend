@@ -207,7 +207,7 @@ export class PhonesController {
     });
 
     // 4. Upsert Conversation
-    const conversation = await this.conversationRepository.upsert({
+    const conversation = await this.conversationRepository.upsertIndividual({
       phoneId,
       clientId: client.id,
       isActive: true,

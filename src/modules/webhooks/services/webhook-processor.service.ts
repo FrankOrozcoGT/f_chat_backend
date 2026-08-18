@@ -142,7 +142,7 @@ export class WebhookProcessorService {
       const client = await this.clientRepository.upsert(clientData);
       clientName = client.name ?? null;
       const conversationData = this.webhooksService.buildConversationData(phoneId, client.id);
-      conversation = await this.conversationRepository.upsert(conversationData);
+      conversation = await this.conversationRepository.upsertIndividual(conversationData);
 
       // Bootstrap historial si es conversación nueva (y no hubo cierre previo)
       const existingCount = await this.messageRepository.countByConversationId(conversation.id);
@@ -407,19 +407,19 @@ export class WebhookProcessorService {
       })
       .filter((d): d is { phoneId: string; clientId: string } => d !== null);
 
-    await this.conversationRepository.createManySkipDuplicates(
+    await this.conversationRepository.createManyIndividualWithParticipants(
       conversationsData,
     );
 
     // 2b. Bulk insert ConversationParticipants
-    const conversations = await this.conversationRepository.findManyByPhoneIdAndClientIds(
+    const conversations = await this.conversationRepository.findManyIndividualByPhoneAndClientIds(
       phoneId,
       conversationsData.map((d) => d.clientId),
     );
     await this.conversationRepository.createManyParticipantsSkipDuplicates(
       conversations
-        .filter((c): c is { id: string; clientId: string } => c.clientId !== null)
-        .map((c) => ({ conversationId: c.id, clientId: c.clientId })),
+        .filter((c) => c.participants[0]?.clientId)
+        .map((c) => ({ conversationId: c.id, clientId: c.participants[0].clientId })),
     );
 
     // 3. Acumular contador y emitir progreso

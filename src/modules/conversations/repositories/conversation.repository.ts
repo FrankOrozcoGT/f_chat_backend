@@ -92,33 +92,6 @@ export class ConversationRepository {
     };
   }
 
-  /**
-   * @deprecated Usar upsertIndividual en su lugar
-   */
-  async upsert(data: { phoneId: string; clientId: string; isActive: boolean }) {
-    return this.upsertIndividual(data);
-  }
-
-  /**
-   * @deprecated Usar createManyIndividualWithParticipants en su lugar
-   */
-  async createManySkipDuplicates(
-    data: { phoneId: string; clientId: string }[],
-  ) {
-    return this.createManyIndividualWithParticipants(data);
-  }
-
-  /**
-   * @deprecated Usar findManyIndividualByPhoneAndClientIds en su lugar
-   */
-  async findManyByPhoneIdAndClientIds(phoneId: string, clientIds: string[]) {
-    const convs = await this.findManyIndividualByPhoneAndClientIds(phoneId, clientIds);
-    return convs.map((c) => ({
-      id: c.id,
-      clientId: c.participants[0]?.clientId ?? null,
-    }));
-  }
-
   async upsertIndividual(data: { phoneId: string; clientId: string; isActive: boolean }) {
     const existing = await this.prisma.conversation.findFirst({
       where: {
