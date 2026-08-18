@@ -1,7 +1,7 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
-import { NodesModule } from '@modules/nodes/nodes.module';
+import { ConversationSessionModule } from '@common/conversation-session/conversation-session.module';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { ContactLabelRepository } from './repositories/contact-label.repository';
@@ -17,7 +17,7 @@ import { QueueSchedulerService } from './services/queue-scheduler.service';
   imports: [
     PrismaModule,
     EvolutionModule,
-    forwardRef(() => NodesModule),
+    ConversationSessionModule,
   ],
   controllers: [QueueSystemController],
   providers: [
