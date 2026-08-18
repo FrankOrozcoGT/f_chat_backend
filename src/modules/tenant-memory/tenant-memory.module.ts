@@ -4,11 +4,12 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantMemoryRepository } from './repositories/tenant-memory.repository';
 import { TenantMemoryController } from './tenant-memory.controller';
+import { TenantMemoryService } from './tenant-memory.service';
 
 @Module({
   imports: [PrismaModule, forwardRef(() => AuthModule)],
   controllers: [TenantMemoryController],
-  providers: [TenantMemoryRepository, TenantRolesGuard],
+  providers: [TenantMemoryService, TenantMemoryRepository, TenantRolesGuard],
   exports: [TenantMemoryRepository],
 })
 export class TenantMemoryModule {}
