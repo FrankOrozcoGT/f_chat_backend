@@ -38,12 +38,16 @@ export class QueueSystemController {
   }
 
   @Put('labels/:id')
-  updateLabel(@Param('id') id: string, @Body() dto: UpdateLabelDto) {
-    return this.contactLabelRepo.updateById(id, dto);
+  updateLabel(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateLabelDto,
+  ) {
+    return this.contactLabelRepo.updateById(id, user.tenantId, dto);
   }
 
   @Delete('labels/:id')
-  deleteLabel(@Param('id') id: string) {
-    return this.contactLabelRepo.deleteById(id);
+  deleteLabel(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.contactLabelRepo.deleteById(id, user.tenantId);
   }
 }
