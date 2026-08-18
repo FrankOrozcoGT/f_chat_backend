@@ -66,4 +66,16 @@ export class IntentRepository {
       include: { flow: { include: { nodes: { include: { node: true } }, transitions: true } } },
     });
   }
+
+  async findByIdWithFlow(id: string) {
+    return this.prisma.intent.findUnique({ where: { id }, include: { flow: true } });
+  }
+
+  async findManyByIdsWithFlow(ids: string[]) {
+    return this.prisma.intent.findMany({ where: { id: { in: ids } }, include: { flow: true } });
+  }
+
+  async deleteByIdRaw(id: string) {
+    return this.prisma.intent.delete({ where: { id } });
+  }
 }

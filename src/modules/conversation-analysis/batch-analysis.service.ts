@@ -1,16 +1,20 @@
-import { Injectable, Logger, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@common/prisma/prisma.service';
+import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { FlowGeneratorNode } from './langgraph/nodes/flow-generator.node';
-import { DiagramConsolidatorNode } from './langgraph/nodes/diagram-consolidator.node';
+import {
+  DiagramConsolidatorNode,
+  NodeMappingEntry,
+  InternalQueueEntry,
+  RepresentativeCase,
+} from './langgraph/nodes/diagram-consolidator.node';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { FlowVersionRepository, DraftFlowSnapshot } from '@modules/nodes/repositories/flow-version.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { createHash } from 'crypto';
 import { ensureError } from '@common/utils/ensure-error';
 
@@ -19,7 +23,6 @@ export class BatchAnalysisService {
   private readonly logger = new Logger(BatchAnalysisService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly analysisService: ConversationAnalysisService,
     private readonly clientLabelRepo: ClientLabelRepository,
     private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
@@ -30,6 +33,7 @@ export class BatchAnalysisService {
     private readonly intentRepo: IntentRepository,
     private readonly nodeRepo: NodeRepository,
     private readonly flowVersionRepo: FlowVersionRepository,
+    private readonly conversationRepo: ConversationRepository,
   ) {}
 
   async runBatch(
@@ -37,7 +41,7 @@ export class BatchAnalysisService {
     channelCount: number,
     messageLimit: number,
   ): Promise<{ analyzed: number; internalsDetected: number; totalCostUsd: number; intents: { intent: string; count: number }[]; internals: { conversationId: string; clientId: string | null; groupJid: string | null; internalPurpose: string | null }[] }> {
-    const conversations = await this.getActiveConversations(tenantId, channelCount);
+    const conversations = await this.conversationRepo.findActiveForBatchAnalysis(tenantId, channelCount);
 
     let analyzed = 0;
     let internalsDetected = 0;
@@ -201,10 +205,11 @@ export class BatchAnalysisService {
 
         const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(flowId);
         let currentDiagram: string | null = existingVersion?.consolidatedDiagram ?? null;
-        let currentNodeMapping: Record<string, any[]> | null = (existingVersion as any)?.nodeMapping ?? null;
+        let currentNodeMapping: Record<string, NodeMappingEntry[]> | null =
+          (existingVersion?.nodeMapping as Record<string, NodeMappingEntry[]> | undefined) ?? null;
         let currentNodeCategories: Record<string, string> = {};
-        let currentInternalQueues: any[] = [];
-        let currentRepresentativeCases: any[] = [];
+        let currentInternalQueues: InternalQueueEntry[] = [];
+        let currentRepresentativeCases: RepresentativeCase[] = [];
         const isRefinement = !!currentDiagram;
 
         let remaining: typeof conversationFlows;
@@ -281,10 +286,7 @@ export class BatchAnalysisService {
   }
 
   async regenerateDiagram(flowId: string): Promise<{ flowId: string; intentName: string; costUsd: number; removedInternals: number }> {
-    const flow = await this.prisma.flow.findUnique({
-      where: { id: flowId },
-      select: { id: true, tenantId: true, intents: { select: { name: true } } },
-    });
+    const flow = await this.nodeRepo.findFlowById(flowId);
     if (!flow) throw new Error(`Flow ${flowId} not found`);
     const intentName = flow.intents[0]?.name;
     if (!intentName) throw new Error(`Flow ${flowId} has no intent`);
@@ -316,10 +318,10 @@ export class BatchAnalysisService {
     const BATCH_SIZE = 10;
     let costUsd = 0;
     let currentDiagram: string | null = null;
-    let currentNodeMapping: Record<string, any[]> | null = null;
+    let currentNodeMapping: Record<string, NodeMappingEntry[]> | null = null;
     let currentNodeCategories: Record<string, string> = {};
-    let currentInternalQueues: any[] = [];
-    let currentRepresentativeCases: any[] = [];
+    let currentInternalQueues: InternalQueueEntry[] = [];
+    let currentRepresentativeCases: RepresentativeCase[] = [];
 
     const firstBatch = conversationFlows.slice(0, INITIAL_BATCH);
     if (firstBatch.length > 0) {
@@ -377,15 +379,12 @@ export class BatchAnalysisService {
   }
 
   async mergeIntents(tenantId: string, sourceIntentIds: string[], targetIntentId: string) {
-    const target = await this.prisma.intent.findUnique({ where: { id: targetIntentId }, include: { flow: true } });
+    const target = await this.intentRepo.findByIdWithFlow(targetIntentId);
     if (!target) throw new BadRequestException(`Target intent ${targetIntentId} not found`);
     if (target.tenantId !== tenantId) throw new ForbiddenException('Target intent does not belong to this tenant');
     if (!target.flowId) throw new BadRequestException(`Target intent "${target.name}" has no flow`);
 
-    const sources = await this.prisma.intent.findMany({
-      where: { id: { in: sourceIntentIds } },
-      include: { flow: true },
-    });
+    const sources = await this.intentRepo.findManyByIdsWithFlow(sourceIntentIds);
     if (sources.length !== sourceIntentIds.length) {
       const found = new Set(sources.map((s) => s.id));
       const missing = sourceIntentIds.filter((id) => !found.has(id));
@@ -401,32 +400,16 @@ export class BatchAnalysisService {
 
     for (const source of sources) {
       // 1. Rename analyses
-      const updated = await this.prisma.conversationAnalysis.updateMany({
-        where: { intent: source.name, conversation: { phone: { tenantId } } },
-        data: { intent: target.name },
-      });
+      const updated = await this.conversationAnalysisRepo.renameIntent(source.name, target.name, tenantId);
       totalMergedAnalyses += updated.count;
       this.logger.log(`mergeIntents: renamed ${updated.count} analyses from "${source.name}" to "${target.name}"`);
 
       // 2. Move analysis links and collect conversation flows for refinement
       if (source.flowId) {
-        const sourceLinks = await this.prisma.conversationAnalysisFlow.findMany({
-          where: { flowId: source.flowId },
-          select: { id: true, analysisId: true, analysis: { select: { conversationId: true, flowSummary: true, flowDiagram: true } } },
-        });
+        const sourceLinks = await this.flowIntentRepo.findLinksWithAnalysisByFlowId(source.flowId);
 
         for (const link of sourceLinks) {
-          const exists = await this.prisma.conversationAnalysisFlow.findUnique({
-            where: { analysisId_flowId: { analysisId: link.analysisId, flowId: target.flowId! } },
-          });
-          if (!exists) {
-            await this.prisma.conversationAnalysisFlow.update({
-              where: { id: link.id },
-              data: { flowId: target.flowId! },
-            });
-          } else {
-            await this.prisma.conversationAnalysisFlow.delete({ where: { id: link.id } });
-          }
+          await this.flowIntentRepo.moveLinkOrDelete(link.id, link.analysisId, target.flowId!);
 
           if (link.analysis.flowSummary || link.analysis.flowDiagram) {
             newConversationFlows.push({
@@ -441,9 +424,9 @@ export class BatchAnalysisService {
 
       // 3. Delete source intent + its flow
       if (source.flowId) removedFlows.push(source.flowId);
-      await this.prisma.intent.delete({ where: { id: source.id } });
+      await this.intentRepo.deleteByIdRaw(source.id);
       if (source.flowId) {
-        await this.prisma.flow.delete({ where: { id: source.flowId } });
+        await this.nodeRepo.deleteFlow(source.flowId, tenantId);
         this.logger.log(`mergeIntents: deleted source intent "${source.name}" and flow ${source.flowId}`);
       }
     }
@@ -454,15 +437,17 @@ export class BatchAnalysisService {
       const internals = await this.internalChannelReviewRepo.findApprovedByTenantId(tenantId);
       const existingVersion = await this.flowVersionRepo.findLatestWithDiagram(target.flowId!);
       const currentDiagram = existingVersion?.consolidatedDiagram ?? null;
-      const currentNodeMapping = (existingVersion as any)?.nodeMapping ?? null;
-      const currentRepresentativeCases = (existingVersion as any)?.representativeCases ?? [];
+      const currentNodeMapping =
+        (existingVersion?.nodeMapping as Record<string, NodeMappingEntry[]> | undefined) ?? null;
+      const currentRepresentativeCases =
+        (existingVersion?.representativeCases as RepresentativeCase[] | undefined) ?? [];
 
       const BATCH_SIZE = 10;
       let diagram = currentDiagram;
       let nodeMapping = currentNodeMapping;
       let nodeCategories: Record<string, string> = {};
-      let internalQueues: any[] = [];
-      let representativeCases: any[] = currentRepresentativeCases;
+      let internalQueues: InternalQueueEntry[] = [];
+      let representativeCases: RepresentativeCase[] = currentRepresentativeCases;
       let costUsd = 0;
 
       for (let i = 0; i < newConversationFlows.length; i += BATCH_SIZE) {
@@ -494,7 +479,7 @@ export class BatchAnalysisService {
     return { mergedAnalyses: totalMergedAnalyses, removedFlows, refinement };
   }
 
-  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: any[]; errors: { intentName: string; error: string }[] }> {
+  async generateDraftFlows(tenantId: string): Promise<{ flowsGenerated: number; flows: { id: string; name: string }[]; errors: { intentName: string; error: string }[] }> {
     const allIntents = await this.intentRepo.findActiveByTenantId(tenantId);
 
     // Filtrar solo intents con diagrama aprobado — los demás se ignoran silenciosamente
@@ -508,7 +493,7 @@ export class BatchAnalysisService {
     }
 
     let flowsGenerated = 0;
-    const flows: any[] = [];
+    const flows: { id: string; name: string }[] = [];
     const errors: { intentName: string; error: string }[] = [];
 
     for (const intent of intents) {
@@ -614,32 +599,4 @@ export class BatchAnalysisService {
     return map;
   }
 
-  private async getActiveConversations(tenantId: string, channelCount: number) {
-    const conversations = await this.prisma.conversation.findMany({
-      where: {
-        isActive: true,
-        phone: { tenantId },
-      },
-      orderBy: { lastMessageAt: 'desc' },
-      take: channelCount,
-      select: {
-        id: true,
-        phoneId: true,
-        groupJid: true,
-        phone: { select: { id: true, tenantId: true } },
-        participants: {
-          select: { client: { select: { id: true, phoneNumber: true, name: true } } },
-        },
-      },
-    });
-
-    return conversations.map((c) => ({
-      id: c.id,
-      phoneId: c.phoneId,
-      groupJid: c.groupJid,
-      phone: c.phone,
-      client: c.participants[0]?.client ?? null,
-      allParticipants: c.participants.map((p) => p.client).filter((cl): cl is NonNullable<typeof cl> => !!cl),
-    }));
-  }
 }

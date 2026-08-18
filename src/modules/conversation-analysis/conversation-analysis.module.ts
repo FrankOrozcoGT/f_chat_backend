@@ -19,6 +19,7 @@ import { ClientLabelRepository } from './repositories/client-label.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
     InternalChannelReviewRepository,
     ConversationAnalysisRepository,
     FlowIntentRepository,
+    ConversationRepository,
   ],
   exports: [AnalysisWorkflow, ConversationAnalysisService],
 })

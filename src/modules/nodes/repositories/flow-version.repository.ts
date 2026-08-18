@@ -2,6 +2,23 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 
+export interface FlowVersionNodeMappingEntry {
+  conversationId: string;
+  nodeId: string;
+}
+
+export interface FlowVersionInternalQueueEntry {
+  channelName: string;
+  nodeId: string;
+  queueType: 'fifo' | 'batch_reply' | 'llm_flexible';
+  usage: string;
+}
+
+export interface FlowVersionRepresentativeCase {
+  conversationId: string;
+  path: string[];
+  reason: string;
+}
 
 export interface FlowSnapshot {
   nodes: { id: string; name: string; systemPrompt: string; todos: any; tools: any }[];
@@ -104,10 +121,10 @@ export class FlowVersionRepository {
   async saveConsolidatedDiagram(
     flowId: string,
     diagram: string,
-    nodeMapping: Prisma.InputJsonValue,
-    nodeCategories: Prisma.InputJsonValue,
-    internalQueues: Prisma.InputJsonValue,
-    representativeCases: Prisma.InputJsonValue,
+    nodeMapping: Record<string, FlowVersionNodeMappingEntry[]>,
+    nodeCategories: Record<string, string>,
+    internalQueues: FlowVersionInternalQueueEntry[],
+    representativeCases: FlowVersionRepresentativeCase[],
   ): Promise<void> {
     const latest = await this.prisma.flowVersion.findFirst({
       where: { flowId },
@@ -115,15 +132,20 @@ export class FlowVersionRepository {
       select: { id: true },
     });
 
+    const jsonNodeMapping = nodeMapping as unknown as Prisma.InputJsonValue;
+    const jsonNodeCategories = nodeCategories as unknown as Prisma.InputJsonValue;
+    const jsonInternalQueues = internalQueues as unknown as Prisma.InputJsonValue;
+    const jsonRepresentativeCases = representativeCases as unknown as Prisma.InputJsonValue;
+
     if (latest) {
       await this.prisma.flowVersion.update({
         where: { id: latest.id },
         data: {
           consolidatedDiagram: diagram,
-          nodeMapping: nodeMapping,
-          nodeCategories: nodeCategories,
-          internalQueues: internalQueues,
-          representativeCases: representativeCases,
+          nodeMapping: jsonNodeMapping,
+          nodeCategories: jsonNodeCategories,
+          internalQueues: jsonInternalQueues,
+          representativeCases: jsonRepresentativeCases,
           diagramApproved: false,
           diagramModified: false,
         },
@@ -136,10 +158,10 @@ export class FlowVersionRepository {
           nodesSnapshot: {},
           contentHash: '',
           consolidatedDiagram: diagram,
-          nodeMapping: nodeMapping,
-          nodeCategories: nodeCategories,
-          internalQueues: internalQueues,
-          representativeCases: representativeCases,
+          nodeMapping: jsonNodeMapping,
+          nodeCategories: jsonNodeCategories,
+          internalQueues: jsonInternalQueues,
+          representativeCases: jsonRepresentativeCases,
           diagramApproved: false,
           diagramModified: false,
         },

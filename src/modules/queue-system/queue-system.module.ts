@@ -3,6 +3,7 @@ import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { ContactLabelRepository } from './repositories/contact-label.repository';
 import { QueueRequestRepository } from './repositories/queue-request.repository';
 import { QueueSystemController } from './queue-system.controller';
@@ -22,6 +23,7 @@ import { QueueSchedulerService } from './services/queue-scheduler.service';
   providers: [
     ContactLabelRepository,
     QueueRequestRepository,
+    ConversationRepository,
     TenantSettingsRepository,
     ContactLabelService,
     QueueRequestService,

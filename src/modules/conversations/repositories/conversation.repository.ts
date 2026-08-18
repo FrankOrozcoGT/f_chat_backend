@@ -7,6 +7,39 @@ export class ConversationRepository {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Conversaciones activas más recientes de un tenant, con datos mínimos
+   * para el análisis batch (client principal + todos los participantes).
+   */
+  async findActiveForBatchAnalysis(tenantId: string, take: number) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        isActive: true,
+        phone: { tenantId },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        phoneId: true,
+        groupJid: true,
+        phone: { select: { id: true, tenantId: true } },
+        participants: {
+          select: { client: { select: { id: true, phoneNumber: true, name: true } } },
+        },
+      },
+    });
+
+    return conversations.map((c) => ({
+      id: c.id,
+      phoneId: c.phoneId,
+      groupJid: c.groupJid,
+      phone: c.phone,
+      client: c.participants[0]?.client ?? null,
+      allParticipants: c.participants.map((p) => p.client).filter((cl): cl is NonNullable<typeof cl> => !!cl),
+    }));
+  }
+
   async findByTenantIdAndPhone(
     tenantId: string,
     phoneId?: string,
