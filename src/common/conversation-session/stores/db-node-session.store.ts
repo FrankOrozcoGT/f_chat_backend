@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { CachedNodeData, NodeSessionStore, SessionData } from './node-session-store.interface';
 
 @Injectable()

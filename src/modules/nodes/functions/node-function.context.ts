@@ -1,6 +1,6 @@
 import { Node, Flow } from '@prisma/client';
 import { ToolChatResult } from '@common/external-integrations/kimi.client';
-import { NodeSessionStore, SessionData } from '@modules/nodes/stores/node-session-store.interface';
+import { NodeSessionStore, SessionData } from '@common/conversation-session/stores/node-session-store.interface';
 
 export interface TestSideEffect {
   action: string;

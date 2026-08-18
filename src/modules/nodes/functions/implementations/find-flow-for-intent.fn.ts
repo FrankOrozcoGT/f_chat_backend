@@ -3,7 +3,7 @@ import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { IntentRepository } from '../../repositories/intent.repository';
 import { NodeRepository } from '../../repositories/node.repository';
-import { SessionLifecycleService } from '../../../ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 
 @Injectable()
 export class FindFlowForIntentFn {

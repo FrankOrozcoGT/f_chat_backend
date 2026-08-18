@@ -4,8 +4,8 @@ import { MessageType } from '@prisma/client';
 import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
-import { SessionLifecycleService } from './services/session-lifecycle.service';
-import { TestQueueResultStore } from '@modules/nodes/services/test-queue-result.store';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
+import { TestQueueResultStore } from '@common/conversation-session/test-queue-result.store';
 
 export interface IncomingMessageEvent {
   messageId: string;

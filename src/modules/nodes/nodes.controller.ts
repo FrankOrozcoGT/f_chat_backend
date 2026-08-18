@@ -16,15 +16,15 @@ import { MessageType } from '@prisma/client';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
-import { NodeSessionRepository } from './repositories/node-session.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { IntentRepository } from './repositories/intent.repository';
 import { FlowVersionRepository, FlowSnapshot, DraftFlowSnapshot } from './repositories/flow-version.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { TestSessionService } from './services/test-session.service';
-import { TestQueueResultStore } from './services/test-queue-result.store';
+import { TestQueueResultStore } from '@common/conversation-session/test-queue-result.store';
 import { AiWorkflow } from '../ai/langgraph/workflow';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
-import { RedisNodeSessionStore } from './stores/redis-node-session.store';
+import { RedisNodeSessionStore } from '@common/conversation-session/stores/redis-node-session.store';
 import { RedisService } from '@common/redis/redis.service';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
@@ -434,7 +434,7 @@ export class NodesController {
    * Polls for an async queue result in test mode.
    * The result is written by AiAgentService after the second workflow completes.
    */
-  private async pollQueueResult(conversationId: string, timeoutMs: number): Promise<import('./services/test-queue-result.store').TestQueueResult | null> {
+  private async pollQueueResult(conversationId: string, timeoutMs: number): Promise<import('@common/conversation-session/test-queue-result.store').TestQueueResult | null> {
     const interval = 200;
     const maxAttempts = Math.ceil(timeoutMs / interval);
     for (let i = 0; i < maxAttempts; i++) {

@@ -7,11 +7,11 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { RedisService } from '@common/redis/redis.service';
-import { DbNodeSessionStore } from '@modules/nodes/stores/db-node-session.store';
-import { RedisNodeSessionStore } from '@modules/nodes/stores/redis-node-session.store';
+import { DbNodeSessionStore } from '@common/conversation-session/stores/db-node-session.store';
+import { RedisNodeSessionStore } from '@common/conversation-session/stores/redis-node-session.store';
 import { ImageService } from '@common/image/image.service';
 
 @Injectable()

@@ -1,7 +1,7 @@
 import { NodeSessionStatus } from '@prisma/client';
 import { RedisService } from '@common/redis/redis.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { CachedNodeData, NodeSessionStore, SessionData } from '@modules/nodes/stores/node-session-store.interface';
+import { CachedNodeData, NodeSessionStore, SessionData } from '@common/conversation-session/stores/node-session-store.interface';
 import { v4 as uuidv4 } from 'uuid';
 
 const KEY_PREFIX = 'test-node-session';

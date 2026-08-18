@@ -5,7 +5,7 @@ export type ApiError = { apiName: ApiName; message: string };
 export type ConfigError = { message: string };
 import { CreateApiCallData } from '../repositories/ai.repository';
 import { TestSideEffect } from '@modules/nodes/functions/node-function.context';
-import { NodeSessionStore } from '@modules/nodes/stores/node-session-store.interface';
+import { NodeSessionStore } from '@common/conversation-session/stores/node-session-store.interface';
 
 export const WorkflowState = Annotation.Root({
   // Input (from IncomingMessageEvent)

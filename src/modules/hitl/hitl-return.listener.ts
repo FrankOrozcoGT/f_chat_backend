@@ -5,7 +5,7 @@ import { InternalApiClient } from '@common/external-integrations/internal-api.cl
 import { ConversationAnalysisService } from '@modules/conversation-analysis/conversation-analysis.service';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { KimiClient } from '@common/external-integrations/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';

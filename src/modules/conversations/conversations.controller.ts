@@ -18,7 +18,7 @@ import { ProductRepository } from '@modules/catalog/repositories/product.reposit
 import { DiscountRepository } from '@modules/catalog/repositories/discount.repository';
 import { PromotionRepository } from '@modules/catalog/repositories/promotion.repository';
 import { PromotionDiscountRepository } from '@modules/catalog/repositories/promotion-discount.repository';
-import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { QueueRequestRepository } from '@modules/queue-system/repositories/queue-request.repository';
 
 @Controller('api/conversations')

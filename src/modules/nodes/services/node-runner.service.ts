@@ -9,7 +9,7 @@ import {
 import { NodeFunctionRegistry } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 import { PostCodeRetryError } from '../functions/node-function.errors';
-import { SessionLifecycleService } from '../../ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 
 export interface NodeRunInput {
   node: Node;

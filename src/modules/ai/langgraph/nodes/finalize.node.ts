@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiRepository } from '../../repositories/ai.repository';
-import { SessionLifecycleService } from '../../services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { TestSideEffect } from '../../../nodes/functions/node-function.context';

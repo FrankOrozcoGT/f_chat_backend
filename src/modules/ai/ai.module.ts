@@ -9,9 +9,8 @@ import { FinalizeNode } from './langgraph/nodes/finalize.node';
 import { EntryCheckerNode } from './langgraph/nodes/entry-checker.node';
 import { FlowRouterNode } from './langgraph/nodes/flow-router.node';
 import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
+import { ConversationSessionModule } from '@common/conversation-session/conversation-session.module';
 import { AiRepository } from './repositories/ai.repository';
-import { SessionRepository } from './repositories/session.repository';
-import { SessionLifecycleService } from './services/session-lifecycle.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
@@ -29,6 +28,7 @@ import { ImageModule } from '@common/image/image.module';
     RedisModule,
     ImageModule,
     ExternalIntegrationsModule,
+    ConversationSessionModule,
     forwardRef(() => NodesModule),
   ],
   providers: [
@@ -42,12 +42,10 @@ import { ImageModule } from '@common/image/image.module';
     EntryCheckerNode,
     FlowRouterNode,
     AiRepository,
-    SessionRepository,
-    SessionLifecycleService,
   ],
   exports: [
     ExternalIntegrationsModule,
-    SessionLifecycleService,
+    ConversationSessionModule,
     AiWorkflow,
   ],
 })

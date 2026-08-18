@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { SecurityEventRepository } from '../../repositories/security-event.repository';
-import { SessionLifecycleService } from '../../../ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 
 @Injectable()
 export class ReportHackingFn {

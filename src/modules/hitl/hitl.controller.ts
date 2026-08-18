@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
-import { SessionLifecycleService } from '@modules/ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
 import { HitlService } from './hitl.service';
 import { TakeControlDto } from './dto/take-control.dto';

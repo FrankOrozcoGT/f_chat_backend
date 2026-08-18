@@ -61,7 +61,7 @@ export class CustomNode {
       }
 
       // Load session
-      let session: import('@modules/nodes/stores/node-session-store.interface').SessionData | null = null;
+      let session: import('@common/conversation-session/stores/node-session-store.interface').SessionData | null = null;
       if (nodeSessionId) {
         session = await sessionStore.findById(nodeSessionId);
         // If session is waiting_queue and this is a queue response, reactivate it
@@ -78,7 +78,7 @@ export class CustomNode {
       // Load node — use cache only on first iteration
       let activeNode: import('@prisma/client').Node;
       const cached = (iteration === 0)
-        ? session?.cachedNodeData as import('@modules/nodes/stores/node-session-store.interface').CachedNodeData | null
+        ? session?.cachedNodeData as import('@common/conversation-session/stores/node-session-store.interface').CachedNodeData | null
         : null;
       if (cached?.node) {
         activeNode = cached.node;
