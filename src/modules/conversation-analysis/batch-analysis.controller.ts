@@ -6,6 +6,7 @@ import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { TenantRole } from '@prisma/client';
 import { BatchAnalysisService } from './batch-analysis.service';
+import { FlowGenerationService } from './flow-generation.service';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ClientLabelRepository } from './repositories/client-label.repository';
@@ -75,6 +76,7 @@ export class BatchAnalysisController {
 
   constructor(
     private readonly batchAnalysisService: BatchAnalysisService,
+    private readonly flowGenerationService: FlowGenerationService,
     private readonly flowIntentRepo: FlowIntentRepository,
     private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
     private readonly clientLabelRepo: ClientLabelRepository,
@@ -98,7 +100,7 @@ export class BatchAnalysisController {
   @Post('generate-diagrams')
   @HttpCode(200)
   async generateDiagrams(@CurrentUser() user: AuthenticatedUser) {
-    return this.batchAnalysisService.generateDiagrams(user.tenantId);
+    return this.flowGenerationService.generateDiagrams(user.tenantId);
   }
 
   @Get('flows/:flowId/diagram')
@@ -133,7 +135,7 @@ export class BatchAnalysisController {
   @Post('flows/:flowId/regenerate-diagram')
   @HttpCode(200)
   async regenerateDiagram(@Param('flowId') flowId: string) {
-    return this.batchAnalysisService.regenerateDiagram(flowId);
+    return this.flowGenerationService.regenerateDiagram(flowId);
   }
 
   @Post('flows/:flowId/approve-diagram')
@@ -147,8 +149,8 @@ export class BatchAnalysisController {
   @HttpCode(200)
   async generateFlows(
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ flowsGenerated: number; flows: any[] }> {
-    return this.batchAnalysisService.generateDraftFlows(user.tenantId);
+  ): Promise<{ flowsGenerated: number; flows: { id: string; name: string }[] }> {
+    return this.flowGenerationService.generateDraftFlows(user.tenantId);
   }
 
   @Get('internals')
@@ -309,7 +311,7 @@ export class BatchAnalysisController {
     @Body() dto: MergeIntentsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.batchAnalysisService.mergeIntents(user.tenantId, dto.sourceIntentIds, targetIntentId);
+    return this.flowGenerationService.mergeIntents(user.tenantId, dto.sourceIntentIds, targetIntentId);
   }
 
   @Post('groups/:groupJid/mark-internal')

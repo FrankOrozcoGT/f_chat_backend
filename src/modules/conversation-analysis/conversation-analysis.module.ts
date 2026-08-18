@@ -15,6 +15,7 @@ import { IntentSplitterNode } from './langgraph/nodes/intent-splitter.node';
 import { MermaidParserModule } from '@modules/nodes/mermaid-parser/mermaid-parser.module';
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
+import { FlowGenerationService } from './flow-generation.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
@@ -40,6 +41,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
     IntentSplitterNode,
     DiagramConsolidatorNode,
     BatchAnalysisService,
+    FlowGenerationService,
     ClientLabelRepository,
     InternalChannelReviewRepository,
     ConversationAnalysisRepository,
