@@ -23,6 +23,8 @@ import { UpdateFlowDto } from './dto/update-flow.dto';
 import { CreateTransitionDto } from './dto/create-transition.dto';
 import { CreateIntentDto } from './dto/create-intent.dto';
 import { UpdateIntentDto } from './dto/update-intent.dto';
+import { CreateNodeDto } from './dto/create-node.dto';
+import { UpdateNodeDto } from './dto/update-node.dto';
 import { TemplateRepository } from './repositories/template.repository';
 import { NodesService } from './nodes.service';
 import { Prisma } from '@prisma/client';
@@ -237,17 +239,31 @@ export class NodesController {
   }
 
   @Post()
-  async createNode(@CurrentUser() user: AuthUser, @Body() body: Prisma.NodeCreateInput) {
-    return this.nodeRepo.createNode({ ...body, tenant: { connect: { id: user.tenantId } } });
+  async createNode(@CurrentUser() user: AuthUser, @Body() body: CreateNodeDto) {
+    return this.nodeRepo.createNode({
+      ...body,
+      tools: body.tools as Prisma.InputJsonValue,
+      preCodeInputSchema: body.preCodeInputSchema as Prisma.InputJsonValue,
+      postCodeInputSchema: body.postCodeInputSchema as Prisma.InputJsonValue,
+      todos: body.todos as Prisma.InputJsonValue,
+      tenant: { connect: { id: user.tenantId } },
+    });
   }
 
   @Put(':id')
   async updateNode(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: Prisma.NodeUpdateInput,
+    @Body() body: UpdateNodeDto,
   ) {
-    const result = await this.nodeRepo.updateNode(id, user.tenantId, body);
+    const data: Prisma.NodeUpdateInput = {
+      ...body,
+      tools: body.tools as Prisma.InputJsonValue,
+      preCodeInputSchema: body.preCodeInputSchema as Prisma.InputJsonValue,
+      postCodeInputSchema: body.postCodeInputSchema as Prisma.InputJsonValue,
+      todos: body.todos as Prisma.InputJsonValue,
+    };
+    const result = await this.nodeRepo.updateNode(id, user.tenantId, data);
     if (!result) throw new NotFoundException('Node not found');
     return result;
   }
