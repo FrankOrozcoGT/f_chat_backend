@@ -6,6 +6,7 @@ import { MessageRepository } from '@common/messaging/repositories/message.reposi
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
+import { phoneFromJid, jidFromPhone } from '@common/utils/whatsapp-jid';
 
 @Injectable()
 export class MessageHistoryBootstrapService {
@@ -65,7 +66,7 @@ export class MessageHistoryBootstrapService {
         for (const p of participants) {
           if (p.phoneNumber) {
             const lid = p.id.replace('@lid', '');
-            const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            const phone = phoneFromJid(p.phoneNumber);
             lidToPhone.set(lid, phone);
           }
         }
@@ -77,7 +78,7 @@ export class MessageHistoryBootstrapService {
 
           const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
           for (const ph of phonesWithoutPic) {
-            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${ph}@s.whatsapp.net`);
+            const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, jidFromPhone(ph));
             if (picUrl) {
               await this.clientRepository.updateProfilePicIfExists(ph, picUrl);
               const existing = clientByPhone.get(ph);
@@ -154,7 +155,7 @@ export class MessageHistoryBootstrapService {
             if (isGroupConversation && !m.key?.fromMe && m.pushName) {
               const clientInfo = lidToClientMap.get(m.pushName);
               if (clientInfo) {
-                meta.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+                meta.senderJid = jidFromPhone(clientInfo.phoneNumber);
                 meta.senderName = clientInfo.name || clientInfo.phoneNumber;
                 if (clientInfo.profilePicUrl) meta.senderProfilePicUrl = clientInfo.profilePicUrl;
               } else {

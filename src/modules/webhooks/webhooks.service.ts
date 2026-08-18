@@ -11,6 +11,7 @@ import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { PhoneQueueService } from './services/phone-queue.service';
+import { phoneFromJid, isIndividualJid } from '@common/utils/whatsapp-jid';
 import type {
   EvolutionWebhookEvent,
   ConnectionUpdateData,
@@ -342,14 +343,9 @@ export class WebhooksService {
       const remoteJid = contact?.remoteJid;
       const profilePicUrl = contact?.profilePicUrl;
 
-      if (
-        !remoteJid ||
-        !profilePicUrl ||
-        !remoteJid.endsWith('@s.whatsapp.net')
-      )
-        continue;
+      if (!remoteJid || !profilePicUrl || !isIndividualJid(remoteJid)) continue;
 
-      const phoneNumber = remoteJid.replace('@s.whatsapp.net', '');
+      const phoneNumber = phoneFromJid(remoteJid);
       const updated = await this.clientRepository.updateProfilePicIfExists(
         phoneNumber,
         profilePicUrl,
@@ -415,9 +411,7 @@ export class WebhooksService {
       : 'Unknown';
 
     // Limpiar formato: 5521999999999@s.whatsapp.net -> 5521999999999
-    const phoneNumber = remoteJid
-      .replace('@s.whatsapp.net', '')
-      .replace('@c.us', '');
+    const phoneNumber = phoneFromJid(remoteJid);
 
     const profilePicUrl = webhookData?.data?.profilePicUrl || null;
 

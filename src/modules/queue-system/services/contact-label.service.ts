@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { ContactLabelRepository } from '../repositories/contact-label.repository';
 import { CreateLabelDto } from '../dto/create-label.dto';
 import { UpdateLabelDto } from '../dto/update-label.dto';
+import { jidFromPhone } from '@common/utils/whatsapp-jid';
 
 export interface ResolvedContact {
   remoteJid: string;
@@ -31,7 +32,7 @@ export class ContactLabelService {
 
     if (contactLabel.client) {
       return {
-        remoteJid: `${contactLabel.client.phoneNumber}@s.whatsapp.net`,
+        remoteJid: jidFromPhone(contactLabel.client.phoneNumber),
         isGroup: false,
         clientId: contactLabel.client.id,
       };

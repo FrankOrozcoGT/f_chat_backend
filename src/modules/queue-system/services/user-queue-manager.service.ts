@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
+import { jidFromPhone } from '@common/utils/whatsapp-jid';
 
 interface OutboundJobData {
   queueRequestId: string;
@@ -107,7 +108,7 @@ export class UserQueueManager implements OnModuleInit {
     }
 
     // Send WhatsApp message
-    const remoteJid = queueRequest.groupJid ?? `${queueRequest.destinationPhone}@s.whatsapp.net`;
+    const remoteJid = queueRequest.groupJid ?? jidFromPhone(queueRequest.destinationPhone);
     let sentResponse;
     if (queueRequest.imageUrl) {
       sentResponse = await this.evolutionService.sendMediaMessage(

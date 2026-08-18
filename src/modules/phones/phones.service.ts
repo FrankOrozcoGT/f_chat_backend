@@ -15,6 +15,7 @@ import { ContactResponseDto } from './dto/contact-response.dto';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { LimitsService } from '@common/services/limits.service';
 import { ClientRepository } from '@common/messaging/repositories/client.repository';
+import { phoneFromJid } from '@common/utils/whatsapp-jid';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
@@ -157,9 +158,7 @@ export class PhonesService {
       return [];
     }
 
-    const phoneNumber = remoteJid
-      .replace('@s.whatsapp.net', '')
-      .replace('@c.us', '');
+    const phoneNumber = phoneFromJid(remoteJid);
     const firstWithName = rawMessages.find((m) => m.pushName && !m.key?.fromMe);
     const client = await this.clientRepository.upsert({
       phoneNumber,

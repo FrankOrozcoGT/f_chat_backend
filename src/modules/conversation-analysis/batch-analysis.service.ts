@@ -7,6 +7,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { groupAnalysesByIntent } from './utils/group-analyses-by-intent';
 import { ensureError } from '@common/utils/ensure-error';
 import { MergeAnalysesDto } from './dto/merge-analyses.dto';
+import { phoneFromJid } from '@common/utils/whatsapp-jid';
 
 @Injectable()
 export class BatchAnalysisService {
@@ -144,7 +145,7 @@ export class BatchAnalysisService {
               throw new Error(`Group ${conversation.id} marked as internal but AI returned 0 participants`);
             }
             for (const participant of result.participants) {
-              const phoneNumber = participant.senderJid.replace('@s.whatsapp.net', '');
+              const phoneNumber = phoneFromJid(participant.senderJid);
               const matchedClient = conversation.allParticipants.find((p) => p.phoneNumber === phoneNumber);
               if (matchedClient) {
                 await this.internalChannelReviewRepo.upsert({

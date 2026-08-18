@@ -7,6 +7,7 @@ import type {
   EvolutionWebhookEvent,
   EvolutionGroupUpsert,
 } from '../types/evolution-webhook.types';
+import { phoneFromJid } from '@common/utils/whatsapp-jid';
 
 @Injectable()
 export class GroupSyncService {
@@ -67,7 +68,7 @@ export class GroupSyncService {
           this.logger.warn(`[groups.upsert] LID participant in group ${groupJid} — full object: ${JSON.stringify(p)}`);
           continue;
         }
-        const phoneNumber = p.id.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        const phoneNumber = phoneFromJid(p.id);
         if (!phoneNumber) continue;
         const client = await this.clientRepository.upsert({ phoneNumber, name: phoneNumber });
         await this.conversationRepository.upsertParticipant(conversation.id, client.id);

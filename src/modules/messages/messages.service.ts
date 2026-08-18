@@ -23,6 +23,7 @@ import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolutio
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SendWithFileDto } from './dto/send-with-file.dto';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
+import { phoneFromJid, jidFromPhone } from '@common/utils/whatsapp-jid';
 import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
 
 @Injectable()
@@ -98,7 +99,7 @@ export class MessagesService {
     const isGroup = conversation.type === 'group';
     const remoteJid = isGroup
       ? conversation.groupJid
-      : conversation.client ? `${conversation.client.phoneNumber}@s.whatsapp.net` : null;
+      : conversation.client ? jidFromPhone(conversation.client.phoneNumber) : null;
 
     if (!remoteJid) {
       const detail = isGroup
@@ -265,7 +266,7 @@ export class MessagesService {
     for (const p of participants) {
       if (p.phoneNumber) {
         const lid = p.id.replace('@lid', '');
-        const phone = p.phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        const phone = phoneFromJid(p.phoneNumber);
         lidToPhone.set(lid, phone);
       }
     }
@@ -278,7 +279,7 @@ export class MessagesService {
 
     const phonesWithoutPic = phoneNumbers.filter((p) => !clientByPhone.get(p)?.profilePicUrl);
     for (const phone of phonesWithoutPic) {
-      const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, `${phone}@s.whatsapp.net`);
+      const picUrl = await this.evolutionService.fetchProfilePictureUrl(instanceName, jidFromPhone(phone));
       if (picUrl) {
         await this.clientRepository.updateProfilePicIfExists(phone, picUrl);
         const existing = clientByPhone.get(phone);
@@ -313,7 +314,7 @@ export class MessagesService {
   ): void {
     const clientInfo = lidToClientMap.get(pushName);
     if (clientInfo) {
-      metadata.senderJid = `${clientInfo.phoneNumber}@s.whatsapp.net`;
+      metadata.senderJid = jidFromPhone(clientInfo.phoneNumber);
       metadata.senderName = clientInfo.name || clientInfo.phoneNumber;
       if (clientInfo.profilePicUrl) metadata.senderProfilePicUrl = clientInfo.profilePicUrl;
     } else {

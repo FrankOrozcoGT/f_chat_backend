@@ -3,6 +3,7 @@ import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { ClientRepository } from '@common/messaging/repositories/client.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import type { EvolutionWebhookEvent, EvolutionContactUpsert } from '../types/evolution-webhook.types';
+import { phoneFromJid, isIndividualJid } from '@common/utils/whatsapp-jid';
 
 @Injectable()
 export class ContactSyncService {
@@ -30,9 +31,7 @@ export class ContactSyncService {
     const raw: EvolutionContactUpsert[] =
       Array.isArray(webhookData?.data) ? webhookData.data : [];
 
-    const contacts = raw.filter((c) =>
-      c.remoteJid?.endsWith('@s.whatsapp.net'),
-    );
+    const contacts = raw.filter((c) => isIndividualJid(c.remoteJid));
 
     this.logger.log(
       `[${new Date().toISOString()}] contacts.upsert phone=${phoneId} total=${raw.length} individual=${contacts.length}`,
@@ -63,23 +62,21 @@ export class ContactSyncService {
     // 1. Bulk insert clientes
     await this.clientRepository.createManySkipDuplicates(
       contacts.map((c) => ({
-        phoneNumber: c.remoteJid!.replace('@s.whatsapp.net', ''),
-        name: c.pushName || c.remoteJid!.replace('@s.whatsapp.net', ''),
+        phoneNumber: phoneFromJid(c.remoteJid!),
+        name: c.pushName || phoneFromJid(c.remoteJid!),
         profilePicUrl: c.profilePicUrl || null,
       })),
     );
 
     // 2. Obtener IDs y bulk insert conversaciones
-    const phoneNumbers = contacts.map((c) =>
-      c.remoteJid!.replace('@s.whatsapp.net', ''),
-    );
+    const phoneNumbers = contacts.map((c) => phoneFromJid(c.remoteJid!));
     const clients =
       await this.clientRepository.findManyByPhoneNumbers(phoneNumbers);
     const phoneToClientId = new Map(clients.map((c) => [c.phoneNumber, c.id]));
 
     const conversationsData = contacts
       .map((c) => {
-        const phoneNumber = c.remoteJid!.replace('@s.whatsapp.net', '');
+        const phoneNumber = phoneFromJid(c.remoteJid!);
         const clientId = phoneToClientId.get(phoneNumber);
         return clientId ? { phoneId, clientId } : null;
       })
