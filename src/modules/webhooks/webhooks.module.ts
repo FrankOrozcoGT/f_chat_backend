@@ -14,6 +14,7 @@ import { MessageRepository } from './repositories/message.repository';
 import { GroupConversationRepository } from './repositories/group-conversation.repository';
 import { PhoneQueueService } from './services/phone-queue.service';
 import { MessageProcessorService } from './services/message-processor.service';
+import { MessageHistoryBootstrapService } from './services/message-history-bootstrap.service';
 import { ContactSyncService } from './services/contact-sync.service';
 import { GroupSyncService } from './services/group-sync.service';
 import { ChatSyncService } from './services/chat-sync.service';
@@ -38,6 +39,7 @@ import { ConversationAnalysisRepository } from '@modules/conversation-analysis/r
     GroupConversationRepository,
     PhoneQueueService,
     MessageProcessorService,
+    MessageHistoryBootstrapService,
     ContactSyncService,
     GroupSyncService,
     ChatSyncService,
