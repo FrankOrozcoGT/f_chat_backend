@@ -11,7 +11,7 @@ import { PromotionRepository } from './repositories/promotion.repository';
 import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
 import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant-settings.repository';
-import { PrismaService } from '@common/prisma/prisma.service';
+import { ClientRepository } from './repositories/client.repository';
 import { R2Service } from '@common/r2/r2.service';
 
 @Controller('internal/catalog')
@@ -24,7 +24,7 @@ export class InternalCatalogController {
     private readonly promotionDiscountRepository: PromotionDiscountRepository,
     private readonly shippingLocationRepository: ShippingLocationRepository,
     private readonly tenantSettingsRepository: TenantSettingsRepository,
-    private readonly prisma: PrismaService,
+    private readonly clientRepository: ClientRepository,
     private readonly r2Service: R2Service,
   ) {}
 
@@ -102,7 +102,7 @@ export class InternalCatalogController {
 
     // Shipping: ubicación del cliente + zonas de envío del tenant + default
     const clientLocation = body.clientId
-      ? (await this.prisma.client.findUnique({ where: { id: body.clientId }, select: { location: true } }))?.location ?? null
+      ? (await this.clientRepository.findLocationById(body.clientId))?.location ?? null
       : null;
 
     const shippingLocations = await this.shippingLocationRepository.findByTenantId(body.tenantId);
@@ -216,10 +216,7 @@ export class InternalCatalogController {
   async saveClientLocation(
     @Body() body: { clientId: string; location: string },
   ) {
-    const client = await this.prisma.client.update({
-      where: { id: body.clientId },
-      data: { location: body.location },
-    });
+    const client = await this.clientRepository.updateLocation(body.clientId, body.location);
     return { clientId: client.id, location: client.location };
   }
 

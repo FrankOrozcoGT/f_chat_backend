@@ -7,6 +7,7 @@ import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
 import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
+import { ClientRepository } from './repositories/client.repository';
 import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant-settings.repository';
 
 @Module({
@@ -18,6 +19,7 @@ import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant
     PromotionRepository,
     PromotionDiscountRepository,
     ShippingLocationRepository,
+    ClientRepository,
     TenantSettingsRepository,
   ],
   exports: [
