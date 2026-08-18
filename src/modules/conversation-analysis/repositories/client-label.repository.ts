@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -35,7 +36,7 @@ export class ClientLabelRepository {
     groupJid: string | null;
   }): Promise<{ label: string } | null> {
     if (!data.clientId && !data.groupJid) return null;
-    const conditions: any[] = [];
+    const conditions: Prisma.ContactLabelWhereInput[] = [];
     if (data.clientId) conditions.push({ clientId: data.clientId });
     if (data.groupJid) conditions.push({ groupJid: data.groupJid });
     return this.prisma.contactLabel.findFirst({

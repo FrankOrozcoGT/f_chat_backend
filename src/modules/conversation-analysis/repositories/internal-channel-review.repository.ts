@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { InternalReviewStatus } from '@prisma/client';
+import { InternalReviewStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class InternalChannelReviewRepository {
@@ -56,7 +56,7 @@ export class InternalChannelReviewRepository {
     groupJid: string | null;
   }): Promise<{ id: string; status: InternalReviewStatus; internalPurpose: string | null } | null> {
     if (!data.clientId && !data.groupJid) return null;
-    const conditions: any[] = [];
+    const conditions: Prisma.InternalChannelReviewWhereInput[] = [];
     if (data.clientId) conditions.push({ clientId: data.clientId });
     if (data.groupJid) conditions.push({ groupJid: data.groupJid });
     return this.prisma.internalChannelReview.findFirst({
@@ -76,7 +76,7 @@ export class InternalChannelReviewRepository {
     internalPurpose: string | null;
     channelName: string | null;
   }) {
-    const conditions: any[] = [];
+    const conditions: Prisma.InternalChannelReviewWhereInput[] = [];
     if (data.clientId) conditions.push({ clientId: data.clientId });
     if (data.groupJid) conditions.push({ groupJid: data.groupJid });
 
