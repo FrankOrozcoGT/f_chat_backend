@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
@@ -7,10 +7,6 @@ import { TenantRole } from '@prisma/client';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { FlowGenerationService } from './flow-generation.service';
 import { InternalChannelService } from './internal-channel.service';
-import { FlowIntentRepository } from './repositories/flow-intent.repository';
-import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
-import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
-import { FlowVersionRepository } from '@modules/nodes/repositories/flow-version.repository';
 import { RunBatchDto } from './dto/run-batch.dto';
 import { UpdateDiagramDto } from './dto/update-diagram.dto';
 import { MarkInternalDto } from './dto/mark-internal.dto';
@@ -28,16 +24,10 @@ interface AuthenticatedUser {
 @UseGuards(JwtAuthGuard, TenantRolesGuard)
 @TenantRoles(TenantRole.owner, TenantRole.tecnico)
 export class BatchAnalysisController {
-  private readonly logger = new Logger(BatchAnalysisController.name);
-
   constructor(
     private readonly batchAnalysisService: BatchAnalysisService,
     private readonly flowGenerationService: FlowGenerationService,
     private readonly internalChannelService: InternalChannelService,
-    private readonly flowIntentRepo: FlowIntentRepository,
-    private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
-    private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
-    private readonly flowVersionRepo: FlowVersionRepository,
   ) {}
 
   @Post()
@@ -61,20 +51,7 @@ export class BatchAnalysisController {
 
   @Get('flows/:flowId/diagram')
   async getFlowDiagram(@Param('flowId') flowId: string) {
-    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
-    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
-    return {
-      flowId,
-      versionId: version.id,
-      version: version.version,
-      consolidatedDiagram: version.consolidatedDiagram,
-      nodeMapping: version.nodeMapping,
-      nodeCategories: version.nodeCategories,
-      internalQueues: version.internalQueues,
-      representativeCases: version.representativeCases,
-      diagramApproved: version.diagramApproved,
-      diagramModified: version.diagramModified,
-    };
+    return this.flowGenerationService.getFlowDiagram(flowId);
   }
 
   @Patch('flows/:flowId/diagram')
@@ -82,10 +59,7 @@ export class BatchAnalysisController {
     @Param('flowId') flowId: string,
     @Body() dto: UpdateDiagramDto,
   ) {
-    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
-    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
-    await this.flowVersionRepo.updateDiagram(version.id, dto.diagram);
-    return { flowId, versionId: version.id, diagramModified: true };
+    return this.flowGenerationService.updateFlowDiagram(flowId, dto);
   }
 
   @Post('flows/:flowId/regenerate-diagram')
@@ -97,8 +71,7 @@ export class BatchAnalysisController {
   @Post('flows/:flowId/approve-diagram')
   @HttpCode(200)
   async approveDiagram(@Param('flowId') flowId: string) {
-    await this.flowVersionRepo.approveDiagram(flowId);
-    return { flowId, diagramApproved: true };
+    return this.flowGenerationService.approveDiagram(flowId);
   }
 
   @Post('generate-flows')
@@ -111,7 +84,7 @@ export class BatchAnalysisController {
 
   @Get('internals')
   async getInternalReviews(@CurrentUser() user: AuthenticatedUser) {
-    return this.internalChannelReviewRepo.findByTenantId(user.tenantId);
+    return this.internalChannelService.getInternalReviews(user.tenantId);
   }
 
   @Patch('internals/:id')
@@ -125,23 +98,7 @@ export class BatchAnalysisController {
 
   @Get('flows/:flowId/analyses')
   async getFlowAnalyses(@Param('flowId') flowId: string) {
-    const records = await this.flowIntentRepo.findByFlowId(flowId);
-    return records.map((r) => ({
-      analysisId: r.analysis.id,
-      conversationId: r.analysis.conversationId,
-      groupJid: r.analysis.conversation?.groupJid ?? null,
-      participants: (r.analysis.conversation?.participants ?? []).map((p) => ({
-        clientId: p.clientId,
-        name: p.client?.name ?? null,
-        phoneNumber: p.client?.phoneNumber ?? null,
-      })),
-      intent: r.analysis.intent,
-      flowSummary: r.analysis.flowSummary,
-      flowDiagram: r.analysis.flowDiagram,
-      isInternal: r.analysis.isInternal,
-      internalPurpose: r.analysis.internalPurpose,
-      analyzedAt: r.analysis.analyzedAt,
-    }));
+    return this.batchAnalysisService.getFlowAnalyses(flowId);
   }
 
   @Get('clients/:clientId/conversations')
@@ -149,8 +106,7 @@ export class BatchAnalysisController {
     @Param('clientId') clientId: string,
     @Query('limit') limit?: string,
   ) {
-    const msgLimit = parseInt(limit ?? '100', 10);
-    return this.conversationAnalysisRepo.findClientConversationsWithMessages(clientId, msgLimit);
+    return this.batchAnalysisService.getClientConversations(clientId, limit);
   }
 
   @Post('clients/:clientId/mark-internal')
@@ -165,15 +121,7 @@ export class BatchAnalysisController {
 
   @Get('intents')
   async getIntents(@CurrentUser() user: AuthenticatedUser) {
-    const analyses = await this.conversationAnalysisRepo.findAllByTenantId(user.tenantId, false);
-    const grouped = new Map<string, number>();
-    for (const a of analyses) {
-      if (!a.intent) continue;
-      grouped.set(a.intent, (grouped.get(a.intent) ?? 0) + 1);
-    }
-    return Array.from(grouped.entries())
-      .map(([intent, count]) => ({ intent, count }))
-      .sort((a, b) => b.count - a.count);
+    return this.batchAnalysisService.getIntents(user.tenantId);
   }
 
   @Post('intents/merge-analyses')
@@ -182,13 +130,7 @@ export class BatchAnalysisController {
     @Body() dto: MergeAnalysesDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    let totalRenamed = 0;
-    for (const source of dto.sourceIntents) {
-      const result = await this.conversationAnalysisRepo.renameIntent(source, dto.targetIntent, user.tenantId);
-      totalRenamed += result.count;
-      this.logger.log(`mergeAnalyses: renamed ${result.count} analyses from "${source}" to "${dto.targetIntent}"`);
-    }
-    return { targetIntent: dto.targetIntent, totalRenamed };
+    return this.batchAnalysisService.mergeAnalyses(dto, user.tenantId);
   }
 
   @Post('intents/:targetIntentId/merge')

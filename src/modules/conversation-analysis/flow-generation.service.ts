@@ -15,6 +15,7 @@ import { FlowVersionRepository, DraftFlowSnapshot } from '@modules/nodes/reposit
 import { groupAnalysesByIntent } from './utils/group-analyses-by-intent';
 import { createHash } from 'crypto';
 import { ensureError } from '@common/utils/ensure-error';
+import { UpdateDiagramDto } from './dto/update-diagram.dto';
 
 @Injectable()
 export class FlowGenerationService {
@@ -30,6 +31,35 @@ export class FlowGenerationService {
     private readonly nodeRepo: NodeRepository,
     private readonly flowVersionRepo: FlowVersionRepository,
   ) {}
+
+  async getFlowDiagram(flowId: string) {
+    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
+    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
+    return {
+      flowId,
+      versionId: version.id,
+      version: version.version,
+      consolidatedDiagram: version.consolidatedDiagram,
+      nodeMapping: version.nodeMapping,
+      nodeCategories: version.nodeCategories,
+      internalQueues: version.internalQueues,
+      representativeCases: version.representativeCases,
+      diagramApproved: version.diagramApproved,
+      diagramModified: version.diagramModified,
+    };
+  }
+
+  async updateFlowDiagram(flowId: string, dto: UpdateDiagramDto) {
+    const version = await this.flowVersionRepo.findLatestWithDiagram(flowId);
+    if (!version) throw new BadRequestException(`No version found for flow ${flowId}`);
+    await this.flowVersionRepo.updateDiagram(version.id, dto.diagram);
+    return { flowId, versionId: version.id, diagramModified: true };
+  }
+
+  async approveDiagram(flowId: string) {
+    await this.flowVersionRepo.approveDiagram(flowId);
+    return { flowId, diagramApproved: true };
+  }
 
   async generateDiagrams(tenantId: string): Promise<{ diagramsGenerated: number; totalCostUsd: number; flows: { flowId: string; intentName: string }[]; errors: { intentName: string; error: string }[] }> {
     const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId);

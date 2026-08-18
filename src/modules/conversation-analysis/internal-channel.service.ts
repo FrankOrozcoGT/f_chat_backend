@@ -13,6 +13,10 @@ export class InternalChannelService {
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
   ) {}
 
+  async getInternalReviews(tenantId: string) {
+    return this.internalChannelReviewRepo.findByTenantId(tenantId);
+  }
+
   async reviewInternal(id: string, tenantId: string, dto: ReviewInternalDto) {
     const updated = await this.internalChannelReviewRepo.review(id, {
       status: dto.status,

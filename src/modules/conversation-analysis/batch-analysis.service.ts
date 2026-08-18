@@ -3,8 +3,10 @@ import { ConversationAnalysisService } from './conversation-analysis.service';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { groupAnalysesByIntent } from './utils/group-analyses-by-intent';
 import { ensureError } from '@common/utils/ensure-error';
+import { MergeAnalysesDto } from './dto/merge-analyses.dto';
 
 @Injectable()
 export class BatchAnalysisService {
@@ -15,7 +17,55 @@ export class BatchAnalysisService {
     private readonly internalChannelReviewRepo: InternalChannelReviewRepository,
     private readonly conversationAnalysisRepo: ConversationAnalysisRepository,
     private readonly conversationRepo: ConversationRepository,
+    private readonly flowIntentRepo: FlowIntentRepository,
   ) {}
+
+  async getFlowAnalyses(flowId: string) {
+    const records = await this.flowIntentRepo.findByFlowId(flowId);
+    return records.map((r) => ({
+      analysisId: r.analysis.id,
+      conversationId: r.analysis.conversationId,
+      groupJid: r.analysis.conversation?.groupJid ?? null,
+      participants: (r.analysis.conversation?.participants ?? []).map((p) => ({
+        clientId: p.clientId,
+        name: p.client?.name ?? null,
+        phoneNumber: p.client?.phoneNumber ?? null,
+      })),
+      intent: r.analysis.intent,
+      flowSummary: r.analysis.flowSummary,
+      flowDiagram: r.analysis.flowDiagram,
+      isInternal: r.analysis.isInternal,
+      internalPurpose: r.analysis.internalPurpose,
+      analyzedAt: r.analysis.analyzedAt,
+    }));
+  }
+
+  async getClientConversations(clientId: string, limit?: string) {
+    const msgLimit = parseInt(limit ?? '100', 10);
+    return this.conversationAnalysisRepo.findClientConversationsWithMessages(clientId, msgLimit);
+  }
+
+  async getIntents(tenantId: string) {
+    const analyses = await this.conversationAnalysisRepo.findAllByTenantId(tenantId, false);
+    const grouped = new Map<string, number>();
+    for (const a of analyses) {
+      if (!a.intent) continue;
+      grouped.set(a.intent, (grouped.get(a.intent) ?? 0) + 1);
+    }
+    return Array.from(grouped.entries())
+      .map(([intent, count]) => ({ intent, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  async mergeAnalyses(dto: MergeAnalysesDto, tenantId: string) {
+    let totalRenamed = 0;
+    for (const source of dto.sourceIntents) {
+      const result = await this.conversationAnalysisRepo.renameIntent(source, dto.targetIntent, tenantId);
+      totalRenamed += result.count;
+      this.logger.log(`mergeAnalyses: renamed ${result.count} analyses from "${source}" to "${dto.targetIntent}"`);
+    }
+    return { targetIntent: dto.targetIntent, totalRenamed };
+  }
 
   async runBatch(
     tenantId: string,
