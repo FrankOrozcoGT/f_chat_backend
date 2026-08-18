@@ -243,22 +243,14 @@ export class WebhookProcessorService {
 
     // Si es mensaje entrante de grupo, verificar si hay un QueueRequest pendiente para ese grupo+sender
     if (!fromMe && isGroup) {
-      const quotedMessageId = (message.metadata as any)?.quotedMessageId ?? undefined;
-      const queueRequest = await this.queueRequestService.handleResponse(
+      const matched = await this.tryMatchQueueResponse(
         instanceName,
         senderPhone,
-        message.content,
+        message,
+        `group ${remoteJid} sender ${senderPhone}`,
         remoteJid,
-        quotedMessageId,
       );
-      if (queueRequest) {
-        this.eventEmitter.emit('queue.response.received', {
-          queueRequestId: queueRequest.id,
-          messageId: message.id,
-        });
-        this.logger.log(`[queue] Response from group ${remoteJid} sender ${senderPhone} matched QueueRequest ${queueRequest.id}`);
-        return;
-      }
+      if (matched) return;
     }
 
     // Si es mensaje entrante individual, verificar si es contacto etiquetado (supervisor, etc.)
@@ -267,23 +259,13 @@ export class WebhookProcessorService {
 
       if (isLabeled) {
         // Contactos etiquetados NUNCA van al flujo normal — su respuesta va al queue system
-        const quotedMessageId = (message.metadata as any)?.quotedMessageId ?? undefined;
-        const queueRequest = await this.queueRequestService.handleResponse(
+        const matched = await this.tryMatchQueueResponse(
           instanceName,
           clientPhone,
-          message.content,
-          undefined,
-          quotedMessageId,
+          message,
+          `labeled contact ${clientPhone}`,
         );
-        if (queueRequest) {
-          this.eventEmitter.emit('queue.response.received', {
-            queueRequestId: queueRequest.id,
-            messageId: message.id,
-          });
-          this.logger.log(
-            `[queue] Response from labeled contact ${clientPhone} matched QueueRequest ${queueRequest.id}`,
-          );
-        } else {
+        if (!matched) {
           this.logger.log(
             `[queue] Message from labeled contact ${clientPhone} but no pending QueueRequest found`,
           );
@@ -325,6 +307,38 @@ export class WebhookProcessorService {
         );
       }
     }
+  }
+
+  /**
+   * Intenta hacer match del mensaje entrante contra un QueueRequest pendiente
+   * (respuesta de un supervisor/agente esperada por el sistema de cola).
+   * Emite 'queue.response.received' y loggea si hay match.
+   * @returns true si hubo match (el llamador debe cortar el flujo normal)
+   */
+  private async tryMatchQueueResponse(
+    instanceName: string,
+    phone: string,
+    message: { id: string; content: string; metadata: unknown },
+    logLabel: string,
+    remoteJid?: string,
+  ): Promise<boolean> {
+    const quotedMessageId = (message.metadata as any)?.quotedMessageId ?? undefined;
+    const queueRequest = await this.queueRequestService.handleResponse(
+      instanceName,
+      phone,
+      message.content,
+      remoteJid,
+      quotedMessageId,
+    );
+
+    if (!queueRequest) return false;
+
+    this.eventEmitter.emit('queue.response.received', {
+      queueRequestId: queueRequest.id,
+      messageId: message.id,
+    });
+    this.logger.log(`[queue] Response from ${logLabel} matched QueueRequest ${queueRequest.id}`);
+    return true;
   }
 
   /**
