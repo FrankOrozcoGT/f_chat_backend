@@ -7,12 +7,9 @@ import {
   Param,
   Body,
   UseGuards,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
-import { NodeRepository } from './repositories/node.repository';
-import { IntentRepository } from './repositories/intent.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { CreateFlowDto } from './dto/create-flow.dto';
 import { UpdateFlowDto } from './dto/update-flow.dto';
@@ -21,7 +18,6 @@ import { CreateIntentDto } from './dto/create-intent.dto';
 import { UpdateIntentDto } from './dto/update-intent.dto';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
-import { TemplateRepository } from './repositories/template.repository';
 import { NodesService } from './nodes.service';
 
 interface AuthUser {
@@ -33,10 +29,7 @@ interface AuthUser {
 @UseGuards(JwtAuthGuard)
 export class NodesController {
   constructor(
-    private readonly nodeRepo: NodeRepository,
-    private readonly intentRepo: IntentRepository,
     private readonly functionRegistry: NodeFunctionRegistry,
-    private readonly templateRepo: TemplateRepository,
     private readonly nodesService: NodesService,
   ) {}
 
@@ -71,21 +64,17 @@ export class NodesController {
 
   @Post('flows')
   createFlow(@CurrentUser() user: AuthUser, @Body() dto: CreateFlowDto) {
-    return this.nodeRepo.createFlow({ tenantId: user.tenantId, ...dto });
+    return this.nodesService.createFlow(user.tenantId, dto);
   }
 
   @Put('flows/:id')
   async updateFlow(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateFlowDto) {
-    const result = await this.nodeRepo.updateFlow(id, user.tenantId, dto);
-    if (!result) throw new NotFoundException('Flow not found');
-    return result;
+    return this.nodesService.updateFlow(id, user.tenantId, dto);
   }
 
   @Delete('flows/:id')
   async deleteFlow(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const result = await this.nodeRepo.deleteFlow(id, user.tenantId);
-    if (!result) throw new NotFoundException('Flow not found');
-    return result;
+    return this.nodesService.deleteFlow(id, user.tenantId);
   }
 
   // ─── Flow Versions ───────────────────────────────────────────────────────────
@@ -108,7 +97,7 @@ export class NodesController {
 
   @Get('flows/:flowId/transitions')
   getTransitions(@CurrentUser() user: AuthUser, @Param('flowId') flowId: string) {
-    return this.nodeRepo.findTransitionsByFlowId(flowId, user.tenantId);
+    return this.nodesService.getTransitions(flowId, user.tenantId);
   }
 
   @Post('flows/:flowId/transitions')
@@ -118,42 +107,34 @@ export class NodesController {
 
   @Delete('flows/:flowId/transitions/:id')
   async deleteTransition(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const result = await this.nodeRepo.deleteTransition(id, user.tenantId);
-    if (result.count === 0) throw new NotFoundException('Transition not found');
-    return result;
+    return this.nodesService.deleteTransition(id, user.tenantId);
   }
 
   // ─── Intents ─────────────────────────────────────────────────────────────────
 
   @Get('intents')
   getIntents(@CurrentUser() user: AuthUser) {
-    return this.intentRepo.findByTenantId(user.tenantId);
+    return this.nodesService.getIntents(user.tenantId);
   }
 
   @Post('intents')
   createIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateIntentDto) {
-    return this.intentRepo.create(user.tenantId, dto);
+    return this.nodesService.createIntent(user.tenantId, dto);
   }
 
   @Put('intents/:id')
   async updateIntent(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateIntentDto) {
-    const result = await this.intentRepo.updateById(id, user.tenantId, dto);
-    if (!result) throw new NotFoundException('Intent not found');
-    return result;
+    return this.nodesService.updateIntent(id, user.tenantId, dto);
   }
 
   @Delete('intents/:id')
   async deleteIntent(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const result = await this.intentRepo.deleteById(id, user.tenantId);
-    if (result.count === 0) throw new NotFoundException('Intent not found');
-    return result;
+    return this.nodesService.deleteIntent(id, user.tenantId);
   }
 
   @Get(':id')
   async getNode(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const node = await this.nodeRepo.findById(id, user.tenantId);
-    if (!node) throw new NotFoundException('Node not found');
-    return node;
+    return this.nodesService.getNode(id, user.tenantId);
   }
 
   @Post()
@@ -183,8 +164,7 @@ export class NodesController {
 
   @Get('templates/:code')
   async getTemplate(@Param('code') code: string, @CurrentUser() user: AuthUser) {
-    const content = await this.templateRepo.findByCode(code, user.tenantId);
-    return { code, content };
+    return this.nodesService.getTemplate(code, user.tenantId);
   }
 
   @Put('templates/:code')
@@ -193,7 +173,6 @@ export class NodesController {
     @Body() body: { content: string },
     @CurrentUser() user: AuthUser,
   ) {
-    await this.templateRepo.upsert(code, user.tenantId, body.content);
-    return { code, content: body.content };
+    return this.nodesService.upsertTemplate(code, user.tenantId, body.content);
   }
 }

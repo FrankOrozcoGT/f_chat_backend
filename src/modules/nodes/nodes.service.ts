@@ -1,11 +1,17 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { NodeRepository } from './repositories/node.repository';
+import { IntentRepository } from './repositories/intent.repository';
+import { TemplateRepository } from './repositories/template.repository';
 import { FlowVersionRepository, FlowSnapshot, DraftFlowSnapshot } from './repositories/flow-version.repository';
 import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
+import { CreateFlowDto } from './dto/create-flow.dto';
+import { UpdateFlowDto } from './dto/update-flow.dto';
 import { CreateTransitionDto } from './dto/create-transition.dto';
+import { CreateIntentDto } from './dto/create-intent.dto';
+import { UpdateIntentDto } from './dto/update-intent.dto';
 
 interface DraftSnapshotNode {
   name: string;
@@ -51,9 +57,73 @@ export interface DraftFlowView {
 export class NodesService {
   constructor(
     private readonly nodeRepo: NodeRepository,
+    private readonly intentRepo: IntentRepository,
+    private readonly templateRepo: TemplateRepository,
     private readonly flowVersionRepo: FlowVersionRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
   ) {}
+
+  createFlow(tenantId: string, dto: CreateFlowDto) {
+    return this.nodeRepo.createFlow({ tenantId, ...dto });
+  }
+
+  async updateFlow(id: string, tenantId: string, dto: UpdateFlowDto) {
+    const result = await this.nodeRepo.updateFlow(id, tenantId, dto);
+    if (!result) throw new NotFoundException('Flow not found');
+    return result;
+  }
+
+  async deleteFlow(id: string, tenantId: string) {
+    const result = await this.nodeRepo.deleteFlow(id, tenantId);
+    if (!result) throw new NotFoundException('Flow not found');
+    return result;
+  }
+
+  getTransitions(flowId: string, tenantId: string) {
+    return this.nodeRepo.findTransitionsByFlowId(flowId, tenantId);
+  }
+
+  async deleteTransition(id: string, tenantId: string) {
+    const result = await this.nodeRepo.deleteTransition(id, tenantId);
+    if (result.count === 0) throw new NotFoundException('Transition not found');
+    return result;
+  }
+
+  getIntents(tenantId: string) {
+    return this.intentRepo.findByTenantId(tenantId);
+  }
+
+  createIntent(tenantId: string, dto: CreateIntentDto) {
+    return this.intentRepo.create(tenantId, dto);
+  }
+
+  async updateIntent(id: string, tenantId: string, dto: UpdateIntentDto) {
+    const result = await this.intentRepo.updateById(id, tenantId, dto);
+    if (!result) throw new NotFoundException('Intent not found');
+    return result;
+  }
+
+  async deleteIntent(id: string, tenantId: string) {
+    const result = await this.intentRepo.deleteById(id, tenantId);
+    if (result.count === 0) throw new NotFoundException('Intent not found');
+    return result;
+  }
+
+  async getNode(id: string, tenantId: string) {
+    const node = await this.nodeRepo.findById(id, tenantId);
+    if (!node) throw new NotFoundException('Node not found');
+    return node;
+  }
+
+  async getTemplate(code: string, tenantId: string) {
+    const content = await this.templateRepo.findByCode(code, tenantId);
+    return { code, content };
+  }
+
+  async upsertTemplate(code: string, tenantId: string, content: string) {
+    await this.templateRepo.upsert(code, tenantId, content);
+    return { code, content };
+  }
 
   async getMyFlows(tenantId: string) {
     const flows = await this.nodeRepo.findAllFlowsByTenantId(tenantId);
