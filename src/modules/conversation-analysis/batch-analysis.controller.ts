@@ -170,29 +170,54 @@ export class BatchAnalysisController {
     });
 
     if (dto.status === 'approved') {
-      if (!updated.channelName) {
-        throw new BadRequestException(`Cannot approve internal channel ${id}: channelName is missing`);
-      }
       const purpose = dto.modifiedPurpose ?? updated.internalPurpose;
-      if (!purpose) {
-        throw new BadRequestException(`Cannot approve internal channel ${id}: internalPurpose is missing`);
-      }
-      await this.clientLabelRepo.upsertDraftLabel({
-        tenantId: user.tenantId,
-        clientId: updated.clientId ?? null,
-        groupJid: updated.groupJid ?? null,
-        internalPurpose: purpose,
+      await this.applyApprovedInternalChannel(id, user.tenantId, {
+        clientId: updated.clientId,
+        groupJid: updated.groupJid,
         channelName: updated.channelName,
+        internalPurpose: purpose,
       });
-      if (updated.clientId) {
-        await this.conversationAnalysisRepo.markAllAsInternalByClient(updated.clientId, purpose);
-      }
-      if (updated.groupJid) {
-        await this.conversationAnalysisRepo.markAllAsInternalByGroup(updated.groupJid, purpose);
-      }
     }
 
     return updated;
+  }
+
+  /**
+   * Propaga la aprobación de un canal interno: etiqueta al cliente/grupo y
+   * marca sus análisis históricos como internos. Requiere que el
+   * InternalChannelReview con `id` ya esté en status 'approved'.
+   */
+  private async applyApprovedInternalChannel(
+    reviewId: string,
+    tenantId: string,
+    data: {
+      clientId: string | null;
+      groupJid: string | null;
+      channelName: string | null;
+      internalPurpose: string | null;
+    },
+  ) {
+    if (!data.channelName) {
+      throw new BadRequestException(`Cannot approve internal channel ${reviewId}: channelName is missing`);
+    }
+    if (!data.internalPurpose) {
+      throw new BadRequestException(`Cannot approve internal channel ${reviewId}: internalPurpose is missing`);
+    }
+
+    await this.clientLabelRepo.upsertDraftLabel({
+      tenantId,
+      clientId: data.clientId ?? null,
+      groupJid: data.groupJid ?? null,
+      internalPurpose: data.internalPurpose,
+      channelName: data.channelName,
+    });
+
+    if (data.clientId) {
+      await this.conversationAnalysisRepo.markAllAsInternalByClient(data.clientId, data.internalPurpose);
+    }
+    if (data.groupJid) {
+      await this.conversationAnalysisRepo.markAllAsInternalByGroup(data.groupJid, data.internalPurpose);
+    }
   }
 
   @Get('flows/:flowId/analyses')
@@ -277,31 +302,21 @@ export class BatchAnalysisController {
     @Body() dto: MarkInternalDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.internalChannelReviewRepo.upsert({
+    const review = await this.internalChannelReviewRepo.upsert({
       tenantId: user.tenantId,
       clientId,
       groupJid: null,
       internalPurpose: dto.internalPurpose,
       channelName: dto.channelName,
     });
+    await this.internalChannelReviewRepo.review(review.id, { status: 'approved' });
 
-    await this.internalChannelReviewRepo.review(
-      (await this.prisma.internalChannelReview.findFirst({
-        where: { tenantId: user.tenantId, clientId },
-        select: { id: true },
-      }))!.id,
-      { status: 'approved' },
-    );
-
-    await this.clientLabelRepo.upsertDraftLabel({
-      tenantId: user.tenantId,
+    await this.applyApprovedInternalChannel(review.id, user.tenantId, {
       clientId,
       groupJid: null,
-      internalPurpose: dto.internalPurpose,
       channelName: dto.channelName,
+      internalPurpose: dto.internalPurpose,
     });
-
-    await this.conversationAnalysisRepo.markAllAsInternalByClient(clientId, dto.internalPurpose);
 
     return { clientId, channelName: dto.channelName, status: 'approved' };
   }
@@ -351,31 +366,21 @@ export class BatchAnalysisController {
     @Body() dto: MarkInternalDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.internalChannelReviewRepo.upsert({
+    const review = await this.internalChannelReviewRepo.upsert({
       tenantId: user.tenantId,
       clientId: null,
       groupJid,
       internalPurpose: dto.internalPurpose,
       channelName: dto.channelName,
     });
+    await this.internalChannelReviewRepo.review(review.id, { status: 'approved' });
 
-    await this.internalChannelReviewRepo.review(
-      (await this.prisma.internalChannelReview.findFirst({
-        where: { tenantId: user.tenantId, groupJid },
-        select: { id: true },
-      }))!.id,
-      { status: 'approved' },
-    );
-
-    await this.clientLabelRepo.upsertDraftLabel({
-      tenantId: user.tenantId,
+    await this.applyApprovedInternalChannel(review.id, user.tenantId, {
       clientId: null,
       groupJid,
-      internalPurpose: dto.internalPurpose,
       channelName: dto.channelName,
+      internalPurpose: dto.internalPurpose,
     });
-
-    await this.conversationAnalysisRepo.markAllAsInternalByGroup(groupJid, dto.internalPurpose);
 
     return { groupJid, channelName: dto.channelName, status: 'approved' };
   }
