@@ -183,7 +183,7 @@ export class WebhookProcessorService {
     if (hasMedia && messageKey) {
       try {
         this.logger.log(
-          `[media] Attempting download instanceName=${instanceName} userId=${phone.tenantId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
+          `[media] Attempting download instanceName=${instanceName} tenantId=${phone.tenantId} convId=${conversation.id} keyId=${messageKey.id} key=${JSON.stringify(messageKey)}`,
         );
         mediaData =
           await this.fileStorageService.downloadAndSaveMediaFromEvolution(
@@ -503,7 +503,7 @@ export class WebhookProcessorService {
     conversationId: string,
     instanceName: string,
     remoteJid: string,
-    userId: string,
+    tenantId: string,
   ) {
     try {
       const isGroupConversation = remoteJid.endsWith('@g.us');
@@ -592,7 +592,7 @@ export class WebhookProcessorService {
               await this.fileStorageService.downloadAndSaveMediaFromEvolution(
                 this.evolutionService,
                 instanceName,
-                userId,
+                tenantId,
                 conversationId,
                 m.key.id,
                 m.key,
@@ -604,7 +604,7 @@ export class WebhookProcessorService {
                 conversationId,
                 mediaUrl: mediaData.relativePath,
               },
-              userId,
+              tenantId,
             );
           } catch (err) {
             this.logger.warn(
