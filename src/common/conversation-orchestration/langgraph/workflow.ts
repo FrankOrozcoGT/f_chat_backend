@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { StateGraph, END, START } from '@langchain/langgraph';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
-import { WorkflowState, WorkflowStateType } from './state.interface';
+import { WorkflowState, WorkflowStateType, ApiError, ConfigError } from './state.interface';
+import { TestSideEffect } from '@modules/nodes/functions/node-function.context';
 import { InputRouterNode } from './nodes/input-router.node';
 import { IntentRouterNode } from './nodes/intent-router.node';
 import { CustomNode } from './nodes/custom-node.node';
@@ -14,9 +15,9 @@ export interface WorkflowResult {
   responseText: string;
   intent: string;
   currentNodeId: string | null;
-  sideEffects: any[];
+  sideEffects: TestSideEffect[];
   totalCost: number;
-  error: any;
+  error: ApiError | ConfigError | null;
   preCodeContext: string | null;
   nodeTransitions: Array<{ from: string | null; to: string | null; reason: string }>;
 }
@@ -24,7 +25,7 @@ export interface WorkflowResult {
 @Injectable()
 export class AiWorkflow {
   private readonly logger = new Logger(AiWorkflow.name);
-  private graph: any;
+  private graph: ReturnType<AiWorkflow['buildGraph']>;
 
   constructor(
     private readonly inputRouterNode: InputRouterNode,
