@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
@@ -7,7 +7,7 @@ import { TenantMemoryController } from './tenant-memory.controller';
 import { TenantMemoryService } from './tenant-memory.service';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AuthModule)],
+  imports: [PrismaModule, AuthModule],
   controllers: [TenantMemoryController],
   providers: [TenantMemoryService, TenantMemoryRepository, TenantRolesGuard],
   exports: [TenantMemoryRepository],
