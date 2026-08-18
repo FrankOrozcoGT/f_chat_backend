@@ -5,7 +5,6 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
 import * as dotenv from 'dotenv';
-import { join } from 'path';
 import { AppModule } from '@/app.module';
 
 // Cargar .env ANTES de inicializar NestJS
@@ -30,10 +29,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Servir archivos estáticos desde /storage
-  app.useStaticAssets(join(process.cwd(), 'storage'), {
-    prefix: '/storage/',
-  });
+  // Los archivos de /storage/conversations/* se sirven vía StorageController
+  // (requiere auth y valida tenantId), no como estáticos públicos.
 
   // Global Validation Pipe
   app.useGlobalPipes(
