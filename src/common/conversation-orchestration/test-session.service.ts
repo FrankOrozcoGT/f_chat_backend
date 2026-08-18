@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
 import { RedisService } from '@common/redis/redis.service';
 import { TestQueueResultStore } from '@common/conversation-session/test-queue-result.store';
 import { RedisNodeSessionStore } from '@common/conversation-session/stores/redis-node-session.store';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
+import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 import { AiWorkflow } from './langgraph/workflow';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -46,22 +47,27 @@ export class TestSessionService {
     private readonly testQueueResultStore: TestQueueResultStore,
     private readonly workflow: AiWorkflow,
     private readonly nodeRepo: NodeRepository,
+    private readonly phoneRepo: PhoneRepository,
   ) {}
 
   async start(
     conversationId: string,
     flowId: string | null,
     clientPhone: string,
-    instanceName: string,
     tenantId: string,
   ): Promise<string> {
+    const phone = await this.phoneRepo.findFirstByTenantId(tenantId);
+    if (!phone) {
+      throw new BadRequestException('No phone found for user. Connect a phone first.');
+    }
+
     const testId = uuidv4();
     const session: TestSession = {
       testId,
       conversationId,
       flowId,
       clientPhone,
-      instanceName,
+      instanceName: phone.instanceName,
       tenantId,
       currentNodeId: null,
       steps: [],
