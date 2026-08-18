@@ -137,7 +137,7 @@ export class NodeRepository {
 
   async replaceFlowNodes(
     flowId: string,
-    nodes: { name: string; systemPrompt: string; todos?: TodoDefinition[]; tools?: any[] }[],
+    nodes: { name: string; systemPrompt: string; todos?: TodoDefinition[]; tools?: string[] }[],
     transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[],
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -155,8 +155,8 @@ export class NodeRepository {
               tenantId: flow?.tenantId,
               name: n.name,
               systemPrompt: n.systemPrompt,
-              todos: (n.todos ?? []) as any,
-              tools: (n.tools ?? []) as any,
+              todos: (n.todos ?? []) as unknown as Prisma.InputJsonValue,
+              tools: (n.tools ?? []) as unknown as Prisma.InputJsonValue,
             },
           }),
         ),
@@ -208,8 +208,8 @@ export class NodeRepository {
               tenantId: data.tenantId,
               name: n.name,
               systemPrompt: n.systemPrompt,
-              todos: (n.todos ?? []) as any,
-              tools: (n.tools ?? []) as any,
+              todos: (n.todos ?? []) as unknown as Prisma.InputJsonValue,
+              tools: (n.tools ?? []) as unknown as Prisma.InputJsonValue,
             },
           }),
         ),
