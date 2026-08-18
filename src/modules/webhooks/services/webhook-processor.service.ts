@@ -60,6 +60,13 @@ export class WebhookProcessorService {
       return;
     }
 
+    // Obtener phone (necesario para tenantId en media y scoping de eventos WS)
+    const phone = await this.phoneRepository.findById(phoneId);
+    if (!phone) {
+      this.logger.warn(`Phone ${phoneId} not found`);
+      return;
+    }
+
     // Si es mensaje saliente (fromMe), esperar 300ms para evitar race condition con cache
     if (fromMe && messageKey) {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -68,7 +75,7 @@ export class WebhookProcessorService {
       );
 
       if (existingMessage) {
-        this.websocketGateway.emit('message:sent', existingMessage);
+        this.websocketGateway.emit('message:sent', existingMessage, phone.tenantId);
         this.logger.log(
           `Message ${messageKey.id} already in DB, emitted to frontend`,
         );
@@ -77,13 +84,6 @@ export class WebhookProcessorService {
       }
 
       this.logger.log(`Message ${messageKey.id} from WhatsApp Web, saving`);
-    }
-
-    // Obtener phone (necesario para userId en media)
-    const phone = await this.phoneRepository.findById(phoneId);
-    if (!phone) {
-      this.logger.warn(`Phone ${phoneId} not found`);
-      return;
     }
 
     // Upsert Conversation (individual o grupo)
@@ -227,7 +227,7 @@ export class WebhookProcessorService {
 
     // Emitir al frontend
     if (fromMe) {
-      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true });
+      this.websocketGateway.emit('message:sent', { ...message, fromExternal: true }, phone.tenantId);
       this.logger.log(`Outgoing message from WhatsApp Web for conversation ${conversation.id}`);
     } else {
       const conversationName = isGroup
@@ -237,7 +237,7 @@ export class WebhookProcessorService {
         ...message,
         conversationName,
         senderName: isGroup ? senderName : null,
-      });
+      }, phone.tenantId);
       this.logger.log(`Incoming message for conversation ${conversation.id}`);
     }
 
