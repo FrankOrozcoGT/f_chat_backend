@@ -19,8 +19,12 @@ import { TenantsModule } from '@modules/tenants/tenants.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET environment variable is required');
+        }
         return {
-          secret: configService.get<string>('JWT_SECRET') || 'dev-secret-key',
+          secret,
           signOptions: {
             expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ||
               '7d') as StringValue,
