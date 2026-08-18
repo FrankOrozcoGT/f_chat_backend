@@ -209,7 +209,14 @@ export class ConversationsController {
 
   @Patch(':id/read')
   @UseGuards(JwtAuthGuard)
-  async markAsRead(@Param('id') id: string) {
+  async markAsRead(@Param('id') id: string, @Req() req) {
+    const tenantId = req.user.tenantId;
+
+    const conversation = await this.conversationRepository.findByIdWithRelations(id);
+    if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
+
+    this.conversationsService.checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+
     await this.conversationRepository.resetUnread(id);
     return { ok: true };
   }
