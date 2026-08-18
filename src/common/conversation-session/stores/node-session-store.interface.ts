@@ -32,6 +32,3 @@ export interface NodeSessionStore {
   pauseFlow(id: string, summary: string): Promise<void>;
   close(id: string): Promise<void>;
 }
-
-
-export const NODE_SESSION_STORE = Symbol('NODE_SESSION_STORE');

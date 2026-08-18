@@ -1,5 +1,4 @@
 import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, HttpCode, BadRequestException, Logger } from '@nestjs/common';
-import { IsInt, Min, IsIn, IsOptional, IsString, IsArray, ArrayMinSize } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { TenantRolesGuard } from '@common/guards/tenant-roles.guard';
 import { TenantRoles } from '@common/decorators/tenant-roles.decorator';
@@ -12,55 +11,12 @@ import { InternalChannelReviewRepository } from './repositories/internal-channel
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowVersionRepository } from '@modules/nodes/repositories/flow-version.repository';
-
-class RunBatchDto {
-  @IsInt()
-  @Min(1)
-  channelCount: number;
-
-  @IsInt()
-  @Min(1)
-  messageLimit: number;
-}
-
-class UpdateDiagramDto {
-  @IsString()
-  diagram: string;
-}
-
-class MarkInternalDto {
-  @IsString()
-  channelName: string;
-
-  @IsString()
-  internalPurpose: string;
-}
-
-class MergeIntentsDto {
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
-  sourceIntentIds: string[];
-}
-
-class MergeAnalysesDto {
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
-  sourceIntents: string[];
-
-  @IsString()
-  targetIntent: string;
-}
-
-class ReviewInternalDto {
-  @IsIn(['approved', 'rejected'])
-  status: 'approved' | 'rejected';
-
-  @IsOptional()
-  @IsString()
-  modifiedPurpose?: string | null;
-}
+import { RunBatchDto } from './dto/run-batch.dto';
+import { UpdateDiagramDto } from './dto/update-diagram.dto';
+import { MarkInternalDto } from './dto/mark-internal.dto';
+import { MergeIntentsDto } from './dto/merge-intents.dto';
+import { MergeAnalysesDto } from './dto/merge-analyses.dto';
+import { ReviewInternalDto } from './dto/review-internal.dto';
 
 interface AuthenticatedUser {
   id: string;

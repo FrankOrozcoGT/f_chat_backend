@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { Conversation, Phone } from '@prisma/client';
+import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
 
 @Injectable()
 export class HitlService {
@@ -7,9 +8,7 @@ export class HitlService {
     conversation: Conversation & { phone: Phone },
     tenantId: string,
   ) {
-    if (conversation.phone.tenantId !== tenantId) {
-      throw new BadRequestException('You do not own this conversation');
-    }
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
     if (conversation.mode === 'HITL') {
       throw new BadRequestException('Conversation is already in HITL mode');
     }
@@ -19,9 +18,7 @@ export class HitlService {
     conversation: Conversation & { phone: Phone },
     tenantId: string,
   ) {
-    if (conversation.phone.tenantId !== tenantId) {
-      throw new BadRequestException('You do not own this conversation');
-    }
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
     if (conversation.mode === 'AI') {
       throw new BadRequestException('Conversation is already in AI mode');
     }
