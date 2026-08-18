@@ -4,15 +4,10 @@ import {
   Body,
   Req,
   UseGuards,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
-import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
-import { RedisService } from '@common/redis/redis.service';
-import { RedisNodeSessionStore } from '@common/conversation-session/stores/redis-node-session.store';
-import { TestQueueResultStore } from '@common/conversation-session/test-queue-result.store';
 import { TestSessionService } from './test-session.service';
 import { TestStartDto } from './dto/test-start.dto';
 import { TestSendDto } from './dto/test-send.dto';
@@ -23,11 +18,8 @@ import { TestStopDto } from './dto/test-stop.dto';
 @UseGuards(JwtAuthGuard)
 export class FlowTestController {
   constructor(
-    private readonly nodeRepo: NodeRepository,
     private readonly phoneRepo: PhoneRepository,
-    private readonly redisService: RedisService,
     private readonly testSessionService: TestSessionService,
-    private readonly testQueueResultStore: TestQueueResultStore,
   ) {}
 
   @Post('start')
@@ -62,18 +54,7 @@ export class FlowTestController {
 
   @Post('stop')
   async stopTest(@Body() dto: TestStopDto) {
-    const session = await this.testSessionService.getSession(dto.testId);
-    if (!session) {
-      throw new NotFoundException('Test session not found');
-    }
-    this.testQueueResultStore.clear(session.conversationId);
-    // Clean up node session from Redis
-    const nodeSessionStore = new RedisNodeSessionStore(this.redisService, this.nodeRepo);
-    const nodeSession = await nodeSessionStore.findActiveOrWaitingByConversationId(session.conversationId);
-    if (nodeSession) {
-      await nodeSessionStore.close(nodeSession.id);
-    }
-    await this.testSessionService.deleteSession(dto.testId);
+    await this.testSessionService.stop(dto.testId);
     return {};
   }
 }
