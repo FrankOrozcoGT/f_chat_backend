@@ -5,7 +5,7 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "assets": [
-      { "include": "modules/ai/prompts/**/*.md", "outDir": "dist/src", "watchAssets": true },
+      { "include": "common/conversation-orchestration/prompts/**/*.md", "outDir": "dist/src", "watchAssets": true },
       { "include": "modules/conversation-analysis/prompts/**/*.md", "outDir": "dist/src", "watchAssets": true },
       { "include": "common/external-integrations/prompts/**/*.md", "outDir": "dist/src", "watchAssets": true }
     ]

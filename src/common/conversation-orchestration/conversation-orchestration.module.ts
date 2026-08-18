@@ -11,11 +11,14 @@ import { FlowRouterNode } from './langgraph/nodes/flow-router.node';
 import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { ConversationSessionModule } from '@common/conversation-session/conversation-session.module';
 import { AiRepository } from './repositories/ai.repository';
+import { TestSessionService } from './test-session.service';
+import { FlowTestController } from './flow-test.controller';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { LimitsModule } from '@common/services/limits.module';
-import { NodesModule } from '../nodes/nodes.module';
+import { NodesModule } from '@modules/nodes/nodes.module';
+import { PhonesModule } from '@modules/phones/phones.module';
 import { RedisModule } from '@common/redis/redis.module';
 import { ImageModule } from '@common/image/image.module';
 
@@ -29,8 +32,10 @@ import { ImageModule } from '@common/image/image.module';
     ImageModule,
     ExternalIntegrationsModule,
     ConversationSessionModule,
+    PhonesModule,
     forwardRef(() => NodesModule),
   ],
+  controllers: [FlowTestController],
   providers: [
     AiAgentService,
     AiWorkflow,
@@ -42,6 +47,7 @@ import { ImageModule } from '@common/image/image.module';
     EntryCheckerNode,
     FlowRouterNode,
     AiRepository,
+    TestSessionService,
   ],
   exports: [
     ExternalIntegrationsModule,
@@ -49,4 +55,4 @@ import { ImageModule } from '@common/image/image.module';
     AiWorkflow,
   ],
 })
-export class AiModule {}
+export class ConversationOrchestrationModule {}

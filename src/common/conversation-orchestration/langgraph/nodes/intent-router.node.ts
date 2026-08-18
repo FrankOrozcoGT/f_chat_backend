@@ -8,7 +8,7 @@ import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeFunctionRegistry } from '@modules/nodes/functions/node-function.registry';
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
-import { ROUTER_SYSTEM_PROMPT, ROUTER_PRE_CODE, ROUTER_POST_CODE } from '@modules/nodes/router-config';
+import { ROUTER_SYSTEM_PROMPT, ROUTER_PRE_CODE, ROUTER_POST_CODE } from '@common/conversation-orchestration/router-config';
 
 @Injectable()
 export class IntentRouterNode {

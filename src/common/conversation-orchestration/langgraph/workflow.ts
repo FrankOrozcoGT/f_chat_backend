@@ -9,7 +9,7 @@ import { OutputRouterNode } from './nodes/output-router.node';
 import { FinalizeNode } from './nodes/finalize.node';
 import { EntryCheckerNode } from './nodes/entry-checker.node';
 import { FlowRouterNode } from './nodes/flow-router.node';
-import { IncomingMessageEvent } from '../ai-agent.service';
+import { IncomingMessageEvent } from '../incoming-message-event.interface';
 export interface WorkflowResult {
   responseText: string;
   intent: string;

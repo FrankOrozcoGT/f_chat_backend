@@ -6,23 +6,9 @@ import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 import { TestQueueResultStore } from '@common/conversation-session/test-queue-result.store';
+import type { IncomingMessageEvent } from './incoming-message-event.interface';
 
-export interface IncomingMessageEvent {
-  messageId: string;
-  conversationId: string;
-  instanceName: string;
-  clientPhone: string;
-  tenantId: string;
-  messageType: MessageType;
-  content: string | null;
-  transcription?: string | null;
-  mediaRelativePath: string | null;
-  mediaMetadata: { fileName: string; mimeType: string } | null;
-  isTest?: boolean;
-  fromHitl?: boolean;
-  conversationSummary?: string | null;
-  queueContext?: string | null;
-}
+export type { IncomingMessageEvent };
 
 @Injectable()
 export class AiAgentService {

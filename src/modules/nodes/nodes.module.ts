@@ -3,7 +3,6 @@ import { DiscoveryModule } from '@nestjs/core';
 import { EvolutionModule } from '@common/evolution/evolution.module';
 import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { ConversationSessionModule } from '@common/conversation-session/conversation-session.module';
-import { AiModule } from '../ai/ai.module';
 import { NodeRepository } from './repositories/node.repository';
 import { IntentRepository } from './repositories/intent.repository';
 import { NodeRunnerService } from './services/node-runner.service';
@@ -35,13 +34,12 @@ import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
 import { FlowVersionRepository } from './repositories/flow-version.repository';
 import { TemplateRepository } from './repositories/template.repository';
-import { TestSessionService } from './services/test-session.service';
 import { NodesController } from './nodes.controller';
 import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
+  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
   controllers: [NodesController],
   providers: [
     NodeRepository,
@@ -73,7 +71,6 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     SecurityEventRepository,
     FlowVersionRepository,
     TemplateRepository,
-    TestSessionService,
   ],
   exports: [NodeRepository, ConversationSessionModule, IntentRepository, NodeRunnerService, NodeFunctionRegistry, FlowVersionRepository],
 })

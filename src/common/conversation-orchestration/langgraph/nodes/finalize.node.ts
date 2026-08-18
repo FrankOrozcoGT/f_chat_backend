@@ -3,8 +3,8 @@ import { AiRepository } from '../../repositories/ai.repository';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
-import { TestSideEffect } from '../../../nodes/functions/node-function.context';
-import { QUEUE_RESUME_MESSAGE_PREFIX } from '../../../queue-system/services/queue-resume.service';
+import { TestSideEffect } from '@modules/nodes/functions/node-function.context';
+import { QUEUE_RESUME_MESSAGE_PREFIX } from '@modules/queue-system/services/queue-resume.service';
 
 @Injectable()
 export class FinalizeNode {
