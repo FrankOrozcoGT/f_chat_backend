@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 
+export interface TestQueueSideEffect {
+  action: string;
+  args?: Record<string, unknown>;
+}
+
 export interface TestQueueResult {
   response: string;
   intent: string;
   currentNodeId: string | null;
-  sideEffects: any[];
+  sideEffects: TestQueueSideEffect[];
   preCodeContext: string | null;
-  nodeTransitions: any[];
+  nodeTransitions: Array<{ from: string | null; to: string | null; reason: string }>;
 }
 
 /**
