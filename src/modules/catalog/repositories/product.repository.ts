@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -52,25 +52,35 @@ export class ProductRepository {
     });
   }
 
-  async updateById(id: string, data: { name?: string; basePrice?: number; description?: string }) {
-    return this.prisma.product.update({
-      where: { id },
+  async updateById(
+    id: string,
+    tenantId: string,
+    data: { name?: string; basePrice?: number; description?: string },
+  ) {
+    const { count } = await this.prisma.product.updateMany({
+      where: { id, tenantId },
       data,
     });
+    if (count === 0) throw new NotFoundException('Product not found');
+    return this.findById(id, tenantId);
   }
 
-  async updateImageKey(id: string, imageKey: string | null) {
-    return this.prisma.product.update({
-      where: { id },
+  async updateImageKey(id: string, tenantId: string, imageKey: string | null) {
+    const { count } = await this.prisma.product.updateMany({
+      where: { id, tenantId },
       data: { imageKey },
     });
+    if (count === 0) throw new NotFoundException('Product not found');
   }
 
-  async findById(id: string) {
-    return this.prisma.product.findUnique({ where: { id } });
+  async findById(id: string, tenantId: string) {
+    return this.prisma.product.findFirst({ where: { id, tenantId } });
   }
 
-  async deleteById(id: string) {
-    return this.prisma.product.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const { count } = await this.prisma.product.deleteMany({
+      where: { id, tenantId },
+    });
+    if (count === 0) throw new NotFoundException('Product not found');
   }
 }

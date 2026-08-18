@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -50,7 +50,10 @@ export class DiscountRepository {
     });
   }
 
-  async deleteById(id: string) {
-    return this.prisma.discount.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const { count } = await this.prisma.discount.deleteMany({
+      where: { id, product: { tenantId } },
+    });
+    if (count === 0) throw new NotFoundException('Discount not found');
   }
 }
