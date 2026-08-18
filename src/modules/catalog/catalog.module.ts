@@ -3,6 +3,7 @@ import { PrismaModule } from '@common/prisma/prisma.module';
 import { InternalCatalogController } from './internal-catalog.controller';
 import { CatalogController } from './catalog.controller';
 import { CatalogService } from './catalog.service';
+import { InternalCatalogService } from './internal-catalog.service';
 import { ProductRepository } from './repositories/product.repository';
 import { DiscountRepository } from './repositories/discount.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
@@ -16,6 +17,7 @@ import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant
   controllers: [InternalCatalogController, CatalogController],
   providers: [
     CatalogService,
+    InternalCatalogService,
     ProductRepository,
     DiscountRepository,
     PromotionRepository,
