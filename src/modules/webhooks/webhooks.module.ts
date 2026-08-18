@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { WebhooksController } from './webhooks.controller';
 import { InternalWebhooksController } from './internal-webhooks.controller';
 import { WebhooksService } from './webhooks.service';
+import { InternalMessagesService } from './internal-messages.service';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { WebSocketModule } from '@common/websocket/websocket.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
@@ -33,6 +34,7 @@ import { ConversationAnalysisRepository } from '@modules/conversation-analysis/r
   controllers: [WebhooksController, InternalWebhooksController],
   providers: [
     WebhooksService,
+    InternalMessagesService,
     PhoneRepository,
     ClientRepository,
     MessageRepository,
