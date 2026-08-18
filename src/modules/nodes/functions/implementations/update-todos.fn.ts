@@ -2,14 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { getObjectArg } from '../args-validator';
+import { TodoDefinition, parseTodoDefinitions } from '../../types/todo-definition';
 
-export interface TodoDefinition {
-  id: string;
-  name: string;
-  description?: string;
-  functions?: string[];
-  transitions?: string[];
-}
+export type { TodoDefinition } from '../../types/todo-definition';
 
 @Injectable()
 export class UpdateTodosFn {
@@ -65,8 +60,7 @@ export class UpdateTodosFn {
     }
 
     // Build response: what's missing for happy path + available alternates
-    const rawTodos = ctx.node.todos;
-    const nodeTodos: TodoDefinition[] = Array.isArray(rawTodos) ? (rawTodos as unknown as TodoDefinition[]) : [];
+    const nodeTodos: TodoDefinition[] = parseTodoDefinitions(ctx.node.todos);
 
     if (nodeTodos.length === 0) {
       return 'Todos actualizados. Este nodo no tiene todos definidos.';
