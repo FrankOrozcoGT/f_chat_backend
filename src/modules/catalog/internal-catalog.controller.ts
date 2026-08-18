@@ -5,45 +5,32 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { InternalGuard } from '@common/guards/internal.guard';
-import { ProductRepository } from './repositories/product.repository';
-import { DiscountRepository } from './repositories/discount.repository';
-import { PromotionRepository } from './repositories/promotion.repository';
-import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { InternalCatalogService } from './internal-catalog.service';
 
 @Controller('internal/catalog')
 @UseGuards(InternalGuard)
 export class InternalCatalogController {
-  constructor(
-    private readonly productRepository: ProductRepository,
-    private readonly discountRepository: DiscountRepository,
-    private readonly promotionRepository: PromotionRepository,
-    private readonly promotionDiscountRepository: PromotionDiscountRepository,
-    private readonly internalCatalogService: InternalCatalogService,
-  ) {}
+  constructor(private readonly internalCatalogService: InternalCatalogService) {}
 
   @Post('products/upsert')
   async upsertProduct(
     @Body() body: { tenantId: string; name: string; basePrice: number; description?: string },
   ) {
-    return this.productRepository.upsertByName(body.tenantId, body.name, {
-      basePrice: body.basePrice,
-      description: body.description,
-    });
+    return this.internalCatalogService.upsertProduct(body.tenantId, body.name, body.basePrice, body.description);
   }
 
   @Post('products/find')
   async findProduct(
     @Body() body: { tenantId: string; name: string },
   ) {
-    return this.productRepository.findByTenantIdAndName(body.tenantId, body.name);
+    return this.internalCatalogService.findProduct(body.tenantId, body.name);
   }
 
   @Post('discounts/upsert')
   async upsertDiscount(
     @Body() body: { productId: string; clientId?: string | null; discountPrice: number },
   ) {
-    return this.discountRepository.upsert(body);
+    return this.internalCatalogService.upsertDiscount(body);
   }
 
   @Post('promotions/create')
@@ -56,14 +43,14 @@ export class InternalCatalogController {
       productIds: string[];
     },
   ) {
-    return this.promotionRepository.create(body);
+    return this.internalCatalogService.createPromotion(body);
   }
 
   @Post('promotion-discounts/upsert')
   async upsertPromotionDiscount(
     @Body() body: { promotionId: string; clientId?: string | null; discountPrice: number },
   ) {
-    return this.promotionDiscountRepository.upsert(body);
+    return this.internalCatalogService.upsertPromotionDiscount(body);
   }
 
   @Post('load-client-products')

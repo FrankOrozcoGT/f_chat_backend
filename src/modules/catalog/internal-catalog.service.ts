@@ -34,6 +34,32 @@ export class InternalCatalogService {
     private readonly r2Service: R2Service,
   ) {}
 
+  async upsertProduct(tenantId: string, name: string, basePrice: number, description?: string) {
+    return this.productRepository.upsertByName(tenantId, name, { basePrice, description });
+  }
+
+  async findProduct(tenantId: string, name: string) {
+    return this.productRepository.findByTenantIdAndName(tenantId, name);
+  }
+
+  async upsertDiscount(data: { productId: string; clientId?: string | null; discountPrice: number }) {
+    return this.discountRepository.upsert(data);
+  }
+
+  async createPromotion(data: {
+    tenantId: string;
+    name?: string;
+    description?: string;
+    specialPrice: number;
+    productIds: string[];
+  }) {
+    return this.promotionRepository.create(data);
+  }
+
+  async upsertPromotionDiscount(data: { promotionId: string; clientId?: string | null; discountPrice: number }) {
+    return this.promotionDiscountRepository.upsert(data);
+  }
+
   /**
    * loadClientProducts (preCode): productos del tenant con descuentos del cliente + promos.
    */
