@@ -4,6 +4,7 @@ import { ProductRepository } from './repositories/product.repository';
 import { PromotionRepository } from './repositories/promotion.repository';
 import { ShippingLocationRepository } from './repositories/shipping-location.repository';
 import { DiscountRepository } from './repositories/discount.repository';
+import { PromotionDiscountRepository } from './repositories/promotion-discount.repository';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
@@ -19,6 +20,7 @@ export class CatalogService {
     private readonly promotionRepository: PromotionRepository,
     private readonly shippingLocationRepository: ShippingLocationRepository,
     private readonly discountRepository: DiscountRepository,
+    private readonly promotionDiscountRepository: PromotionDiscountRepository,
     private readonly r2Service: R2Service,
   ) {}
 
@@ -62,6 +64,21 @@ export class CatalogService {
 
   deleteProduct(tenantId: string, id: string) {
     return this.productRepository.deleteById(id, tenantId);
+  }
+
+  /**
+   * Contexto de catálogo para el detalle de una conversación: productos del
+   * tenant, descuentos/promos-descuento del cliente (si tiene) y promociones activas.
+   */
+  async getClientCatalogContext(tenantId: string, clientId: string | undefined) {
+    const [products, clientDiscounts, clientPromotionDiscounts, promotions] = await Promise.all([
+      this.productRepository.findByTenantId(tenantId),
+      clientId ? this.discountRepository.findByClientId(clientId) : Promise.resolve([]),
+      clientId ? this.promotionDiscountRepository.findByClientId(clientId) : Promise.resolve([]),
+      this.promotionRepository.findByTenantId(tenantId),
+    ]);
+
+    return { products, clientDiscounts, clientPromotionDiscounts, promotions };
   }
 
   // ─── Discounts ───────────────────────────────────────────────────────────────

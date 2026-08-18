@@ -1,10 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
-import { ProductRepository } from '@modules/catalog/repositories/product.repository';
-import { DiscountRepository } from '@modules/catalog/repositories/discount.repository';
-import { PromotionRepository } from '@modules/catalog/repositories/promotion.repository';
-import { PromotionDiscountRepository } from '@modules/catalog/repositories/promotion-discount.repository';
+import { CatalogService } from '@modules/catalog/catalog.service';
 import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { QueueRequestRepository } from '@modules/queue-system/repositories/queue-request.repository';
 import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
@@ -15,10 +12,7 @@ export class ConversationsService {
 
   constructor(
     private readonly conversationRepository: ConversationRepository,
-    private readonly productRepository: ProductRepository,
-    private readonly discountRepository: DiscountRepository,
-    private readonly promotionRepository: PromotionRepository,
-    private readonly promotionDiscountRepository: PromotionDiscountRepository,
+    private readonly catalogService: CatalogService,
     private readonly nodeSessionRepository: NodeSessionRepository,
     private readonly queueRequestRepository: QueueRequestRepository,
   ) {}
@@ -97,26 +91,17 @@ export class ConversationsService {
     // 3. Datos del cliente
     const clientId = conversation.client?.id;
 
-    // 4. Cargar en paralelo: productos, descuentos, promociones, sub-conversaciones analizadas
-    const [products, clientDiscounts, clientPromotionDiscounts, analyzedConversations] =
-      await Promise.all([
-        this.productRepository.findByTenantId(tenantId),
-        clientId
-          ? this.discountRepository.findByClientId(clientId)
-          : Promise.resolve([]),
-        clientId
-          ? this.promotionDiscountRepository.findByClientId(clientId)
-          : Promise.resolve([]),
-        clientId
-          ? this.conversationRepository.findAnalyzedByPhoneAndClient(
-              conversation.phoneId,
-              clientId,
-            )
-          : Promise.resolve([]),
-      ]);
-
-    // 5. Obtener promociones del usuario
-    const promotions = await this.promotionRepository.findByTenantId(tenantId);
+    // 4. Cargar en paralelo: catálogo del cliente (productos/descuentos/promos) + sub-conversaciones analizadas
+    const [catalogContext, analyzedConversations] = await Promise.all([
+      this.catalogService.getClientCatalogContext(tenantId, clientId),
+      clientId
+        ? this.conversationRepository.findAnalyzedByPhoneAndClient(
+            conversation.phoneId,
+            clientId,
+          )
+        : Promise.resolve([]),
+    ]);
+    const { products, clientDiscounts, clientPromotionDiscounts, promotions } = catalogContext;
 
     this.logger.log(`Conversation detail retrieved successfully for id: ${id}`);
 

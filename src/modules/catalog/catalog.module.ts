@@ -27,6 +27,7 @@ import { TenantSettingsRepository } from '../tenant-settings/repositories/tenant
     TenantSettingsRepository,
   ],
   exports: [
+    CatalogService,
     ProductRepository,
     DiscountRepository,
     PromotionRepository,
