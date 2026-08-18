@@ -101,7 +101,7 @@ export class IntentRouterNode {
 
       const result = await this.langSmithService.traceLLM(
         () => this.nodeRunner.run({
-          node: { id: 'virtual-router', name: 'Router (hardcoded)', systemPrompt: ROUTER_SYSTEM_PROMPT } as any,
+          node: { systemPrompt: ROUTER_SYSTEM_PROMPT },
           transcription,
           imageUrl,
           history,

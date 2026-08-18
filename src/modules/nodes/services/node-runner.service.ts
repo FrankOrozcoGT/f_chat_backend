@@ -12,7 +12,7 @@ import { PostCodeRetryError } from '../functions/node-function.errors';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
 
 export interface NodeRunInput {
-  node: Node;
+  node: Pick<Node, 'systemPrompt'>;
   transcription: string;
   imageUrl: string | null;
   history: { role: string; content: string }[];

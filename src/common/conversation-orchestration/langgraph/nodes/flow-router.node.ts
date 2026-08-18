@@ -92,7 +92,7 @@ export class FlowRouterNode {
 
       const result = await this.langSmithService.traceLLM(
         () => this.nodeRunner.run({
-          node: { id: 'flow-router', name: 'Flow Router (hardcoded)', systemPrompt } as any,
+          node: { systemPrompt },
           transcription,
           imageUrl: null,
           history: [],
@@ -142,8 +142,11 @@ export class FlowRouterNode {
       }
 
       // switchToHitl u otro — terminar
+      const finalRouterAction = terminationTool === 'switchToHitl' || terminationTool === 'reportHacking'
+        ? terminationTool
+        : null;
       return {
-        routerAction: terminationTool as any,
+        routerAction: finalRouterAction,
         sideEffects: [...(state.sideEffects ?? []), ...ctx.sideEffects],
       };
     } catch (error) {
