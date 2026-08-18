@@ -7,11 +7,10 @@ import {
   Body,
   Param,
   UseGuards,
-  ConflictException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
-import { ContactLabelRepository } from './repositories/contact-label.repository';
+import { ContactLabelService } from './services/contact-label.service';
 import { CreateLabelDto } from './dto/create-label.dto';
 import { UpdateLabelDto } from './dto/update-label.dto';
 
@@ -23,18 +22,16 @@ interface AuthUser {
 @Controller('api/queue')
 @UseGuards(JwtAuthGuard)
 export class QueueSystemController {
-  constructor(private readonly contactLabelRepo: ContactLabelRepository) {}
+  constructor(private readonly contactLabelService: ContactLabelService) {}
 
   @Get('labels')
   getLabels(@CurrentUser() user: AuthUser) {
-    return this.contactLabelRepo.findByTenantId(user.tenantId);
+    return this.contactLabelService.getLabels(user.tenantId);
   }
 
   @Post('labels')
   async createLabel(@CurrentUser() user: AuthUser, @Body() dto: CreateLabelDto) {
-    const existing = await this.contactLabelRepo.findByTenantIdAndLabel(user.tenantId, dto.label);
-    if (existing) throw new ConflictException(`Label "${dto.label}" already exists for this tenant`);
-    return this.contactLabelRepo.create(user.tenantId, dto);
+    return this.contactLabelService.createLabel(user.tenantId, dto);
   }
 
   @Put('labels/:id')
@@ -43,11 +40,11 @@ export class QueueSystemController {
     @Param('id') id: string,
     @Body() dto: UpdateLabelDto,
   ) {
-    return this.contactLabelRepo.updateById(id, user.tenantId, dto);
+    return this.contactLabelService.updateLabel(id, user.tenantId, dto);
   }
 
   @Delete('labels/:id')
   deleteLabel(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.contactLabelRepo.deleteById(id, user.tenantId);
+    return this.contactLabelService.deleteLabel(id, user.tenantId);
   }
 }
