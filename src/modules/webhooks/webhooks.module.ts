@@ -13,7 +13,10 @@ import { ClientRepository } from './repositories/client.repository';
 import { MessageRepository } from './repositories/message.repository';
 import { GroupConversationRepository } from './repositories/group-conversation.repository';
 import { PhoneQueueService } from './services/phone-queue.service';
-import { WebhookProcessorService } from './services/webhook-processor.service';
+import { MessageProcessorService } from './services/message-processor.service';
+import { ContactSyncService } from './services/contact-sync.service';
+import { GroupSyncService } from './services/group-sync.service';
+import { ChatSyncService } from './services/chat-sync.service';
 import { PhoneQueueProcessor } from './processors/phone-queue.processor';
 import { ConversationAnalysisRepository } from '@modules/conversation-analysis/repositories/conversation-analysis.repository';
 
@@ -34,7 +37,10 @@ import { ConversationAnalysisRepository } from '@modules/conversation-analysis/r
     MessageRepository,
     GroupConversationRepository,
     PhoneQueueService,
-    WebhookProcessorService,
+    MessageProcessorService,
+    ContactSyncService,
+    GroupSyncService,
+    ChatSyncService,
     PhoneQueueProcessor,
     ConversationAnalysisRepository,
   ],
