@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SessionRepository } from '../repositories/session.repository';
-import { InternalApiClient } from '../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
 import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
 

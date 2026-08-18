@@ -5,7 +5,7 @@ import { LlmResponse } from './interfaces/llm-response.interface';
 import { loadPrompt } from '@common/utils/load-prompt';
 import { join } from 'path';
 
-const PROMPTS_DIR = join(__dirname, '..', 'prompts');
+const PROMPTS_DIR = join(__dirname, 'prompts');
 const CHAT_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'chat-system.md');
 
 export class KimiApiError extends Error {

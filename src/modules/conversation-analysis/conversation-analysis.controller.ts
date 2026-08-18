@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { ConversationAnalysisService } from './conversation-analysis.service';
 import { AnalyzeResponseDto } from './dto/analyze-response.dto';
 

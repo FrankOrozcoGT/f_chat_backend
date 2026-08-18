@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { KimiClient } from '@modules/ai/clients/kimi.client';
+import { KimiClient } from '@common/external-integrations/kimi.client';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 import { join } from 'path';
 import {

@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { AiModule } from '@modules/ai/ai.module';
+import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { LimitsModule } from '@common/services/limits.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
@@ -22,7 +22,7 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
 
 @Module({
   imports: [
-    AiModule,
+    ExternalIntegrationsModule,
     LimitsModule,
     FileStorageModule,
     MermaidParserModule,

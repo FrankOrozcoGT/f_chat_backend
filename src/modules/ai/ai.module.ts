@@ -8,10 +8,7 @@ import { OutputRouterNode } from './langgraph/nodes/output-router.node';
 import { FinalizeNode } from './langgraph/nodes/finalize.node';
 import { EntryCheckerNode } from './langgraph/nodes/entry-checker.node';
 import { FlowRouterNode } from './langgraph/nodes/flow-router.node';
-import { QwenSttClient } from './clients/qwen-stt.client';
-import { KimiClient } from './clients/kimi.client';
-import { QwenTtsClient } from './clients/qwen-tts.client';
-import { InternalApiClient } from './clients/internal-api.client';
+import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { AiRepository } from './repositories/ai.repository';
 import { SessionRepository } from './repositories/session.repository';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
@@ -31,6 +28,7 @@ import { ImageModule } from '@common/image/image.module';
     LimitsModule,
     RedisModule,
     ImageModule,
+    ExternalIntegrationsModule,
     forwardRef(() => NodesModule),
   ],
   providers: [
@@ -43,18 +41,12 @@ import { ImageModule } from '@common/image/image.module';
     FinalizeNode,
     EntryCheckerNode,
     FlowRouterNode,
-    QwenSttClient,
-    KimiClient,
-    QwenTtsClient,
-    InternalApiClient,
     AiRepository,
     SessionRepository,
     SessionLifecycleService,
   ],
   exports: [
-    InternalApiClient,
-    KimiClient,
-    QwenSttClient,
+    ExternalIntegrationsModule,
     SessionLifecycleService,
     AiWorkflow,
   ],

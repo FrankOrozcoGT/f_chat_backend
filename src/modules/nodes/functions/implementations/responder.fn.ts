@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';

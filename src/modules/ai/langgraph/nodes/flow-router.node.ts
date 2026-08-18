@@ -6,7 +6,7 @@ import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeFunctionRegistry } from '@modules/nodes/functions/node-function.registry';
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { KimiClient } from '../../clients/kimi.client';
+import { KimiClient } from '@common/external-integrations/kimi.client';
 
 // Post codes disponibles para el flow-router
 const FLOW_ROUTER_POST_CODE = ['transitionToNode', 'switchToHitl', 'exitFlow', 'reportHacking'];

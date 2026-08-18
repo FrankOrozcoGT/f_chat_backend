@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiName, MessageType } from '@prisma/client';
-import { KimiApiError } from '../../clients/kimi.client';
+import { KimiApiError } from '@common/external-integrations/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiRepository } from '../../repositories/ai.repository';
 import { SessionLifecycleService } from '../../services/session-lifecycle.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { TestSideEffect } from '../../../nodes/functions/node-function.context';
 import { QUEUE_RESUME_MESSAGE_PREFIX } from '../../../queue-system/services/queue-resume.service';

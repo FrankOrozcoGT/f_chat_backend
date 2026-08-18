@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { KimiClient } from '../../clients/kimi.client';
+import { KimiClient } from '@common/external-integrations/kimi.client';
 
 interface TodoDefinition {
   id: string;

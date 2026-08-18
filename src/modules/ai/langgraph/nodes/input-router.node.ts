@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiName, MessageType } from '@prisma/client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
-import { QwenSttClient } from '../../clients/qwen-stt.client';
+import { QwenSttClient } from '@common/external-integrations/qwen-stt.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';

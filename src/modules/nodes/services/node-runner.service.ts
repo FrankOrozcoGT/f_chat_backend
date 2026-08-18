@@ -5,7 +5,7 @@ import {
   ToolChatResult,
   ToolDefinition,
   ToolTermination,
-} from '../../ai/clients/kimi.client';
+} from '@common/external-integrations/kimi.client';
 import { NodeFunctionRegistry } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 import { PostCodeRetryError } from '../functions/node-function.errors';

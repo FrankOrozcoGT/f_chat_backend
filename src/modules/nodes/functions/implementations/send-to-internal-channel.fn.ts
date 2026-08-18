@@ -5,7 +5,7 @@ import { NodeContext } from '../node-function.context';
 import { PostCodeRetryError } from '../node-function.errors';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 

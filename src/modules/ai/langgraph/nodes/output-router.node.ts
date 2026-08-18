@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { QwenTtsClient } from '../../clients/qwen-tts.client';
+import { QwenTtsClient } from '@common/external-integrations/qwen-tts.client';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 

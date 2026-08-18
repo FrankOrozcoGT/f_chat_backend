@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ApiName } from '@prisma/client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from '../../clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';

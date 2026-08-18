@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { ConversationAnalysisService } from '@modules/conversation-analysis/conversation-analysis.service';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { NodeSessionRepository } from '@modules/nodes/repositories/node-session.repository';
-import { KimiClient } from '@modules/ai/clients/kimi.client';
+import { KimiClient } from '@common/external-integrations/kimi.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 

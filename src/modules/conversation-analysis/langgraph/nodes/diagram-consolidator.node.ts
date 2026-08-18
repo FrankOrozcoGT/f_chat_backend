@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { KimiClient, ToolDefinition, ToolTermination } from '@modules/ai/clients/kimi.client';
+import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');

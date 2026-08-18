@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { EvolutionModule } from '@common/evolution/evolution.module';
+import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { AiModule } from '../ai/ai.module';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from './repositories/node-session.repository';
@@ -41,7 +42,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
+  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, forwardRef(() => AiModule), PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
   controllers: [NodesController],
   providers: [
     NodeRepository,

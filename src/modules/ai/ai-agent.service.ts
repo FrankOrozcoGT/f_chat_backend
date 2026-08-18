@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { MessageType } from '@prisma/client';
 import { AiWorkflow } from './langgraph/workflow';
 import { LimitsService } from '@common/services/limits.service';
-import { InternalApiClient } from './clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { SessionLifecycleService } from './services/session-lifecycle.service';
 import { TestQueueResultStore } from '@modules/nodes/services/test-queue-result.store';
 
