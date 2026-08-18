@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class CheckPromotionsFn {
@@ -33,10 +34,7 @@ export class CheckPromotionsFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const productName = ctx.args?.productName as string;
-    if (!productName) {
-      throw new Error('checkPromotions: "productName" es requerido pero no fue proporcionado');
-    }
+    const productName = getStringArg('checkPromotions', ctx.args, 'productName', { required: true });
 
     if (ctx.isTest) {
       ctx.sideEffects.push({ action: 'checkPromotions', args: { productName } });

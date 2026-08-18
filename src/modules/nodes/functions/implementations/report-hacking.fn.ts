@@ -3,6 +3,7 @@ import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { SecurityEventRepository } from '../../repositories/security-event.repository';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class ReportHackingFn {
@@ -27,7 +28,7 @@ export class ReportHackingFn {
   })
   async execute(ctx: NodeContext): Promise<string> {
     const description =
-      (ctx.args?.description as string) || 'Intento de hacking detectado';
+      getStringArg('reportHacking', ctx.args, 'description') || 'Intento de hacking detectado';
 
     if (ctx.isTest) {
       ctx.sideEffects.push(

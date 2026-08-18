@@ -6,6 +6,7 @@ import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-d
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { TemplateRepository } from '../../repositories/template.repository';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class CloseSessionFn {
@@ -40,7 +41,7 @@ export class CloseSessionFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const customMessage = ctx.args?.message as string | undefined;
+    const customMessage = getStringArg('closeSession', ctx.args, 'message');
     const farewellTemplate = await this.templateRepo.findByCode('farewell', ctx.tenantId);
     const farewell = customMessage ? `${customMessage}\n\n${farewellTemplate}` : farewellTemplate;
 

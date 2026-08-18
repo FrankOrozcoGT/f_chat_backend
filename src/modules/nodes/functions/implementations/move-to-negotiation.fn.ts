@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class MoveToNegotiationFn {
@@ -34,10 +35,7 @@ export class MoveToNegotiationFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.args?.reason as string;
-    if (!reason) {
-      throw new Error('moveToNegotiation: "reason" es requerido');
-    }
+    const reason = getStringArg('moveToNegotiation', ctx.args, 'reason', { required: true });
 
     if (ctx.isTest) {
       ctx.sideEffects.push({

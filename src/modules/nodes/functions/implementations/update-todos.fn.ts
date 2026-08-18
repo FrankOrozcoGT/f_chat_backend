@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getObjectArg } from '../args-validator';
 
 export interface TodoDefinition {
   id: string;
@@ -39,10 +40,7 @@ export class UpdateTodosFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const updates = ctx.args?.updates as Record<string, boolean> | undefined;
-    if (!updates || typeof updates !== 'object') {
-      throw new Error('updateTodos: "updates" es requerido y debe ser un objeto {todoId: boolean}');
-    }
+    const updates = getObjectArg<Record<string, boolean>>('updateTodos', ctx.args, 'updates', { required: true });
 
     const session = ctx.nodeSession;
     if (!session) {

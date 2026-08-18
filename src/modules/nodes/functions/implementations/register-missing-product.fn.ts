@@ -3,6 +3,7 @@ import { InternalApiClient } from '@common/external-integrations/internal-api.cl
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class RegisterMissingProductFn {
@@ -42,14 +43,8 @@ export class RegisterMissingProductFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const productName = ctx.args?.productName as string;
-    const notes = ctx.args?.notes as string;
-
-    if (!productName || !notes) {
-      throw new Error(
-        'registerMissingProduct: "productName" y "notes" son requeridos',
-      );
-    }
+    const productName = getStringArg('registerMissingProduct', ctx.args, 'productName', { required: true });
+    const notes = getStringArg('registerMissingProduct', ctx.args, 'notes', { required: true });
 
     const conversation = await this.internalApi.getConversationFull(ctx.conversationId);
     const clientId = conversation.client?.id ?? null;

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class SalesRejectionFn {
@@ -38,12 +39,8 @@ export class SalesRejectionFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.args?.reason as string;
-    const productName = ctx.args?.productName as string;
-
-    if (!reason || !productName) {
-      throw new Error('salesRejection: "reason" y "productName" son requeridos');
-    }
+    const reason = getStringArg('salesRejection', ctx.args, 'reason', { required: true });
+    const productName = getStringArg('salesRejection', ctx.args, 'productName', { required: true });
 
     if (ctx.isTest) {
       ctx.sideEffects.push({

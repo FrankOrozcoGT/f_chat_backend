@@ -4,6 +4,7 @@ import { NodeContext } from '../node-function.context';
 import { IntentRepository } from '../../repositories/intent.repository';
 import { NodeRepository } from '../../repositories/node.repository';
 import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class FindFlowForIntentFn {
@@ -30,13 +31,7 @@ export class FindFlowForIntentFn {
   async execute(ctx: NodeContext): Promise<string> {
     const { tenantId, conversationId, nodeSession } = ctx;
 
-    const intentName = ctx.args?.intent as string | undefined;
-
-    if (!intentName) {
-      throw new Error(
-        `findFlowForIntent: "intent" is required — got: ${JSON.stringify(ctx.args)}`,
-      );
-    }
+    const intentName = getStringArg('findFlowForIntent', ctx.args, 'intent', { required: true });
 
     // Reads are always OK (even in test)
     const intent = await this.intentRepo.findByTenantIdAndName(
