@@ -6,7 +6,7 @@ import { MessageRepository } from '@common/messaging/repositories/message.reposi
 import { GroupConversationRepository } from '../repositories/group-conversation.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
 import { EvolutionService } from '@common/evolution/evolution.service';
-import { phoneFromJid, jidFromPhone } from '@common/utils/whatsapp-jid';
+import { phoneFromJid, jidFromPhone, isGroupJid } from '@common/utils/whatsapp-jid';
 
 @Injectable()
 export class MessageHistoryBootstrapService {
@@ -32,7 +32,7 @@ export class MessageHistoryBootstrapService {
     tenantId: string,
   ) {
     try {
-      const isGroupConversation = remoteJid.endsWith('@g.us');
+      const isGroupConversation = isGroupJid(remoteJid);
 
       const [rawMessages, groupPictureUrl] = await Promise.all([
         this.evolutionService.findMessages(instanceName, remoteJid),
