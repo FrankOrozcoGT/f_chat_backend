@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
 import { EvolutionService } from '@common/evolution/evolution.service';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { TemplateRepository } from '../../repositories/template.repository';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class CloseSessionFn {
@@ -40,7 +41,7 @@ export class CloseSessionFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const customMessage = ctx.args?.message as string | undefined;
+    const customMessage = getStringArg('closeSession', ctx.args, 'message');
     const farewellTemplate = await this.templateRepo.findByCode('farewell', ctx.tenantId);
     const farewell = customMessage ? `${customMessage}\n\n${farewellTemplate}` : farewellTemplate;
 

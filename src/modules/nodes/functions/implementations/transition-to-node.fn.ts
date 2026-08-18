@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { NodeRepository } from '../../repositories/node.repository';
-import { SessionLifecycleService } from '../../../ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class TransitionToNodeFn {
@@ -42,12 +43,8 @@ export class TransitionToNodeFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const transitionCode = ctx.args?.transitionCode as string;
-    const summary = ctx.args?.summary as string | undefined;
-
-    if (!transitionCode) {
-      throw new Error('transitionToNode: "transitionCode" es requerido');
-    }
+    const transitionCode = getStringArg('transitionToNode', ctx.args, 'transitionCode', { required: true });
+    const summary = getStringArg('transitionToNode', ctx.args, 'summary');
 
     const flowId = ctx.nodeSession?.flowId;
     const currentNodeId = ctx.nodeSession?.currentNodeId;

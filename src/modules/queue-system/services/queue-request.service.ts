@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
 import { ContactLabelService } from './contact-label.service';
 import { UserQueueManager } from './user-queue-manager.service';
+import { phoneFromJid } from '@common/utils/whatsapp-jid';
 
 export interface EnqueueParams {
   userId: string;
@@ -46,7 +47,7 @@ export class QueueRequestService {
             if (!resolved.clientPhone) throw new Error(`ContactLabel "${label}" tiene grupo pero no tiene usuario asignado`);
             return resolved.clientPhone;
           })()
-        : resolved.remoteJid.replace('@s.whatsapp.net', ''),
+        : phoneFromJid(resolved.remoteJid),
       groupJid: resolved.isGroup ? resolved.remoteJid : null,
       outgoingMessage: message,
       imageUrl: params.imageUrl ?? null,

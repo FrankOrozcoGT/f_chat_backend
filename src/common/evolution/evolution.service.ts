@@ -28,7 +28,7 @@ interface EvolutionContact {
   profilePicUrl?: string | null;
 }
 
-interface EvolutionMessage {
+export interface EvolutionMessage {
   key: {
     remoteJid: string;
     fromMe: boolean;

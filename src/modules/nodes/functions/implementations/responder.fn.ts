@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageType } from '@prisma/client';
 import { EvolutionService, EvolutionMediaType } from '@common/evolution/evolution.service';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class ResponderFn {
@@ -44,12 +45,8 @@ export class ResponderFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const mensaje = ctx.args?.mensaje as string;
-    const imageUrl = ctx.args?.imageUrl as string | undefined;
-
-    if (!mensaje) {
-      throw new Error('responder: "mensaje" es requerido pero no fue proporcionado');
-    }
+    const mensaje = getStringArg('responder', ctx.args, 'mensaje', { required: true });
+    const imageUrl = getStringArg('responder', ctx.args, 'imageUrl');
 
     if (ctx.isTest) {
       ctx.sideEffects.push({ action: 'sendMessage', args: { mensaje, imageUrl } });

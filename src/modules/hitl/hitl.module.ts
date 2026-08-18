@@ -4,14 +4,14 @@ import { HitlService } from './hitl.service';
 import { HitlReturnListener } from './hitl-return.listener';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { ConversationsModule } from '@modules/conversations/conversations.module';
-import { AiModule } from '@modules/ai/ai.module';
+import { ConversationOrchestrationModule } from '@common/conversation-orchestration/conversation-orchestration.module';
 import { ConversationAnalysisModule } from '@modules/conversation-analysis/conversation-analysis.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
-import { MessageRepository } from '@modules/webhooks/repositories/message.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 
 @Module({
-  imports: [PrismaModule, ConversationsModule, AiModule, ConversationAnalysisModule, NodesModule],
+  imports: [PrismaModule, ConversationsModule, ConversationOrchestrationModule, ConversationAnalysisModule, NodesModule],
   controllers: [HitlController],
   providers: [
     HitlService,

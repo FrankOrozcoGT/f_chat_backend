@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -53,8 +53,12 @@ export class PromotionRepository {
 
   async updateById(
     id: string,
+    tenantId: string,
     data: { name?: string; description?: string; specialPrice?: number; productIds?: string[] },
   ) {
+    const owned = await this.prisma.promotion.findFirst({ where: { id, tenantId } });
+    if (!owned) throw new NotFoundException('Promotion not found');
+
     const { productIds, ...fields } = data;
     return this.prisma.promotion.update({
       where: { id },
@@ -71,8 +75,11 @@ export class PromotionRepository {
     });
   }
 
-  async deleteById(id: string) {
-    return this.prisma.promotion.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const { count } = await this.prisma.promotion.deleteMany({
+      where: { id, tenantId },
+    });
+    if (count === 0) throw new NotFoundException('Promotion not found');
   }
 
   async upsertByName(data: {
@@ -87,7 +94,7 @@ export class PromotionRepository {
     });
 
     if (existing) {
-      return this.updateById(existing.id, {
+      return this.updateById(existing.id, data.tenantId, {
         description: data.description,
         specialPrice: data.specialPrice,
         productIds: data.productIds,

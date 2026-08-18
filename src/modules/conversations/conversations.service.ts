@@ -1,83 +1,173 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
-import { Client, Phone, ConversationMode } from '@prisma/client';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConversationRepository } from './repositories/conversation.repository';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
+import { CatalogService } from '@modules/catalog/catalog.service';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
+import { QueueRequestRepository } from '@modules/queue-system/repositories/queue-request.repository';
+import { checkTenantOwnsConversation } from '@common/utils/check-tenant-owns-conversation';
 
 @Injectable()
 export class ConversationsService {
-  /**
-   * Valida que el usuario sea dueño de la conversación (vía phone)
-   * @param conversation - Conversación a validar
-   * @param phone - Teléfono asociado a la conversación
-   * @param userId - ID del usuario autenticado
-   * @throws ForbiddenException si el usuario no es dueño
-   */
-  checkTenantOwnsConversation(
-    conversation: { id: string; phoneId: string },
-    phone: Phone,
+  private readonly logger = new Logger(ConversationsService.name);
+
+  constructor(
+    private readonly conversationRepository: ConversationRepository,
+    private readonly catalogService: CatalogService,
+    private readonly nodeSessionRepository: NodeSessionRepository,
+    private readonly queueRequestRepository: QueueRequestRepository,
+  ) {}
+
+  async findAll(
     tenantId: string,
-  ): void {
-    if (phone.tenantId !== tenantId) {
-      throw new ForbiddenException(
-        'You do not have permission to access this conversation',
-      );
-    }
-  }
+    phoneId?: string,
+    page?: string,
+    limit?: string,
+    search?: string,
+  ) {
+    this.logger.log(
+      `GET /api/conversations - tenantId: ${tenantId}, phoneId: ${phoneId || 'all'}, page: ${page}, search: ${search || 'none'}`,
+    );
 
-  /**
-   * Construye el response de detalle de conversación
-   * @param conversation - Conversación
-   * @param client - Cliente asociado
-   * @returns Objeto con conversation, client y summary
-   */
-  mapContactsToConversations(
-    contacts: any[],
-    phone: Phone,
-  ): ConversationResponseDto[] {
-    const now = new Date();
-    return contacts
-      .filter((c) => c.remoteJid?.endsWith('@s.whatsapp.net'))
-      .map((c) => {
-        const client = {
-          id: c.remoteJid,
-          phoneNumber: c.remoteJid.replace(/@s\.whatsapp\.net$/, ''),
-          name: c.pushName || c.notify || null,
-          profilePicUrl: c.profilePicUrl || null,
-          firstContactAt: now,
-          lastContactAt: now,
-        } as Client;
-
-        return new ConversationResponseDto({
-          id: c.remoteJid,
-          phoneId: phone.id,
-          type: 'individual',
-          mode: ConversationMode.HITL,
-          lastMessageAt: now,
-          lastMessagePreview: null,
-          isActive: true,
-          summary: null,
-          createdAt: now,
-          updatedAt: now,
-          client,
-          phone,
-        });
-      });
-  }
-
-  buildDetailResponse(conversation: { id: string; lastMessageAt: Date; lastMessagePreview: string | null; isActive: boolean; mode: string }, client: Client | null) {
-    const summary = {
-      conversationId: conversation.id,
-      clientName: client?.name || 'Unknown',
-      clientPhone: client?.phoneNumber || 'N/A',
-      lastMessageAt: conversation.lastMessageAt,
-      lastMessagePreview: conversation.lastMessagePreview,
-      isActive: conversation.isActive,
-      mode: conversation.mode,
+    const options = {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      search,
     };
+
+    const {
+      data,
+      total,
+      page: currentPage,
+      limit: currentLimit,
+    } = await this.conversationRepository.findByTenantIdAndPhone(
+      tenantId,
+      phoneId,
+      options,
+    );
+
+    if (data.length > 0) {
+      return {
+        data: data.map(
+          (conversation) => new ConversationResponseDto(conversation),
+        ),
+        total,
+        page: currentPage,
+        limit: currentLimit,
+        totalPages: Math.ceil(total / currentLimit),
+      };
+    }
+
+    // Sin conversaciones en DB — el sync viene via webhook contacts.upsert
+    this.logger.log(
+      `No conversations in DB for tenantId=${tenantId}, sync pending via webhook`,
+    );
+    return {
+      data: [],
+      total: 0,
+      page: currentPage,
+      limit: currentLimit,
+      totalPages: 0,
+    };
+  }
+
+  getGroupsSelect(tenantId: string) {
+    return this.conversationRepository.findAllGroupsSelect(tenantId);
+  }
+
+  async getDetail(id: string, tenantId: string) {
+    this.logger.log(
+      `GET /api/conversations/:id - tenantId: ${tenantId}, conversationId: ${id}`,
+    );
+
+    // 1. Obtener conversación con relaciones (phone + participants → client)
+    const conversation = await this.conversationRepository.findByIdWithRelations(id);
+    if (!conversation) {
+      throw new NotFoundException(`Conversation with id ${id} not found`);
+    }
+
+    // 2. Validar permisos
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+
+    // 3. Datos del cliente
+    const clientId = conversation.client?.id;
+
+    // 4. Cargar en paralelo: catálogo del cliente (productos/descuentos/promos) + sub-conversaciones analizadas
+    const [catalogContext, analyzedConversations] = await Promise.all([
+      this.catalogService.getClientCatalogContext(tenantId, clientId),
+      clientId
+        ? this.conversationRepository.findAnalyzedByPhoneAndClient(
+            conversation.phoneId,
+            clientId,
+          )
+        : Promise.resolve([]),
+    ]);
+    const { products, clientDiscounts, clientPromotionDiscounts, promotions } = catalogContext;
+
+    this.logger.log(`Conversation detail retrieved successfully for id: ${id}`);
 
     return {
-      conversation,
-      client,
-      summary,
+      conversation: {
+        id: conversation.id,
+        phoneId: conversation.phoneId,
+        isActive: conversation.isActive,
+        mode: conversation.mode,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessagePreview: conversation.lastMessagePreview,
+      },
+      client: conversation.client
+        ? {
+            id: conversation.client.id,
+            name: conversation.client.name,
+            phoneNumber: conversation.client.phoneNumber,
+          }
+        : null,
+      products,
+      clientDiscounts,
+      promotions,
+      clientPromotionDiscounts,
+      analyzedConversations: analyzedConversations.map((c) => ({
+        id: c.id,
+        summary: c.summary,
+        messageCount: c._count.messages,
+        createdAt: c.createdAt,
+      })),
     };
+  }
+
+  async closeConversation(id: string, tenantId: string) {
+    const conversation = await this.conversationRepository.findWithMessagesById(id);
+    if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
+
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+
+    if (!conversation.client || conversation.messages.length === 0) {
+      return { closed: true, movedMessages: 0 };
+    }
+
+    const messageIds = conversation.messages.map((m) => m.id);
+    const result = await this.conversationRepository.archiveMessages(
+      conversation.phoneId,
+      conversation.client.id,
+      messageIds,
+    );
+
+    const activeSession = await this.nodeSessionRepository.findActiveOrWaitingByConversationId(id);
+    if (activeSession) {
+      await this.nodeSessionRepository.close(activeSession.id);
+    }
+
+    await this.queueRequestRepository.cancelByConversationId(id);
+
+    return { closed: true, movedMessages: result.messageCount, subConversationId: result.subConversationId };
+  }
+
+  async markAsRead(id: string, tenantId: string) {
+    const conversation = await this.conversationRepository.findByIdWithRelations(id);
+    if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
+
+    checkTenantOwnsConversation(conversation, conversation.phone, tenantId);
+
+    await this.conversationRepository.resetUnread(id);
+    return { ok: true };
   }
 }

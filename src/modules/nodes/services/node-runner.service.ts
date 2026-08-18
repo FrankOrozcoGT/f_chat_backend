@@ -5,20 +5,21 @@ import {
   ToolChatResult,
   ToolDefinition,
   ToolTermination,
-} from '../../ai/clients/kimi.client';
-import { NodeFunctionRegistry } from '../functions/node-function.registry';
+} from '@common/external-integrations/kimi.client';
+import { NodeFunctionRegistry, RegisteredFunction } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 import { PostCodeRetryError } from '../functions/node-function.errors';
-import { SessionLifecycleService } from '../../ai/services/session-lifecycle.service';
+import { SessionLifecycleService } from '@common/conversation-session/session-lifecycle.service';
+import { TodoDefinition, parseTodoDefinitions } from '../types/todo-definition';
 
 export interface NodeRunInput {
-  node: Node;
+  node: Pick<Node, 'systemPrompt'>;
   transcription: string;
   imageUrl: string | null;
   history: { role: string; content: string }[];
   systemPromptExtra?: string;
   toolDefinitions: ToolDefinition[];
-  toolHandlers: Map<string, { meta: any; instance: any; method: string }>;
+  toolHandlers: Map<string, RegisteredFunction>;
   terminationNames: Set<string>;
   fnRegistry: NodeFunctionRegistry;
   ctx: NodeContext;
@@ -129,12 +130,7 @@ export class NodeRunnerService {
   ): Promise<NodeRunResult> {
     // 0. Parsear todos — solo se inyectan si el nodo los tiene definidos
     // La validación de que sean obligatorios se hace en custom-node (nodos de DB)
-    const nodeTodos: Array<{ id: string; name: string; description?: string; functions?: string[] }> | null =
-      Array.isArray(activeNode.todos)
-        ? (activeNode.todos as any[])
-        : activeNode.todos
-          ? JSON.parse(String(activeNode.todos))
-          : null;
+    const nodeTodos: TodoDefinition[] = parseTodoDefinitions(activeNode.todos);
 
     // 1. Inyectar datos del cliente siempre (disponibles desde custom-node)
     let systemPromptExtra =
@@ -263,7 +259,7 @@ export class NodeRunnerService {
   }
 
   private buildOnToolCall(
-    toolHandlers: Map<string, { meta: any; instance: any; method: string }>,
+    toolHandlers: Map<string, RegisteredFunction>,
     terminationNames: Set<string>,
     ctx: NodeContext,
   ) {

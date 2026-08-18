@@ -6,15 +6,10 @@ import {
   Patch,
   Param,
   Body,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { SystemAdminGuard } from '@common/guards/system-admin.guard';
 import { AdminService } from './admin.service';
-import { CostsRepository } from './repositories/costs.repository';
-import { ApiHealthRepository } from '@modules/health/repositories/api-health.repository';
-import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
-import { TenantRepository } from '@modules/tenants/repositories/tenant.repository';
 import { CostsQueryDto } from './dto/costs-query.dto';
 import { CostsResponseDto } from './dto/costs-response.dto';
 import { UpdateUserLimitsDto } from './dto/update-user-limits.dto';
@@ -23,29 +18,21 @@ import { UpdateUserPlanDto } from './dto/update-user-plan.dto';
 @Controller('admin')
 @UseGuards(JwtAuthGuard, SystemAdminGuard)
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-    private readonly costsRepository: CostsRepository,
-    private readonly apiHealthRepository: ApiHealthRepository,
-    private readonly tenantSettingsRepository: TenantSettingsRepository,
-    private readonly tenantRepository: TenantRepository,
-  ) {}
+  constructor(private readonly adminService: AdminService) {}
 
   @Get('costs')
   async getCosts(@Query() query: CostsQueryDto): Promise<CostsResponseDto> {
-    const apiCalls = await this.costsRepository.getApiCallsByPeriod(query.period);
-    return this.adminService.aggregateCosts(apiCalls);
+    return this.adminService.getCosts(query);
   }
 
   @Get('tenants')
   async getAllTenants() {
-    return this.tenantRepository.findAllWithSettings();
+    return this.adminService.getAllTenants();
   }
 
   @Get('health')
   async getHealthStatus() {
-    const dbRecords = await this.apiHealthRepository.getAllApiHealth();
-    return this.adminService.getHealthStatus(dbRecords);
+    return this.adminService.getHealth();
   }
 
   @Patch('tenants/:tenantId/plan')
@@ -53,11 +40,7 @@ export class AdminController {
     @Param('tenantId') tenantId: string,
     @Body() dto: UpdateUserPlanDto,
   ) {
-    const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
-    if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
-    }
-    return this.tenantSettingsRepository.updatePlan(tenantId, dto.plan);
+    return this.adminService.updateTenantPlan(tenantId, dto);
   }
 
   @Patch('tenants/:tenantId/limits')
@@ -65,10 +48,6 @@ export class AdminController {
     @Param('tenantId') tenantId: string,
     @Body() dto: UpdateUserLimitsDto,
   ) {
-    const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
-    if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
-    }
-    return this.tenantSettingsRepository.updateLimits(tenantId, dto);
+    return this.adminService.updateTenantLimits(tenantId, dto);
   }
 }

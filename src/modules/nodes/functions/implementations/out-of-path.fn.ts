@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class OutOfPathFn {
@@ -29,7 +30,7 @@ export class OutOfPathFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const summary = ctx.args?.summary as string;
+    const summary = getStringArg('outOfPath', ctx.args, 'summary', { required: true });
 
     // Guardar contexto en flowSummary para que el flow router lo use
     if (ctx.nodeSession) {

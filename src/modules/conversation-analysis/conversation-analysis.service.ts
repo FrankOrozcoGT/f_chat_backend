@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { LimitsService } from '@common/services/limits.service';
 import { AnalysisWorkflow } from './langgraph/analysis-workflow';
 import {
@@ -93,7 +93,7 @@ export class ConversationAnalysisService {
       senderType: m.senderType,
       transcription: m.transcription,
       mediaUrl: m.mediaUrl,
-      metadata: m.metadata as Record<string, any> | null,
+      metadata: m.metadata,
       createdAt: m.createdAt,
     }));
 

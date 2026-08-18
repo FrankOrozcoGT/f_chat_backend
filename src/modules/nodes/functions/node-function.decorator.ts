@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ToolDefinition } from '../../ai/clients/kimi.client';
+import { ToolDefinition } from '@common/external-integrations/kimi.client';
 
 export const NODE_FUNCTION_METADATA = 'NODE_FUNCTION_METADATA';
 

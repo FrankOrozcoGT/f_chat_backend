@@ -15,7 +15,7 @@ import { ConversationsModule } from '@modules/conversations/conversations.module
 import { MessagesModule } from '@modules/messages/messages.module';
 import { LangSmithModule } from '@common/langsmith/langsmith.module';
 import { RedisModule } from '@common/redis/redis.module';
-import { AiModule } from '@modules/ai/ai.module';
+import { ConversationOrchestrationModule } from '@common/conversation-orchestration/conversation-orchestration.module';
 import { HitlModule } from '@modules/hitl/hitl.module';
 import { AdminModule } from '@modules/admin/admin.module';
 import { TenantSettingsModule } from '@modules/tenant-settings/tenant-settings.module';
@@ -52,7 +52,7 @@ import { DashboardModule } from '@modules/dashboard/dashboard.module';
     ConversationsModule,
     MessagesModule,
     NodesModule,
-    AiModule,
+    ConversationOrchestrationModule,
     HitlModule,
     AdminModule,
     TenantSettingsModule,

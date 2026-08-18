@@ -7,6 +7,53 @@ export class ConversationRepository {
 
   constructor(private prisma: PrismaService) {}
 
+  async findIdByGroupJid(groupJid: string) {
+    return this.prisma.conversation.findUnique({
+      where: { groupJid },
+      select: { id: true },
+    });
+  }
+
+  async findIdsByIndividualClientId(clientId: string) {
+    return this.prisma.conversation.findMany({
+      where: { participants: { some: { clientId } }, groupJid: null },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Conversaciones activas más recientes de un tenant, con datos mínimos
+   * para el análisis batch (client principal + todos los participantes).
+   */
+  async findActiveForBatchAnalysis(tenantId: string, take: number) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        isActive: true,
+        phone: { tenantId },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        phoneId: true,
+        groupJid: true,
+        phone: { select: { id: true, tenantId: true } },
+        participants: {
+          select: { client: { select: { id: true, phoneNumber: true, name: true } } },
+        },
+      },
+    });
+
+    return conversations.map((c) => ({
+      id: c.id,
+      phoneId: c.phoneId,
+      groupJid: c.groupJid,
+      phone: c.phone,
+      client: c.participants[0]?.client ?? null,
+      allParticipants: c.participants.map((p) => p.client).filter((cl): cl is NonNullable<typeof cl> => !!cl),
+    }));
+  }
+
   async findByTenantIdAndPhone(
     tenantId: string,
     phoneId?: string,
@@ -90,33 +137,6 @@ export class ConversationRepository {
       ...conv,
       client: conv.participants[0]?.client ?? null,
     };
-  }
-
-  /**
-   * @deprecated Usar upsertIndividual en su lugar
-   */
-  async upsert(data: { phoneId: string; clientId: string; isActive: boolean }) {
-    return this.upsertIndividual(data);
-  }
-
-  /**
-   * @deprecated Usar createManyIndividualWithParticipants en su lugar
-   */
-  async createManySkipDuplicates(
-    data: { phoneId: string; clientId: string }[],
-  ) {
-    return this.createManyIndividualWithParticipants(data);
-  }
-
-  /**
-   * @deprecated Usar findManyIndividualByPhoneAndClientIds en su lugar
-   */
-  async findManyByPhoneIdAndClientIds(phoneId: string, clientIds: string[]) {
-    const convs = await this.findManyIndividualByPhoneAndClientIds(phoneId, clientIds);
-    return convs.map((c) => ({
-      id: c.id,
-      clientId: c.participants[0]?.clientId ?? null,
-    }));
   }
 
   async upsertIndividual(data: { phoneId: string; clientId: string; isActive: boolean }) {

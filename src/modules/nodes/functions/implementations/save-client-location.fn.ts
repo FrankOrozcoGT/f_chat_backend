@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class SaveClientLocationFn {
@@ -33,10 +34,7 @@ export class SaveClientLocationFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const location = ctx.args?.location as string;
-    if (!location) {
-      throw new Error('saveClientLocation: "location" es requerido pero no fue proporcionado');
-    }
+    const location = getStringArg('saveClientLocation', ctx.args, 'location', { required: true });
 
     const conversation = await this.internalApi.getConversationFull(ctx.conversationId);
     const clientId = conversation.client?.id;

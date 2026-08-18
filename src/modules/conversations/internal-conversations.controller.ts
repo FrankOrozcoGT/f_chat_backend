@@ -6,36 +6,23 @@ import {
   Param,
   Body,
   UseGuards,
-  NotFoundException,
 } from '@nestjs/common';
 import { InternalGuard } from '@common/guards/internal.guard';
-import { ConversationRepository } from './repositories/conversation.repository';
+import { InternalConversationsService } from './internal-conversations.service';
 
 @Controller('internal/conversations')
 @UseGuards(InternalGuard)
 export class InternalConversationsController {
-  constructor(
-    private readonly conversationRepository: ConversationRepository,
-  ) {}
+  constructor(private readonly internalConversationsService: InternalConversationsService) {}
 
   @Get(':id')
   async getConversation(@Param('id') id: string) {
-    const conversation =
-      await this.conversationRepository.findByIdWithRelations(id);
-    if (!conversation) {
-      throw new NotFoundException(`Conversation ${id} not found`);
-    }
-    return { id: conversation.id, phone: { tenantId: conversation.phone.tenantId } };
+    return this.internalConversationsService.getConversation(id);
   }
 
   @Get(':id/full')
   async getConversationFull(@Param('id') id: string) {
-    const conversation =
-      await this.conversationRepository.findByIdWithRelations(id);
-    if (!conversation) {
-      throw new NotFoundException(`Conversation ${id} not found`);
-    }
-    return conversation;
+    return this.internalConversationsService.getConversationFull(id);
   }
 
   @Patch(':id/mode')
@@ -43,7 +30,7 @@ export class InternalConversationsController {
     @Param('id') id: string,
     @Body('mode') mode: 'AI' | 'HITL',
   ) {
-    await this.conversationRepository.updateMode(id, mode);
+    await this.internalConversationsService.updateMode(id, mode);
   }
 
   @Patch(':id/summary')
@@ -51,7 +38,7 @@ export class InternalConversationsController {
     @Param('id') id: string,
     @Body('summary') summary: string,
   ) {
-    return this.conversationRepository.updateSummary(id, summary);
+    return this.internalConversationsService.updateSummary(id, summary);
   }
 
   @Post('create-with-participant')
@@ -63,6 +50,6 @@ export class InternalConversationsController {
       isActive: boolean;
     },
   ) {
-    return this.conversationRepository.createWithParticipant(body);
+    return this.internalConversationsService.createWithParticipant(body);
   }
 }

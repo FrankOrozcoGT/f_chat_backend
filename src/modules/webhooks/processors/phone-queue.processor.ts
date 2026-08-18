@@ -1,15 +1,28 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { WebhookProcessorService } from '../services/webhook-processor.service';
+import { MessageProcessorService } from '../services/message-processor.service';
+import { ContactSyncService } from '../services/contact-sync.service';
+import { GroupSyncService } from '../services/group-sync.service';
+import { ChatSyncService } from '../services/chat-sync.service';
 import { WebhookJobData } from '../services/phone-queue.service';
+import type {
+  EvolutionWebhookEvent,
+  EvolutionContactUpsert,
+  EvolutionGroupUpsert,
+  EvolutionChatSet,
+} from '../types/evolution-webhook.types';
+import type { EvolutionMessage } from '@common/evolution/evolution.service';
 
 @Processor('phone-webhooks', { concurrency: 1 })
 export class PhoneQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(PhoneQueueProcessor.name);
 
   constructor(
-    private readonly webhookProcessor: WebhookProcessorService,
+    private readonly messageProcessor: MessageProcessorService,
+    private readonly contactSyncService: ContactSyncService,
+    private readonly groupSyncService: GroupSyncService,
+    private readonly chatSyncService: ChatSyncService,
   ) {
     super();
   }
@@ -23,19 +36,34 @@ export class PhoneQueueProcessor extends WorkerHost {
 
     switch (type) {
       case 'process-message':
-        await this.webhookProcessor.processMessage(phoneId, instanceName, webhookData);
+        await this.messageProcessor.processMessage(
+          phoneId,
+          instanceName,
+          webhookData as EvolutionWebhookEvent<EvolutionMessage & { profilePicUrl?: string | null }>,
+        );
         break;
 
       case 'sync-contacts':
-        await this.webhookProcessor.syncContacts(phoneId, tenantId, webhookData);
+        await this.contactSyncService.syncContacts(
+          phoneId,
+          tenantId,
+          webhookData as EvolutionWebhookEvent<EvolutionContactUpsert[]>,
+        );
         break;
 
       case 'sync-group':
-        await this.webhookProcessor.syncGroup(phoneId, instanceName, webhookData);
+        await this.groupSyncService.syncGroup(
+          phoneId,
+          instanceName,
+          webhookData as EvolutionWebhookEvent<EvolutionGroupUpsert[] | EvolutionGroupUpsert>,
+        );
         break;
 
       case 'sync-chats':
-        await this.webhookProcessor.syncChats(phoneId, webhookData);
+        await this.chatSyncService.syncChats(
+          phoneId,
+          webhookData as EvolutionWebhookEvent<EvolutionChatSet[]>,
+        );
         break;
 
       default:

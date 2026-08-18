@@ -5,9 +5,10 @@ import { NodeContext } from '../node-function.context';
 import { PostCodeRetryError } from '../node-function.errors';
 import { QueueRequestService } from '@modules/queue-system/services/queue-request.service';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
-import { InternalApiClient } from '@modules/ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { EvolutionService } from '@common/evolution/evolution.service';
 import { buildOutgoingMessageData } from '@common/utils/build-outgoing-message-data';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class SendToInternalChannelFn {
@@ -57,13 +58,11 @@ export class SendToInternalChannelFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const channelName = ctx.args?.channelName as string;
-    const message = ctx.args?.message as string;
-    const imageMessageId = ctx.args?.imageMessageId as string | undefined;
-    const clientMessage = ctx.args?.clientMessage as string | undefined;
+    const channelName = getStringArg('sendToInternalChannel', ctx.args, 'channelName', { required: true });
+    const message = getStringArg('sendToInternalChannel', ctx.args, 'message', { required: true });
+    const imageMessageId = getStringArg('sendToInternalChannel', ctx.args, 'imageMessageId');
+    const clientMessage = getStringArg('sendToInternalChannel', ctx.args, 'clientMessage');
 
-    if (!channelName) throw new Error('sendToInternalChannel: falta channelName');
-    if (!message) throw new Error('sendToInternalChannel: falta message');
     if (!ctx.nodeSession) throw new Error('sendToInternalChannel: no hay nodeSession activa');
 
     let imageUrl: string | undefined;

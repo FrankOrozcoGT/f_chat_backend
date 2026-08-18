@@ -1,5 +1,5 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { AiModule } from '@modules/ai/ai.module';
+import { Module } from '@nestjs/common';
+import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { LimitsModule } from '@common/services/limits.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { NodesModule } from '@modules/nodes/nodes.module';
@@ -15,18 +15,22 @@ import { IntentSplitterNode } from './langgraph/nodes/intent-splitter.node';
 import { MermaidParserModule } from '@modules/nodes/mermaid-parser/mermaid-parser.module';
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
+import { FlowGenerationService } from './flow-generation.service';
+import { InternalChannelService } from './internal-channel.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 
 @Module({
   imports: [
-    AiModule,
+    ExternalIntegrationsModule,
     LimitsModule,
     FileStorageModule,
     MermaidParserModule,
-    forwardRef(() => NodesModule),
+    NodesModule,
   ],
   controllers: [ConversationAnalysisController, BatchAnalysisController],
   providers: [
@@ -39,10 +43,14 @@ import { FlowIntentRepository } from './repositories/flow-intent.repository';
     IntentSplitterNode,
     DiagramConsolidatorNode,
     BatchAnalysisService,
+    FlowGenerationService,
+    InternalChannelService,
     ClientLabelRepository,
     InternalChannelReviewRepository,
     ConversationAnalysisRepository,
     FlowIntentRepository,
+    ConversationRepository,
+    MessageRepository,
   ],
   exports: [AnalysisWorkflow, ConversationAnalysisService],
 })

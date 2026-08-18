@@ -5,7 +5,9 @@ import {
   InternalChannel,
   DraftFlow,
   ConversationAnalysisSummary,
+  DashboardRepository,
 } from './repositories/dashboard.repository';
+import { DashboardResponseDto } from './dto/dashboard-response.dto';
 
 export interface DashboardMetrics {
   totalClients: number;
@@ -21,6 +23,45 @@ export interface DashboardMetrics {
 
 @Injectable()
 export class DashboardService {
+  constructor(private readonly dashboardRepository: DashboardRepository) {}
+
+  async getDashboard(
+    tenantId: string,
+    fromParam: string | undefined,
+    toParam: string | undefined,
+  ): Promise<DashboardResponseDto> {
+    const to = toParam ? new Date(toParam) : new Date();
+    const from = fromParam
+      ? new Date(fromParam)
+      : new Date(new Date().setDate(to.getDate() - 30));
+
+    // Asegurar que "to" incluya el fin del día
+    to.setHours(23, 59, 59, 999);
+
+    const [rawStats, intentStats, internalChannels, draftFlows, conversationAnalyses] =
+      await Promise.all([
+        this.dashboardRepository.getMessageStats(tenantId, from, to),
+        this.dashboardRepository.getIntentStats(tenantId, from, to),
+        this.dashboardRepository.getInternalChannels(tenantId),
+        this.dashboardRepository.getDraftFlows(tenantId),
+        this.dashboardRepository.getConversationAnalyses(tenantId, from, to),
+      ]);
+
+    const metrics = this.calculateMetrics(
+      rawStats,
+      intentStats,
+      internalChannels,
+      draftFlows,
+      conversationAnalyses,
+    );
+
+    return new DashboardResponseDto({
+      from: from.toISOString().split('T')[0],
+      to: to.toISOString().split('T')[0],
+      ...metrics,
+    });
+  }
+
   calculateMetrics(
     stats: RawMessageStats[],
     intentStats: IntentStat[],

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -42,15 +42,23 @@ export class ContactLabelRepository {
     });
   }
 
-  async updateById(id: string, data: { label?: string; clientId?: string; groupJid?: string }) {
-    return this.prisma.contactLabel.update({
-      where: { id },
+  async updateById(
+    id: string,
+    tenantId: string,
+    data: { label?: string; clientId?: string; groupJid?: string },
+  ) {
+    const { count } = await this.prisma.contactLabel.updateMany({
+      where: { id, tenantId },
       data,
-      include: { client: true },
     });
+    if (count === 0) throw new NotFoundException('Label not found');
+    return this.prisma.contactLabel.findUnique({ where: { id }, include: { client: true } });
   }
 
-  async deleteById(id: string) {
-    return this.prisma.contactLabel.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const { count } = await this.prisma.contactLabel.deleteMany({
+      where: { id, tenantId },
+    });
+    if (count === 0) throw new NotFoundException('Label not found');
   }
 }

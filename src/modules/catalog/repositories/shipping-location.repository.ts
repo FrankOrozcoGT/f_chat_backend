@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 
 @Injectable()
@@ -36,14 +36,22 @@ export class ShippingLocationRepository {
     });
   }
 
-  async updateById(id: string, data: { name?: string; isFreeShipping?: boolean; shippingCost?: number }) {
-    return this.prisma.shippingLocation.update({
-      where: { id },
+  async updateById(
+    id: string,
+    tenantId: string,
+    data: { name?: string; isFreeShipping?: boolean; shippingCost?: number },
+  ) {
+    const { count } = await this.prisma.shippingLocation.updateMany({
+      where: { id, tenantId },
       data,
     });
+    if (count === 0) throw new NotFoundException('Shipping location not found');
   }
 
-  async deleteById(id: string) {
-    return this.prisma.shippingLocation.delete({ where: { id } });
+  async deleteById(id: string, tenantId: string) {
+    const { count } = await this.prisma.shippingLocation.deleteMany({
+      where: { id, tenantId },
+    });
+    if (count === 0) throw new NotFoundException('Shipping location not found');
   }
 }

@@ -1,5 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ContactLabelRepository } from '../repositories/contact-label.repository';
+import { CreateLabelDto } from '../dto/create-label.dto';
+import { UpdateLabelDto } from '../dto/update-label.dto';
+import { jidFromPhone } from '@common/utils/whatsapp-jid';
 
 export interface ResolvedContact {
   remoteJid: string;
@@ -29,7 +32,7 @@ export class ContactLabelService {
 
     if (contactLabel.client) {
       return {
-        remoteJid: `${contactLabel.client.phoneNumber}@s.whatsapp.net`,
+        remoteJid: jidFromPhone(contactLabel.client.phoneNumber),
         isGroup: false,
         clientId: contactLabel.client.id,
       };
@@ -45,5 +48,23 @@ export class ContactLabelService {
 
   async findLabelsByClientPhone(phoneNumber: string) {
     return this.contactLabelRepo.findByClientPhone(phoneNumber);
+  }
+
+  async getLabels(tenantId: string) {
+    return this.contactLabelRepo.findByTenantId(tenantId);
+  }
+
+  async createLabel(tenantId: string, dto: CreateLabelDto) {
+    const existing = await this.contactLabelRepo.findByTenantIdAndLabel(tenantId, dto.label);
+    if (existing) throw new ConflictException(`Label "${dto.label}" already exists for this tenant`);
+    return this.contactLabelRepo.create(tenantId, dto);
+  }
+
+  async updateLabel(id: string, tenantId: string, dto: UpdateLabelDto) {
+    return this.contactLabelRepo.updateById(id, tenantId, dto);
+  }
+
+  async deleteLabel(id: string, tenantId: string) {
+    return this.contactLabelRepo.deleteById(id, tenantId);
   }
 }

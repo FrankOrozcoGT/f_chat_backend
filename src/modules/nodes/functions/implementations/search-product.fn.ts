@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 const MOCK_PRODUCTS = [
   { name: 'Cartucho HP 664 Negro', price: 85, description: 'Cartucho de tinta original' },
@@ -41,10 +42,7 @@ export class SearchProductFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const query = ctx.args?.query as string;
-    if (!query) {
-      throw new Error('searchProduct: "query" es requerido pero no fue proporcionado');
-    }
+    const query = getStringArg('searchProduct', ctx.args, 'query', { required: true });
 
     if (ctx.isTest) {
       ctx.sideEffects.push({ action: 'searchProduct', args: { query } });

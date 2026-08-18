@@ -17,14 +17,14 @@ export class FileStorageService {
   /**
    * Guarda un archivo subido por el usuario
    * @param file - Archivo de multer
-   * @param userId - ID del usuario
+   * @param tenantId - ID del tenant
    * @param conversationId - ID de la conversación
    * @param messageId - ID del mensaje (para nombrar archivo con estándar)
    * @returns Path relativo, nombre, tamaño y tipo
    */
   async saveUploadedFile(
     file: Express.Multer.File,
-    userId: string,
+    tenantId: string,
     conversationId: string,
     messageId: string,
   ): Promise<{
@@ -39,7 +39,7 @@ export class FileStorageService {
         process.cwd(),
         'storage',
         'conversations',
-        userId,
+        tenantId,
         conversationId,
       );
 
@@ -96,7 +96,7 @@ export class FileStorageService {
       }
 
       // 6. Path relativo (sin dominio)
-      const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+      const relativePath = `/storage/conversations/${tenantId}/${conversationId}/${fileName}`;
 
       this.logger.log(
         `File uploaded and saved: ${relativePath} (${finalFileSize} bytes)`,
@@ -121,7 +121,7 @@ export class FileStorageService {
    * Descarga media desde Evolution API y guarda localmente
    * @param evolutionService - Servicio de Evolution API
    * @param instanceName - Nombre de la instancia
-   * @param userId - ID del usuario
+   * @param tenantId - ID del tenant
    * @param conversationId - ID de la conversación
    * @param messageId - ID del mensaje (para nombrar archivo)
    * @param messageKey - Key del mensaje de WhatsApp
@@ -130,7 +130,7 @@ export class FileStorageService {
   async downloadAndSaveMediaFromEvolution(
     evolutionService: EvolutionService,
     instanceName: string,
-    userId: string,
+    tenantId: string,
     conversationId: string,
     messageId: string,
     messageKey: { id: string; remoteJid: string; fromMe: boolean },
@@ -161,7 +161,7 @@ export class FileStorageService {
         process.cwd(),
         'storage',
         'conversations',
-        userId,
+        tenantId,
         conversationId,
       );
 
@@ -176,7 +176,7 @@ export class FileStorageService {
       await fs.writeFile(filePath, buffer);
 
       // 8. Path relativo (sin dominio)
-      const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+      const relativePath = `/storage/conversations/${tenantId}/${conversationId}/${fileName}`;
 
       this.logger.log(
         `Media downloaded and saved: ${relativePath} (${buffer.length} bytes)`,
@@ -202,7 +202,7 @@ export class FileStorageService {
    */
   async saveBuffer(
     buffer: Buffer,
-    userId: string,
+    tenantId: string,
     conversationId: string,
     messageId: string,
     extension: string,
@@ -217,7 +217,7 @@ export class FileStorageService {
       process.cwd(),
       'storage',
       'conversations',
-      userId,
+      tenantId,
       conversationId,
     );
     await fs.mkdir(storageDir, { recursive: true });
@@ -226,7 +226,7 @@ export class FileStorageService {
     const filePath = path.join(storageDir, fileName);
     await fs.writeFile(filePath, buffer);
 
-    const relativePath = `/storage/conversations/${userId}/${conversationId}/${fileName}`;
+    const relativePath = `/storage/conversations/${tenantId}/${conversationId}/${fileName}`;
     this.logger.log(`Buffer saved: ${relativePath} (${buffer.length} bytes)`);
 
     return { relativePath, fileName, fileSize: buffer.length, mimeType };

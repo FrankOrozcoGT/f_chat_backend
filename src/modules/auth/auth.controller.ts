@@ -6,7 +6,6 @@ import {
   Req,
   Res,
   UseGuards,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
@@ -17,7 +16,7 @@ import { AuthService } from '@modules/auth/auth.service';
 import type { GoogleProfile } from '@modules/auth/strategies/google.strategy';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
-import { TenantRepository } from '@modules/tenants/repositories/tenant.repository';
+import { AUTH_TOKEN_COOKIE, buildAuthCookieOptions } from './auth-cookie.util';
 
 interface AuthenticatedUser extends User {
   tenantId: string;
@@ -30,7 +29,6 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-    private readonly tenantRepository: TenantRepository,
   ) {}
 
   @Get('google-login')
@@ -47,14 +45,7 @@ export class AuthController {
   ) {
     const { token } = await this.authService.handleGoogleLogin(req.user);
 
-    const isProduction =
-      this.configService.get<string>('NODE_ENV') === 'production';
-    res.cookie('auth_token', token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(AUTH_TOKEN_COOKIE, token, this.cookieOptions());
 
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
@@ -64,36 +55,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMe(@CurrentUser() user: AuthenticatedUser) {
-    const [tenantWithSettings, memberships] = await Promise.all([
-      this.tenantRepository.findByIdWithSettings(user.tenantId),
-      this.tenantRepository.findByUserId(user.id),
-    ]);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        picture: user.picture,
-      },
-      tenant: tenantWithSettings
-        ? {
-            id: tenantWithSettings.id,
-            name: tenantWithSettings.name,
-            plan: tenantWithSettings.settings?.plan ?? 'free',
-            whatsappLimit: tenantWithSettings.settings?.whatsappLimit ?? 1,
-            creditsLimit: tenantWithSettings.settings?.creditsLimit ?? 0,
-            creditsUsed: tenantWithSettings.settings?.creditsUsed ?? 0,
-          }
-        : null,
-      tenantRole: user.tenantRole,
-      systemRole: user.systemRole,
-      availableTenants: memberships.map((m) => ({
-        id: m.tenant.id,
-        name: m.tenant.name,
-        role: m.role,
-      })),
-    };
+    return this.authService.getMe(user);
   }
 
   @Post('tenants/switch/:tenantId')
@@ -103,37 +65,21 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
   ) {
-    const member = await this.tenantRepository.findMember(tenantId, user.id);
-    if (!member) throw new ForbiddenException('Not a member of this tenant');
+    const { token, tenantRole } = await this.authService.switchTenant(tenantId, user);
 
-    const token = this.authService.generateJWT({
-      userId: user.id,
-      email: user.email,
-      tenantId,
-      tenantRole: member.role,
-      systemRole: user.systemRole,
-    });
+    res.cookie(AUTH_TOKEN_COOKIE, token, this.cookieOptions());
 
-    const isProduction =
-      this.configService.get<string>('NODE_ENV') === 'production';
-    res.cookie('auth_token', token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return res.json({ tenantId, tenantRole: member.role });
+    return res.json({ tenantId, tenantRole });
   }
 
   @Post('logout')
   logout(@Res() res: Response) {
-    res.clearCookie('auth_token', {
-      httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'lax',
-    });
-
+    res.clearCookie(AUTH_TOKEN_COOKIE, this.cookieOptions());
     return res.status(200).json({ message: 'Logged out successfully' });
+  }
+
+  private cookieOptions() {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    return buildAuthCookieOptions(isProduction);
   }
 }

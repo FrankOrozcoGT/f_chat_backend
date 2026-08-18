@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@modules/ai/clients/kimi.client';
+import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
 import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
 import { loadPrompt } from '@common/utils/load-prompt';
 
@@ -113,7 +113,7 @@ export class NodeContentGeneratorNode {
   async generate(input: NodeContentGeneratorInput): Promise<NodeContentGeneratorOutput> {
     const userPrompt = this.buildUserPrompt(input);
     const proposedTools: ProposedTool[] = [];
-    let nodeArgs: any = null;
+    let nodeArgs: Record<string, unknown> | null = null;
 
     const result = await this.kimiClient.chatWithTools({
       messages: [
@@ -169,11 +169,11 @@ export class NodeContentGeneratorNode {
     return parts.join('\n');
   }
 
-  private validateNode(name: string, args: any): NodeContent {
+  private validateNode(name: string, args: Record<string, unknown>): NodeContent {
     const systemPrompt = args.systemPrompt as string;
     if (!systemPrompt) throw new Error(`NodeContentGenerator: node "${name}" missing systemPrompt`);
 
-    const rawTodos = args.todos as any[];
+    const rawTodos = args.todos as Record<string, unknown>[];
     if (!Array.isArray(rawTodos) || rawTodos.length === 0) {
       throw new Error(`NodeContentGenerator: node "${name}" missing todos`);
     }
@@ -183,10 +183,10 @@ export class NodeContentGeneratorNode {
         throw new Error(`NodeContentGenerator: node "${name}" todos[${j}] missing id/name/description`);
       }
       return {
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        functions: (t.functions ?? []).filter((f: string) => AVAILABLE_TOOL_NAMES.includes(f)),
+        id: t.id as string,
+        name: t.name as string,
+        description: t.description as string,
+        functions: ((t.functions as string[]) ?? []).filter((f: string) => AVAILABLE_TOOL_NAMES.includes(f)),
       };
     });
 

@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getArrayArg, getStringArg } from '../args-validator';
+
+interface SaleItem {
+  productName: string;
+  unitPrice: number;
+  quantity: number;
+}
 
 @Injectable()
 export class CalculateSaleFn {
@@ -47,18 +54,11 @@ export class CalculateSaleFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const items = ctx.args?.items as Array<{
-      productName: string;
-      unitPrice: number;
-      quantity: number;
-    }>;
-    const location = ctx.args?.location as string;
+    const items = getArrayArg<SaleItem>('calculateSale', ctx.args, 'items', { required: true });
+    const location = getStringArg('calculateSale', ctx.args, 'location', { required: true });
 
-    if (!items || items.length === 0) {
-      throw new Error('calculateSale: "items" es requerido y no puede estar vacío');
-    }
-    if (!location) {
-      throw new Error('calculateSale: "location" es requerido');
+    if (items.length === 0) {
+      throw new Error('calculateSale: "items" no puede estar vacío');
     }
 
     if (ctx.isTest) {

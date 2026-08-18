@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@modules/ai/clients/kimi.client';
+import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
@@ -85,7 +85,7 @@ export class IntentSplitterNode {
 
   async split(input: IntentSplitterInput): Promise<IntentSplitterOutput> {
     const userPrompt = this.buildPrompt(input);
-    let splitsArgs: any = null;
+    let splitsArgs: Record<string, unknown> | null = null;
 
     const result = await this.kimiClient.chatWithTools({
       messages: [
@@ -107,11 +107,22 @@ export class IntentSplitterNode {
     if (!splitsArgs) {
       throw new Error(`IntentSplitter [${input.originalIntent}]: no submit_splits call after ${result.iterations} iterations`);
     }
+    const submittedArgs: Record<string, unknown> = splitsArgs;
 
-    const splits = (splitsArgs.splits as any[]).map((s) => ({
-      entrySubgraph: s.entrySubgraph as string,
-      newIntentName: (s.newIntentName as string).toLowerCase().replace(/\s+/g, '_'),
-    }));
+    const rawSplits = submittedArgs.splits;
+    if (!Array.isArray(rawSplits)) {
+      throw new Error(`IntentSplitter [${input.originalIntent}]: "splits" no es un array — recibido: ${JSON.stringify(rawSplits)}`);
+    }
+    const splits = rawSplits.map((s: unknown, i: number) => {
+      const entry = s as Record<string, unknown>;
+      if (typeof entry.entrySubgraph !== 'string' || typeof entry.newIntentName !== 'string') {
+        throw new Error(`IntentSplitter [${input.originalIntent}]: splits[${i}] inválido — recibido: ${JSON.stringify(entry)}`);
+      }
+      return {
+        entrySubgraph: entry.entrySubgraph,
+        newIntentName: entry.newIntentName.toLowerCase().replace(/\s+/g, '_'),
+      };
+    });
 
     const expected = new Set(input.subFlows.map((sf) => sf.entrySubgraph));
     for (const s of splits) {
@@ -128,10 +139,20 @@ export class IntentSplitterNode {
       throw new Error(`IntentSplitter: duplicate newIntentName`);
     }
 
-    const assignments: AnalysisAssignment[] = (splitsArgs.assignments as any[] ?? []).map((a) => ({
-      analysisId: a.analysisId as string,
-      entrySubgraph: a.entrySubgraph as string,
-    }));
+    const rawAssignments = submittedArgs.assignments ?? [];
+    if (!Array.isArray(rawAssignments)) {
+      throw new Error(`IntentSplitter [${input.originalIntent}]: "assignments" no es un array — recibido: ${JSON.stringify(rawAssignments)}`);
+    }
+    const assignments: AnalysisAssignment[] = rawAssignments.map((a: unknown, i: number) => {
+      const entry = a as Record<string, unknown>;
+      if (typeof entry.analysisId !== 'string' || typeof entry.entrySubgraph !== 'string') {
+        throw new Error(`IntentSplitter [${input.originalIntent}]: assignments[${i}] inválido — recibido: ${JSON.stringify(entry)}`);
+      }
+      return {
+        analysisId: entry.analysisId,
+        entrySubgraph: entry.entrySubgraph,
+      };
+    });
 
     const expectedAnalyses = new Set(input.analyses.map((a) => a.analysisId));
     const assignedIds = new Set<string>();

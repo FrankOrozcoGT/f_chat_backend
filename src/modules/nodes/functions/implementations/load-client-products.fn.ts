@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InternalApiClient } from '../../../ai/clients/internal-api.client';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
+import { getStringArg } from '../args-validator';
 
 @Injectable()
 export class ExitFlowFn {
@@ -34,8 +35,8 @@ export class ExitFlowFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const reason = ctx.args?.reason as string;
-    const summary = ctx.args?.summary as string;
+    const reason = getStringArg('exitFlow', ctx.args, 'reason', { required: true });
+    const summary = getStringArg('exitFlow', ctx.args, 'summary', { required: true });
 
     if (ctx.nodeSession) {
       await ctx.sessionStore.pauseFlow(ctx.nodeSession.id, summary);

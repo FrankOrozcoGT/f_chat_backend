@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueRequestRepository } from '../repositories/queue-request.repository';
-import { PrismaService } from '@common/prisma/prisma.service';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 
 export const QUEUE_RESUME_MESSAGE_PREFIX = 'queue-resume-';
 
@@ -12,7 +13,8 @@ export class QueueResumeService {
 
   constructor(
     private readonly queueRequestRepo: QueueRequestRepository,
-    private readonly prisma: PrismaService,
+    private readonly conversationRepo: ConversationRepository,
+    private readonly nodeSessionRepo: NodeSessionRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -25,13 +27,7 @@ export class QueueResumeService {
     }
 
     // Get conversation details for the synthetic message
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: queueRequest.conversationId },
-      include: {
-        phone: true,
-        participants: { include: { client: true } },
-      },
-    });
+    const conversation = await this.conversationRepo.findByIdWithRelations(queueRequest.conversationId);
 
     if (!conversation) {
       this.logger.error(`[resume] Conversation ${queueRequest.conversationId} not found`);
@@ -42,10 +38,7 @@ export class QueueResumeService {
 
     const queueContext = `[RESPUESTA DE COLA - ${queueRequest.label}]: ${queueRequest.responseMessage}`;
 
-    await this.prisma.nodeSession.update({
-      where: { id: queueRequest.nodeSessionId },
-      data: { status: 'active' },
-    });
+    await this.nodeSessionRepo.updateStatus(queueRequest.nodeSessionId, 'active');
 
     this.eventEmitter.emit('ai.incoming.message', {
       messageId: `${QUEUE_RESUME_MESSAGE_PREFIX}${queueRequest.id}`,

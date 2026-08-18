@@ -10,13 +10,6 @@ export class CreateInstanceResponseDto {
   };
 }
 
-export class QrCodeResponseDto {
-  count?: number;
-  pairingCode?: string;
-  code?: string;
-  base64?: string;
-}
-
 export class SendMessageResponseDto {
   key: {
     remoteJid: string;

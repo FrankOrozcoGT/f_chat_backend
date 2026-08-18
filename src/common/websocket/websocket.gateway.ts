@@ -24,7 +24,7 @@ export class AppWebSocketGateway
   server: Server;
 
   private readonly logger = new Logger(AppWebSocketGateway.name);
-  private connections: Map<string, string> = new Map(); // socketId -> userId
+  private connections: Map<string, string> = new Map(); // socketId -> tenantId
 
   constructor(
     private readonly jwtService: JwtService,
@@ -65,7 +65,7 @@ export class AppWebSocketGateway
       const secret = this.configService.get<string>('JWT_SECRET');
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
-      if (!payload || !payload.userId) {
+      if (!payload || !payload.userId || !payload.tenantId) {
         this.logger.warn(
           `[WebSocket] Connection rejected: Invalid JWT payload`,
         );
@@ -73,13 +73,17 @@ export class AppWebSocketGateway
         return;
       }
 
-      // Guardar userId en socket y en Map
+      // Guardar userId y tenantId en socket; las conexiones se indexan por tenantId
+      // porque todos los eventos del sistema (webhooks de WhatsApp, IA) se emiten
+      // a nivel de tenant, no de usuario individual.
       const userId = payload.userId;
+      const tenantId = payload.tenantId;
       client.data.userId = userId;
-      this.connections.set(client.id, userId);
+      client.data.tenantId = tenantId;
+      this.connections.set(client.id, tenantId);
 
       this.logger.log(
-        `[WebSocket] Client connected: ${client.id} (userId: ${userId})`,
+        `[WebSocket] Client connected: ${client.id} (userId: ${userId}, tenantId: ${tenantId})`,
       );
     } catch (error) {
       this.logger.error(`[WebSocket] Connection error: ${error.message}`);
@@ -88,35 +92,35 @@ export class AppWebSocketGateway
   }
 
   handleDisconnect(client: Socket) {
-    const userId = this.connections.get(client.id);
+    const tenantId = this.connections.get(client.id);
     this.connections.delete(client.id);
-    this.logger.log(`Client disconnected: ${client.id} (userId: ${userId})`);
+    this.logger.log(`Client disconnected: ${client.id} (tenantId: ${tenantId})`);
   }
 
   /**
-   * Emite un evento a todos los clientes conectados o a un usuario específico
+   * Emite un evento a todos los clientes conectados o a un tenant específico
    * @param event - Nombre del evento
    * @param data - Datos a enviar
-   * @param targetUserId - ID del usuario objetivo (opcional, si no se provee es broadcast)
+   * @param targetTenantId - ID del tenant objetivo (opcional, si no se provee es broadcast)
    */
-  emitApiDown(apiName: string, error: string, userId?: string) {
+  emitApiDown(apiName: string, error: string, tenantId?: string) {
     this.emit(
       'api:down',
       { apiName, error, timestamp: new Date().toISOString() },
-      userId,
+      tenantId,
     );
   }
 
-  emitApiUp(apiName: string, userId?: string) {
+  emitApiUp(apiName: string, tenantId?: string) {
     this.emit(
       'api:up',
       { apiName, timestamp: new Date().toISOString() },
-      userId,
+      tenantId,
     );
   }
 
   emitCreditsExhausted(
-    userId: string,
+    tenantId: string,
     conversationId: string,
     creditsUsed: number,
     creditsLimit: number,
@@ -124,21 +128,20 @@ export class AppWebSocketGateway
     this.emit(
       'credits:exhausted',
       {
-        userId,
         conversationId,
         creditsUsed,
         creditsLimit,
         timestamp: new Date().toISOString(),
       },
-      userId,
+      tenantId,
     );
   }
 
-  emit(event: string, data: any, targetUserId?: string) {
-    if (targetUserId) {
-      // Emitir solo a los sockets del usuario específico
+  emit(event: string, data: any, targetTenantId?: string) {
+    if (targetTenantId) {
+      // Emitir solo a los sockets del tenant específico
       const targetSockets = Array.from(this.connections.entries())
-        .filter(([_, userId]) => userId === targetUserId)
+        .filter(([_, tenantId]) => tenantId === targetTenantId)
         .map(([socketId]) => socketId);
 
       targetSockets.forEach((socketId) => {
@@ -146,7 +149,7 @@ export class AppWebSocketGateway
       });
 
       this.logger.debug(
-        `Event ${event} emitted to user ${targetUserId} (${targetSockets.length} sockets)`,
+        `Event ${event} emitted to tenant ${targetTenantId} (${targetSockets.length} sockets)`,
       );
     } else {
       // Broadcast a todos

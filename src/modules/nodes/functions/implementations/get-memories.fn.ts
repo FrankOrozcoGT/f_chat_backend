@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NodeFunction } from '../node-function.decorator';
 import { NodeContext } from '../node-function.context';
 import { TenantMemoryRepository } from '@modules/tenant-memory/repositories/tenant-memory.repository';
+import { getArrayArg } from '../args-validator';
 
 @Injectable()
 export class GetMemoriesFn {
@@ -33,11 +34,10 @@ export class GetMemoriesFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const args = ctx.args;
-    const keys = args?.keys as string[] | undefined;
+    const keys = getArrayArg<string>('getMemories', ctx.args, 'keys', { required: true });
 
-    if (!keys || keys.length === 0) {
-      throw new Error('getMemories: keys array is required and cannot be empty');
+    if (keys.length === 0) {
+      throw new Error('getMemories: keys array cannot be empty');
     }
 
     if (ctx.isTest) {

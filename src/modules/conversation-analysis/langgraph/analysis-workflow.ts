@@ -22,7 +22,7 @@ export interface AnalysisWorkflowInput {
 @Injectable()
 export class AnalysisWorkflow {
   private readonly logger = new Logger(AnalysisWorkflow.name);
-  private graph: any;
+  private graph: ReturnType<AnalysisWorkflow['buildGraph']>;
 
   constructor(
     private readonly inputRouterNode: AnalysisInputRouterNode,
