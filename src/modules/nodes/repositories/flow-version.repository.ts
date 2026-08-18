@@ -20,14 +20,22 @@ export interface FlowVersionRepresentativeCase {
   reason: string;
 }
 
+export interface FlowSnapshotTodo {
+  id: string;
+  name: string;
+  description?: string;
+  functions?: string[];
+  transitions?: string[];
+}
+
 export interface FlowSnapshot {
-  nodes: { id: string; name: string; systemPrompt: string; todos: any; tools: any }[];
+  nodes: { id: string; name: string; systemPrompt: string; todos: FlowSnapshotTodo[]; tools: string[] }[];
   transitions: { fromNodeId: string; toNodeId: string; transitionCode: string }[];
 }
 
 // Snapshot generado por IA antes de promote — los nodos no tienen IDs aún
 export interface DraftFlowSnapshot {
-  nodes: { name: string; systemPrompt: string; todos: any; tools: any }[];
+  nodes: { name: string; systemPrompt: string; todos: FlowSnapshotTodo[]; tools: string[] }[];
   transitions: { fromNodeIndex: number; toNodeIndex: number; transitionCode: string }[];
 }
 
