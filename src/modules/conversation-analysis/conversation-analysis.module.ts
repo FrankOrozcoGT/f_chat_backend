@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ExternalIntegrationsModule } from '@common/external-integrations/external-integrations.module';
 import { LimitsModule } from '@common/services/limits.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
@@ -16,6 +16,7 @@ import { MermaidParserModule } from '@modules/nodes/mermaid-parser/mermaid-parse
 import { BatchAnalysisController } from './batch-analysis.controller';
 import { BatchAnalysisService } from './batch-analysis.service';
 import { FlowGenerationService } from './flow-generation.service';
+import { InternalChannelService } from './internal-channel.service';
 import { ClientLabelRepository } from './repositories/client-label.repository';
 import { InternalChannelReviewRepository } from './repositories/internal-channel-review.repository';
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
@@ -28,7 +29,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
     LimitsModule,
     FileStorageModule,
     MermaidParserModule,
-    forwardRef(() => NodesModule),
+    NodesModule,
   ],
   controllers: [ConversationAnalysisController, BatchAnalysisController],
   providers: [
@@ -42,6 +43,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
     DiagramConsolidatorNode,
     BatchAnalysisService,
     FlowGenerationService,
+    InternalChannelService,
     ClientLabelRepository,
     InternalChannelReviewRepository,
     ConversationAnalysisRepository,
