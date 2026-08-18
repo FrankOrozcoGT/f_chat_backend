@@ -35,6 +35,7 @@ import { SecurityEventRepository } from './repositories/security-event.repositor
 import { FlowVersionRepository } from './repositories/flow-version.repository';
 import { TemplateRepository } from './repositories/template.repository';
 import { NodesController } from './nodes.controller';
+import { NodesService } from './nodes.service';
 import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
@@ -42,6 +43,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
   imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, PhonesModule, forwardRef(() => QueueSystemModule), TenantMemoryModule, FileStorageModule],
   controllers: [NodesController],
   providers: [
+    NodesService,
     NodeRepository,
     IntentRepository,
     NodeRunnerService,

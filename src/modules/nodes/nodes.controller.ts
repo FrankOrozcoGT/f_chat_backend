@@ -16,7 +16,7 @@ import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { NodeRepository } from './repositories/node.repository';
 import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
 import { IntentRepository } from './repositories/intent.repository';
-import { FlowVersionRepository, FlowSnapshot, DraftFlowSnapshot } from './repositories/flow-version.repository';
+import { FlowVersionRepository, FlowSnapshot } from './repositories/flow-version.repository';
 import { NodeFunctionRegistry } from './functions/node-function.registry';
 import { CreateFlowDto } from './dto/create-flow.dto';
 import { UpdateFlowDto } from './dto/update-flow.dto';
@@ -24,6 +24,7 @@ import { CreateTransitionDto } from './dto/create-transition.dto';
 import { CreateIntentDto } from './dto/create-intent.dto';
 import { UpdateIntentDto } from './dto/update-intent.dto';
 import { TemplateRepository } from './repositories/template.repository';
+import { NodesService } from './nodes.service';
 import { Prisma } from '@prisma/client';
 
 interface AuthUser {
@@ -41,6 +42,7 @@ export class NodesController {
     private readonly functionRegistry: NodeFunctionRegistry,
     private readonly flowVersionRepo: FlowVersionRepository,
     private readonly templateRepo: TemplateRepository,
+    private readonly nodesService: NodesService,
   ) {}
 
   // ─── Functions ───────────────────────────────────────────────────────────────
@@ -66,35 +68,15 @@ export class NodesController {
         return { ...flow, source: 'active' as const };
       }
 
-      const snapshot = latestVersion.nodesSnapshot as any;
-      const snapshotNodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
-
       return {
         ...flow,
-        source: 'version' as const,
-        versionId: latestVersion.id,
-        versionNumber: latestVersion.version,
-        diagramApproved: latestVersion.diagramApproved,
-        nodes: snapshotNodes.map((n: any, i: number) => ({
-          nodeId: `draft-${i}`,
-          flowId: flow.id,
-          node: {
-            id: `draft-${i}`,
-            name: n.name,
-            systemPrompt: n.systemPrompt,
-            tools: n.tools ?? null,
-            todos: n.todos ?? null,
-          },
-        })),
-        transitions: Array.isArray(snapshot.transitions) ? snapshot.transitions.map((t: any) => ({
-          id: `draft-t-${t.fromNodeIndex}-${t.toNodeIndex}`,
-          flowId: flow.id,
-          fromNodeId: `draft-${t.fromNodeIndex}`,
-          toNodeId: `draft-${t.toNodeIndex}`,
-          transitionCode: t.transitionCode,
-          fromNode: { id: `draft-${t.fromNodeIndex}`, name: snapshotNodes[t.fromNodeIndex]?.name ?? '' },
-          toNode: { id: `draft-${t.toNodeIndex}`, name: snapshotNodes[t.toNodeIndex]?.name ?? '' },
-        })) : [],
+        ...this.nodesService.buildDraftFlowView(
+          flow.id,
+          latestVersion.id,
+          latestVersion.version,
+          latestVersion.diagramApproved,
+          latestVersion.nodesSnapshot,
+        ),
       };
     }));
   }
@@ -111,7 +93,7 @@ export class NodesController {
   async getFlowVersions(@CurrentUser() user: AuthUser, @Param('flowId') flowId: string) {
     const versions = await this.flowVersionRepo.findByFlowId(flowId, user.tenantId);
     return versions.map((v) => {
-      const snapshot = v.nodesSnapshot as any;
+      const snapshot = v.nodesSnapshot as { nodes?: unknown[]; transitions?: unknown[] } | null;
       const nodeCount = Array.isArray(snapshot?.nodes) ? snapshot.nodes.length : 0;
       const transitionCount = Array.isArray(snapshot?.transitions) ? snapshot.transitions.length : 0;
       return {
@@ -138,38 +120,18 @@ export class NodesController {
     const flow = await this.nodeRepo.findFlowById(flowId);
     if (!flow) throw new NotFoundException(`Flow ${flowId} not found`);
 
-    const snapshot = version.nodesSnapshot as any;
-    const snapshotNodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
-
     return {
       ...flow,
-      source: 'version' as const,
-      versionId: version.id,
-      versionNumber: version.version,
-      diagramApproved: version.diagramApproved,
+      ...this.nodesService.buildDraftFlowView(
+        flowId,
+        version.id,
+        version.version,
+        version.diagramApproved,
+        version.nodesSnapshot,
+      ),
       consolidatedDiagram: version.consolidatedDiagram,
       nodeCategories: version.nodeCategories,
       internalQueues: version.internalQueues,
-      nodes: snapshotNodes.map((n: any, i: number) => ({
-        nodeId: `draft-${i}`,
-        flowId,
-        node: {
-          id: `draft-${i}`,
-          name: n.name,
-          systemPrompt: n.systemPrompt,
-          tools: n.tools ?? null,
-          todos: n.todos ?? null,
-        },
-      })),
-      transitions: Array.isArray(snapshot?.transitions) ? snapshot.transitions.map((t: any) => ({
-        id: `draft-t-${t.fromNodeIndex}-${t.toNodeIndex}`,
-        flowId,
-        fromNodeId: `draft-${t.fromNodeIndex}`,
-        toNodeId: `draft-${t.toNodeIndex}`,
-        transitionCode: t.transitionCode,
-        fromNode: { id: `draft-${t.fromNodeIndex}`, name: snapshotNodes[t.fromNodeIndex]?.name ?? '' },
-        toNode: { id: `draft-${t.toNodeIndex}`, name: snapshotNodes[t.toNodeIndex]?.name ?? '' },
-      })) : [],
     };
   }
 
@@ -201,7 +163,7 @@ export class NodesController {
     if (versions.length === 0) throw new BadRequestException('No versions in history to promote');
 
     const latest = versions[0]; // findByFlowId retorna desc por version
-    await this.applySnapshot(flowId, latest.nodesSnapshot as unknown as FlowSnapshot);
+    await this.nodesService.applySnapshot(flowId, latest.nodesSnapshot as unknown as FlowSnapshot);
     await this.flowVersionRepo.markAsPromoted(latest.id);
     return { promoted: true, flowId, versionId: latest.id };
   }
@@ -216,33 +178,8 @@ export class NodesController {
     if (!version) throw new NotFoundException('Version not found');
     if (version.flowId !== flowId) throw new BadRequestException('Version does not belong to this flow');
 
-    await this.applySnapshot(flowId, version.nodesSnapshot as unknown as FlowSnapshot);
+    await this.nodesService.applySnapshot(flowId, version.nodesSnapshot as unknown as FlowSnapshot);
     return { restored: true, flowId, versionId };
-  }
-
-  private async applySnapshot(flowId: string, snap: FlowSnapshot | DraftFlowSnapshot): Promise<void> {
-    const firstNode = (snap.nodes[0] ?? {}) as any;
-    const isDraft = !('id' in firstNode) || firstNode.id === '';
-
-    if (isDraft) {
-      const draft = snap as DraftFlowSnapshot;
-      await this.nodeRepo.replaceFlowNodes(
-        flowId,
-        draft.nodes.map((n) => ({ id: '', ...n })),
-        draft.transitions,
-      );
-    } else {
-      const promoted = snap as FlowSnapshot;
-      const transitions = promoted.transitions.map((t) => {
-        const fromNodeIndex = promoted.nodes.findIndex((n) => n.id === t.fromNodeId);
-        const toNodeIndex = promoted.nodes.findIndex((n) => n.id === t.toNodeId);
-        if (fromNodeIndex === -1 || toNodeIndex === -1) {
-          throw new BadRequestException(`Snapshot has invalid transition: ${t.transitionCode}`);
-        }
-        return { fromNodeIndex, toNodeIndex, transitionCode: t.transitionCode };
-      });
-      await this.nodeRepo.replaceFlowNodes(flowId, promoted.nodes, transitions);
-    }
   }
 
   // ─── Transitions ─────────────────────────────────────────────────────────────
