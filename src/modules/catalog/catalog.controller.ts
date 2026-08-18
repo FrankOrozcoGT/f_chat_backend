@@ -10,17 +10,12 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
-import { R2Service } from '@common/r2/r2.service';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
-import { ProductRepository } from './repositories/product.repository';
-import { PromotionRepository } from './repositories/promotion.repository';
-import { ShippingLocationRepository } from './repositories/shipping-location.repository';
-import { DiscountRepository } from './repositories/discount.repository';
+import { CatalogService } from './catalog.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
@@ -37,28 +32,18 @@ interface AuthUser {
 @Controller('api/catalog')
 @UseGuards(JwtAuthGuard)
 export class CatalogController {
-  constructor(
-    private readonly productRepository: ProductRepository,
-    private readonly promotionRepository: PromotionRepository,
-    private readonly shippingLocationRepository: ShippingLocationRepository,
-    private readonly discountRepository: DiscountRepository,
-    private readonly r2Service: R2Service,
-  ) {}
+  constructor(private readonly catalogService: CatalogService) {}
 
   // ─── Products ────────────────────────────────────────────────────────────────
 
   @Get('products')
   async getProducts(@CurrentUser() user: AuthUser) {
-    const products = await this.productRepository.findByTenantId(user.tenantId);
-    return products.map((p) => ({
-      ...p,
-      imageUrl: p.imageKey ? this.r2Service.buildUrl(p.imageKey) : null,
-    }));
+    return this.catalogService.getProducts(user.tenantId);
   }
 
   @Post('products')
   createProduct(@CurrentUser() user: AuthUser, @Body() dto: CreateProductDto) {
-    return this.productRepository.create(user.tenantId, dto);
+    return this.catalogService.createProduct(user.tenantId, dto);
   }
 
   @Put('products/:id')
@@ -67,7 +52,7 @@ export class CatalogController {
     @Param('id') id: string,
     @Body() dto: UpdateProductDto,
   ) {
-    return this.productRepository.updateById(id, user.tenantId, dto);
+    return this.catalogService.updateProduct(user.tenantId, id, dto);
   }
 
   @Put('products/:id/image')
@@ -89,33 +74,19 @@ export class CatalogController {
     @Param('id') id: string,
     @UploadedFile() file: { buffer: Buffer; mimetype: string },
   ) {
-    if (!file) throw new BadRequestException('image file is required');
-
-    const product = await this.productRepository.findById(id, user.tenantId);
-    if (!product) throw new NotFoundException('product not found');
-
-    if (product.imageKey) {
-      await this.r2Service.deleteImage(product.imageKey);
-    }
-
-    const key = await this.r2Service.uploadImage('products', id, file.buffer, file.mimetype);
-    await this.productRepository.updateImageKey(id, user.tenantId, key);
-
-    return { imageUrl: this.r2Service.buildUrl(key) };
+    return this.catalogService.uploadProductImage(user.tenantId, id, file);
   }
 
   @Delete('products/:id')
   deleteProduct(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.productRepository.deleteById(id, user.tenantId);
+    return this.catalogService.deleteProduct(user.tenantId, id);
   }
 
   // ─── Discounts ───────────────────────────────────────────────────────────────
 
   @Get('products/:productId/discounts')
   async getDiscounts(@CurrentUser() user: AuthUser, @Param('productId') productId: string) {
-    const product = await this.productRepository.findById(productId, user.tenantId);
-    if (!product) throw new NotFoundException('product not found');
-    return this.discountRepository.findByProductId(productId);
+    return this.catalogService.getDiscounts(user.tenantId, productId);
   }
 
   @Post('products/:productId/discounts')
@@ -124,31 +95,24 @@ export class CatalogController {
     @Param('productId') productId: string,
     @Body() dto: CreateDiscountDto,
   ) {
-    const product = await this.productRepository.findById(productId, user.tenantId);
-    if (!product) throw new NotFoundException('product not found');
-
-    return this.discountRepository.upsert({
-      productId,
-      clientId: dto.clientId ?? null,
-      discountPrice: dto.discountPrice,
-    });
+    return this.catalogService.createDiscount(user.tenantId, productId, dto);
   }
 
   @Delete('discounts/:id')
   deleteDiscount(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.discountRepository.deleteById(id, user.tenantId);
+    return this.catalogService.deleteDiscount(user.tenantId, id);
   }
 
   // ─── Promotions ──────────────────────────────────────────────────────────────
 
   @Get('promotions')
   getPromotions(@CurrentUser() user: AuthUser) {
-    return this.promotionRepository.findByTenantId(user.tenantId);
+    return this.catalogService.getPromotions(user.tenantId);
   }
 
   @Post('promotions')
   createPromotion(@CurrentUser() user: AuthUser, @Body() dto: CreatePromotionDto) {
-    return this.promotionRepository.create({ tenantId: user.tenantId, ...dto });
+    return this.catalogService.createPromotion(user.tenantId, dto);
   }
 
   @Put('promotions/:id')
@@ -157,24 +121,24 @@ export class CatalogController {
     @Param('id') id: string,
     @Body() dto: UpdatePromotionDto,
   ) {
-    return this.promotionRepository.updateById(id, user.tenantId, dto);
+    return this.catalogService.updatePromotion(user.tenantId, id, dto);
   }
 
   @Delete('promotions/:id')
   deletePromotion(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.promotionRepository.deleteById(id, user.tenantId);
+    return this.catalogService.deletePromotion(user.tenantId, id);
   }
 
   // ─── Shipping Locations ───────────────────────────────────────────────────────
 
   @Get('shipping-locations')
   getShippingLocations(@CurrentUser() user: AuthUser) {
-    return this.shippingLocationRepository.findByTenantId(user.tenantId);
+    return this.catalogService.getShippingLocations(user.tenantId);
   }
 
   @Post('shipping-locations')
   createShippingLocation(@CurrentUser() user: AuthUser, @Body() dto: CreateShippingLocationDto) {
-    return this.shippingLocationRepository.create(user.tenantId, dto);
+    return this.catalogService.createShippingLocation(user.tenantId, dto);
   }
 
   @Put('shipping-locations/:id')
@@ -183,11 +147,11 @@ export class CatalogController {
     @Param('id') id: string,
     @Body() dto: UpdateShippingLocationDto,
   ) {
-    return this.shippingLocationRepository.updateById(id, user.tenantId, dto);
+    return this.catalogService.updateShippingLocation(user.tenantId, id, dto);
   }
 
   @Delete('shipping-locations/:id')
   deleteShippingLocation(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.shippingLocationRepository.deleteById(id, user.tenantId);
+    return this.catalogService.deleteShippingLocation(user.tenantId, id);
   }
 }
