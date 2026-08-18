@@ -7,6 +7,20 @@ export class ConversationRepository {
 
   constructor(private prisma: PrismaService) {}
 
+  async findIdByGroupJid(groupJid: string) {
+    return this.prisma.conversation.findUnique({
+      where: { groupJid },
+      select: { id: true },
+    });
+  }
+
+  async findIdsByIndividualClientId(clientId: string) {
+    return this.prisma.conversation.findMany({
+      where: { participants: { some: { clientId } }, groupJid: null },
+      select: { id: true },
+    });
+  }
+
   /**
    * Conversaciones activas más recientes de un tenant, con datos mínimos
    * para el análisis batch (client principal + todos los participantes).

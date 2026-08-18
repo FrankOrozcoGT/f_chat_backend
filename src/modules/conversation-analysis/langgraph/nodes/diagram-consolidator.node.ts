@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { PrismaService } from '@common/prisma/prisma.service';
 import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
 import { loadPrompt } from '@common/utils/load-prompt';
+import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
 const SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'diagram-consolidator-system.md');
@@ -143,7 +144,8 @@ export class DiagramConsolidatorNode {
 
   constructor(
     private readonly kimiClient: KimiClient,
-    private readonly prisma: PrismaService,
+    private readonly conversationRepo: ConversationRepository,
+    private readonly messageRepo: MessageRepository,
   ) {}
 
   async consolidate(input: DiagramConsolidatorInput): Promise<DiagramConsolidatorOutput> {
@@ -266,21 +268,13 @@ export class DiagramConsolidatorNode {
 
     if (internal.groupJid) {
       // Group: last 75 messages
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { groupJid: internal.groupJid },
-        select: { id: true },
-      });
+      const conversation = await this.conversationRepo.findIdByGroupJid(internal.groupJid);
       if (!conversation) {
         this.logger.error(`consult_internal: no conversation found for groupJid=${internal.groupJid} (${channelName})`);
         return JSON.stringify({ error: `Sin conversación encontrada para grupo "${channelName}"` });
       }
 
-      const messages = await this.prisma.message.findMany({
-        where: { conversationId: conversation.id },
-        orderBy: { createdAt: 'desc' },
-        take: 75,
-        select: { content: true, direction: true, senderType: true, createdAt: true, metadata: true },
-      });
+      const messages = await this.messageRepo.findRecentByConversationId(conversation.id, 75);
 
       if (messages.length === 0) {
         this.logger.error(`consult_internal: no messages found for group "${channelName}" (conversationId=${conversation.id})`);
@@ -292,10 +286,7 @@ export class DiagramConsolidatorNode {
 
     if (internal.clientId) {
       // Individual: last 50 messages
-      const conversations = await this.prisma.conversation.findMany({
-        where: { participants: { some: { clientId: internal.clientId } }, groupJid: null },
-        select: { id: true },
-      });
+      const conversations = await this.conversationRepo.findIdsByIndividualClientId(internal.clientId);
 
       if (conversations.length === 0) {
         this.logger.error(`consult_internal: no individual conversation found for clientId=${internal.clientId} (${channelName})`);
@@ -303,12 +294,7 @@ export class DiagramConsolidatorNode {
       }
 
       const conversationIds = conversations.map((c) => c.id);
-      const messages = await this.prisma.message.findMany({
-        where: { conversationId: { in: conversationIds } },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        select: { content: true, direction: true, senderType: true, createdAt: true },
-      });
+      const messages = await this.messageRepo.findRecentByConversationIds(conversationIds, 50);
 
       if (messages.length === 0) {
         this.logger.error(`consult_internal: no messages found for "${channelName}" (clientId=${internal.clientId})`);
@@ -323,13 +309,14 @@ export class DiagramConsolidatorNode {
   }
 
   private formatMessages(
-    messages: { content: string; direction: string; senderType: string; createdAt: Date; metadata?: any }[],
+    messages: { content: string; direction: string; senderType: string; createdAt: Date; metadata?: unknown }[],
     channelName: string,
     type: string,
   ): string {
     const formatted = messages.map((m) => {
       const sender = m.direction === 'outgoing' ? 'Negocio' : channelName;
-      const senderJid = m.metadata?.senderJid ? ` (${m.metadata.senderJid})` : '';
+      const metadata = m.metadata as Record<string, unknown> | null | undefined;
+      const senderJid = typeof metadata?.senderJid === 'string' ? ` (${metadata.senderJid})` : '';
       return `[${sender}${senderJid}]: ${m.content}`;
     }).join('\n');
 

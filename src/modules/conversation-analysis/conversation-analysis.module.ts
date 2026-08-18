@@ -22,6 +22,7 @@ import { InternalChannelReviewRepository } from './repositories/internal-channel
 import { ConversationAnalysisRepository } from './repositories/conversation-analysis.repository';
 import { FlowIntentRepository } from './repositories/flow-intent.repository';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
+import { MessageRepository } from '@common/messaging/repositories/message.repository';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ConversationRepository } from '@modules/conversations/repositories/conv
     ConversationAnalysisRepository,
     FlowIntentRepository,
     ConversationRepository,
+    MessageRepository,
   ],
   exports: [AnalysisWorkflow, ConversationAnalysisService],
 })

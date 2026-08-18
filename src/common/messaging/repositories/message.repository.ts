@@ -14,6 +14,31 @@ export class MessageRepository {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Últimos N mensajes de una conversación, orden descendente (más reciente primero).
+   */
+  async findRecentByConversationId(conversationId: string, take: number) {
+    return this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { content: true, direction: true, senderType: true, createdAt: true, metadata: true },
+    });
+  }
+
+  /**
+   * Últimos N mensajes entre varias conversaciones individuales del mismo cliente,
+   * orden descendente (más reciente primero).
+   */
+  async findRecentByConversationIds(conversationIds: string[], take: number) {
+    return this.prisma.message.findMany({
+      where: { conversationId: { in: conversationIds } },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { content: true, direction: true, senderType: true, createdAt: true },
+    });
+  }
+
+  /**
    * Lista mensajes de una conversación
    * @param conversationId - ID de la conversación
    * @returns Mensajes ordenados cronológicamente
