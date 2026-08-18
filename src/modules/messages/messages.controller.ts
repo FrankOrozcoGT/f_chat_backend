@@ -249,7 +249,7 @@ export class MessagesController {
     let quotedKey: { id: string; remoteJid: string; fromMe: boolean } | undefined;
     if (dto.quotedMessageId) {
       const quotedMessage = await this.messageRepository.findById(dto.quotedMessageId);
-      if (!quotedMessage) {
+      if (!quotedMessage || quotedMessage.conversationId !== dto.conversationId) {
         throw new NotFoundException(`Quoted message with id ${dto.quotedMessageId} not found`);
       }
       const keyId = (quotedMessage.metadata as any)?.keyId;
