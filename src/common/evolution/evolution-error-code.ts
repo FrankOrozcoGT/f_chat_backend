@@ -1,0 +1,3 @@
+export enum EvolutionErrorCode {
+  CONNECT_INSTANCE_FAILED = 'EVOLUTION_CONNECT_INSTANCE_FAILED',
+}

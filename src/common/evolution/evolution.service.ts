@@ -8,6 +8,7 @@ import {
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
+import { EvolutionErrorCode } from './evolution-error-code';
 
 export interface ParsedMessageContent {
   type: MessageType;
@@ -202,7 +203,10 @@ export class EvolutionService {
         `Failed to connect instance: ${instanceName}`,
         (error as Error).message,
       );
-      throw new BadGatewayException('Failed to connect WhatsApp instance');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.CONNECT_INSTANCE_FAILED,
+        message: 'Failed to connect WhatsApp instance',
+      });
     }
   }
 
