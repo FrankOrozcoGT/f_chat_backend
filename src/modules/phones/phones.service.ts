@@ -21,6 +21,7 @@ import { phoneFromJid } from '@common/utils/whatsapp-jid';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
+import { errorMessage } from '@common/errors/error-message';
 import { PhoneErrorCode } from './phone-error-code';
 
 @Injectable()
@@ -87,7 +88,7 @@ export class PhonesService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to create instance in Evolution API: ${error.message}`,
+        `Failed to create instance in Evolution API: ${errorMessage(error)}`,
       );
       throw new BadGatewayException({
         code: PhoneErrorCode.CREATE_INSTANCE_FAILED,
@@ -134,7 +135,7 @@ export class PhonesService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to reconnect instance in Evolution API: ${error.message}`,
+        `Failed to reconnect instance in Evolution API: ${errorMessage(error)}`,
       );
       throw new BadGatewayException({
         code: PhoneErrorCode.RECONNECT_FAILED,
@@ -171,7 +172,7 @@ export class PhonesService {
       rawContacts = await this.evolutionService.findContacts(phone.instanceName);
     } catch (error) {
       this.logger.error(
-        `Failed to get contacts for phone ${phoneId}: ${error.message}`,
+        `Failed to get contacts for phone ${phoneId}: ${errorMessage(error)}`,
       );
       throw new BadGatewayException({
         code: PhoneErrorCode.CONTACTS_UNAVAILABLE,
@@ -208,7 +209,7 @@ export class PhonesService {
       rawMessages = await this.evolutionService.findMessages(phone.instanceName, remoteJid);
     } catch (error) {
       this.logger.error(
-        `Failed to get messages for phone ${phoneId}: ${error.message}`,
+        `Failed to get messages for phone ${phoneId}: ${errorMessage(error)}`,
       );
       throw new BadGatewayException({
         code: PhoneErrorCode.MESSAGES_UNAVAILABLE,
@@ -305,7 +306,7 @@ export class PhonesService {
               );
           } catch (err) {
             this.logger.warn(
-              `Failed to download media for keyId ${p.m.key.id}: ${err.message}`,
+              `Failed to download media for keyId ${p.m.key.id}: ${errorMessage(err)}`,
             );
           }
         }
@@ -336,7 +337,10 @@ export class PhonesService {
         `Background: persisted ${newMessages.length} messages for conversation ${conversationId} (${withoutMedia.length} bulk, ${withMedia.length} with media)`,
       );
     } catch (err) {
-      this.logger.error(`Background persistence failed for conversation ${conversationId}: ${err.message}`, err.stack);
+      this.logger.error(
+        `Background persistence failed for conversation ${conversationId}: ${errorMessage(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
       throw err;
     }
   }
@@ -348,7 +352,7 @@ export class PhonesService {
       await this.evolutionService.deleteInstance(phone.instanceName);
     } catch (error) {
       this.logger.warn(
-        `Failed to delete instance in Evolution API: ${error.message}`,
+        `Failed to delete instance in Evolution API: ${errorMessage(error)}`,
       );
       // Continuar con eliminación en DB aunque falle en Evolution
     }

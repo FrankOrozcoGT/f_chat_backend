@@ -8,7 +8,7 @@ import {
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
-import { EvolutionErrorCode } from './evolution-error-code';
+import { errorMessage } from '@common/errors/error-message';
 
 export interface ParsedMessageContent {
   type: MessageType;
@@ -175,7 +175,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to create instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
       throw new BadGatewayException('Failed to create WhatsApp instance');
     }
@@ -201,12 +201,9 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to connect instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException({
-        code: EvolutionErrorCode.CONNECT_INSTANCE_FAILED,
-        message: 'Failed to connect WhatsApp instance',
-      });
+      throw new BadGatewayException('Failed to connect WhatsApp instance');
     }
   }
 
@@ -232,7 +229,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to delete instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
       throw new BadGatewayException('Failed to delete WhatsApp instance');
     }
@@ -279,7 +276,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.warn(
         `Attempt ${attempt}/${maxAttempts} failed for sendTextMessage to ${phoneNumber}`,
-        (error as Error).message,
+        errorMessage(error),
       );
 
       if (attempt < maxAttempts) {
@@ -587,7 +584,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find contacts for instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
       throw new BadGatewayException(
         'Failed to retrieve contacts from WhatsApp',
@@ -628,7 +625,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find messages for ${remoteJid} on instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
       throw new BadGatewayException(
         'Failed to retrieve messages from WhatsApp',
@@ -659,7 +656,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to fetch groups for instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
       throw new BadGatewayException('Failed to fetch groups from WhatsApp');
     }
