@@ -35,6 +35,13 @@ export class PhoneRepository {
     });
   }
 
+  async markPending(id: string, qrCode: string | null): Promise<Phone> {
+    return this.prisma.phone.update({
+      where: { id },
+      data: { status: PhoneStatus.pending, qrCode },
+    });
+  }
+
   async findById(id: string): Promise<Phone | null> {
     return this.prisma.phone.findUnique({ where: { id } });
   }

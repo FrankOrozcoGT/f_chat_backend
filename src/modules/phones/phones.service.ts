@@ -90,10 +90,7 @@ export class PhonesService {
 
     this.logger.log(`Phone instance created successfully: ${phone.id}`);
 
-    return {
-      phone: new PhoneResponseDto(phone),
-      qrCode: evolutionData.qrcode?.code || null,
-    };
+    return this.toPhoneQrResponse(phone, evolutionData.qrcode?.code || null);
   }
 
   private async assertOwnedPhone(phoneId: string, tenantId: string): Promise<Phone> {
@@ -105,6 +102,31 @@ export class PhonesService {
       throw new ForbiddenException('Access denied');
     }
     return phone;
+  }
+
+  async reconnect(phoneId: string, tenantId: string) {
+    const phone = await this.assertOwnedPhone(phoneId, tenantId);
+
+    if (phone.status === PhoneStatus.connected) {
+      throw new BadRequestException('Phone is already connected');
+    }
+    if (phone.status === PhoneStatus.disconnected) {
+      await this.limitsService.validateWhatsAppLimit(tenantId);
+    }
+
+    const connection = await this.evolutionService.connectInstance(
+      phone.instanceName,
+    );
+    const qrCode = connection.code || null;
+    const updated = await this.phoneRepository.markPending(phone.id, qrCode);
+
+    this.logger.log(`Phone reconnection started: ${phone.id}`);
+
+    return this.toPhoneQrResponse(updated, qrCode);
+  }
+
+  private toPhoneQrResponse(phone: Phone, qrCode: string | null) {
+    return { phone: new PhoneResponseDto(phone), qrCode };
   }
 
   async findContacts(phoneId: string, tenantId: string): Promise<ContactResponseDto[]> {
