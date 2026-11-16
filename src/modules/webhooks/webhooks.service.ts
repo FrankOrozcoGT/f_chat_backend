@@ -42,10 +42,6 @@ export class WebhooksService {
     const event = webhookData.event;
     const instanceId = webhookData.instance;
 
-    if (event === 'qrcode.updated') {
-      this.logger.warn(`[DEBUG qrcode.updated] raw payload: ${JSON.stringify(webhookData)}`);
-    }
-
     const phone = await this.phoneRepository.findByEvolutionInstanceId(instanceId);
 
     // ── Eventos que se encolan (escritura pesada) ──
