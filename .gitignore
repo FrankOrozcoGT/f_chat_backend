@@ -55,3 +55,7 @@ lerna-debug.log*
 
 # DB Backups
 /backups/
+
+# Local agent tooling
+/.kimi-code/
+/.mcp.json
