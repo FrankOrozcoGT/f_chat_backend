@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { differenceInMonths } from 'date-fns';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
-import { PhoneErrorCode } from '@modules/phones/phone-error-code';
+import { LimitErrorCode } from './limit-error-code';
 
 @Injectable()
 export class LimitsService {
@@ -27,7 +27,7 @@ export class LimitsService {
 
     if (activePhones >= settings.whatsappLimit) {
       throw new ForbiddenException({
-        code: PhoneErrorCode.WHATSAPP_LIMIT_REACHED,
+        code: LimitErrorCode.WHATSAPP_LIMIT_REACHED,
         message: `WhatsApp limit reached. Current: ${activePhones}, Limit: ${settings.whatsappLimit}`,
       });
     }

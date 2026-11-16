@@ -1,0 +1,3 @@
+export enum LimitErrorCode {
+  WHATSAPP_LIMIT_REACHED = 'WHATSAPP_LIMIT_REACHED',
+}
