@@ -43,6 +43,13 @@ export class PhoneRepository {
     return this.prisma.phone.findUnique({ where: { id } });
   }
 
+  async findByIdAndTenantId(
+    id: string,
+    tenantId: string,
+  ): Promise<Phone | null> {
+    return this.prisma.phone.findFirst({ where: { id, tenantId } });
+  }
+
   async delete(id: string): Promise<Phone> {
     return this.prisma.phone.delete({ where: { id } });
   }

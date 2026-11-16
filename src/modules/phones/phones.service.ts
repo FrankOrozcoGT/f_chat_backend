@@ -105,8 +105,11 @@ export class PhonesService {
   }
 
   private async assertOwnedPhone(phoneId: string, tenantId: string): Promise<Phone> {
-    const phone = await this.phoneRepository.findById(phoneId);
-    if (!phone || phone.tenantId !== tenantId) {
+    const phone = await this.phoneRepository.findByIdAndTenantId(
+      phoneId,
+      tenantId,
+    );
+    if (!phone) {
       throw new NotFoundException({
         code: PhoneErrorCode.NOT_FOUND,
         message: 'Phone not found',
@@ -115,9 +118,10 @@ export class PhonesService {
     return phone;
   }
 
-  async reconnect(phoneId: string, tenantId: string) {
-    const phone = await this.assertOwnedPhone(phoneId, tenantId);
-
+  private async assertReconnectable(
+    phone: Phone,
+    tenantId: string,
+  ): Promise<void> {
     if (phone.status === PhoneStatus.connected) {
       throw new BadRequestException({
         code: PhoneErrorCode.ALREADY_CONNECTED,
@@ -127,6 +131,11 @@ export class PhonesService {
     if (phone.status === PhoneStatus.disconnected) {
       await this.limitsService.validateWhatsAppLimit(tenantId);
     }
+  }
+
+  async reconnect(phoneId: string, tenantId: string) {
+    const phone = await this.assertOwnedPhone(phoneId, tenantId);
+    await this.assertReconnectable(phone, tenantId);
 
     let connection: ConnectInstanceResponseDto;
     try {
