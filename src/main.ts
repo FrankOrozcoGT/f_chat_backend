@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import * as express from 'express';
 import * as dotenv from 'dotenv';
 import { AppModule } from '@/app.module';
+import { HttpExceptionFilter } from '@common/errors/http-exception.filter';
 
 // Cargar .env ANTES de inicializar NestJS
 dotenv.config();
@@ -40,6 +41,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port, '0.0.0.0');

@@ -10,6 +10,13 @@ export class CreateInstanceResponseDto {
   };
 }
 
+export class ConnectInstanceResponseDto {
+  code?: string;
+  base64?: string;
+  pairingCode?: string | null;
+  count?: number;
+}
+
 export class SendMessageResponseDto {
   key: {
     remoteJid: string;

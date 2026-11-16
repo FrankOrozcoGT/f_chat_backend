@@ -4,9 +4,12 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { MessageType } from '@prisma/client';
 import {
+  ConnectInstanceResponseDto,
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
+import { errorMessage } from '@common/errors/error-message';
+import { EvolutionErrorCode } from './evolution-error-code';
 
 export interface ParsedMessageContent {
   type: MessageType;
@@ -173,9 +176,41 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to create instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException('Failed to create WhatsApp instance');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.CREATE_INSTANCE_FAILED,
+        message: 'Failed to create WhatsApp instance',
+      });
+    }
+  }
+
+  async connectInstance(
+    instanceName: string,
+  ): Promise<ConnectInstanceResponseDto> {
+    try {
+      this.logger.log(`Connecting instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<ConnectInstanceResponseDto>(
+          `${this.apiUrl}/instance/connect/${instanceName}`,
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      return response.data;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to connect instance: ${instanceName}`,
+        errorMessage(error),
+      );
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.CONNECT_INSTANCE_FAILED,
+        message: 'Failed to connect WhatsApp instance',
+      });
     }
   }
 
@@ -201,9 +236,12 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to delete instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException('Failed to delete WhatsApp instance');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.DELETE_INSTANCE_FAILED,
+        message: 'Failed to delete WhatsApp instance',
+      });
     }
   }
 
@@ -248,7 +286,7 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.warn(
         `Attempt ${attempt}/${maxAttempts} failed for sendTextMessage to ${phoneNumber}`,
-        (error as Error).message,
+        errorMessage(error),
       );
 
       if (attempt < maxAttempts) {
@@ -266,7 +304,10 @@ export class EvolutionService {
       this.logger.error(
         `All attempts failed for sendTextMessage to ${phoneNumber}`,
       );
-      throw new BadGatewayException('Failed to send message after retries');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.SEND_TEXT_FAILED,
+        message: 'Failed to send message after retries',
+      });
     }
   }
 
@@ -367,9 +408,10 @@ export class EvolutionService {
       this.logger.error(
         `All attempts failed for sendMediaMessage to ${phoneNumber}`,
       );
-      throw new BadGatewayException(
-        'Failed to send media message after retries',
-      );
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.SEND_MEDIA_FAILED,
+        message: 'Failed to send media message after retries',
+      });
     }
   }
 
@@ -453,9 +495,10 @@ export class EvolutionService {
       this.logger.error(
         `All attempts failed for sendAudioMessage to ${phoneNumber}`,
       );
-      throw new BadGatewayException(
-        'Failed to send audio message after retries',
-      );
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.SEND_AUDIO_FAILED,
+        message: 'Failed to send audio message after retries',
+      });
     }
   }
 
@@ -528,7 +571,10 @@ export class EvolutionService {
       this.logger.error(
         `[getBase64] FAILED keyId=${messageKey.id} status=${status} response=${JSON.stringify(responseData)} message=${error.message}`,
       );
-      throw new BadGatewayException('Failed to download media file');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.DOWNLOAD_MEDIA_FAILED,
+        message: 'Failed to download media file',
+      });
     }
   }
 
@@ -556,11 +602,12 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find contacts for instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException(
-        'Failed to retrieve contacts from WhatsApp',
-      );
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.FIND_CONTACTS_FAILED,
+        message: 'Failed to retrieve contacts from WhatsApp',
+      });
     }
   }
 
@@ -597,11 +644,12 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to find messages for ${remoteJid} on instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException(
-        'Failed to retrieve messages from WhatsApp',
-      );
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.FIND_MESSAGES_FAILED,
+        message: 'Failed to retrieve messages from WhatsApp',
+      });
     }
   }
 
@@ -628,9 +676,12 @@ export class EvolutionService {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to fetch groups for instance: ${instanceName}`,
-        (error as Error).message,
+        errorMessage(error),
       );
-      throw new BadGatewayException('Failed to fetch groups from WhatsApp');
+      throw new BadGatewayException({
+        code: EvolutionErrorCode.FETCH_GROUPS_FAILED,
+        message: 'Failed to fetch groups from WhatsApp',
+      });
     }
   }
 

@@ -34,6 +34,12 @@ export class PhonesController {
     return this.phonesService.create(dto, req.user.tenantId);
   }
 
+  @Post(':id/reconnect')
+  @UseGuards(JwtAuthGuard)
+  async reconnect(@Param('id') phoneId: string, @Req() req) {
+    return this.phonesService.reconnect(phoneId, req.user.tenantId);
+  }
+
   @Get(':id/contacts')
   @UseGuards(JwtAuthGuard)
   async findContacts(

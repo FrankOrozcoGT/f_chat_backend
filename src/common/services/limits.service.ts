@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { differenceInMonths } from 'date-fns';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { LimitErrorCode } from './limit-error-code';
 
 @Injectable()
 export class LimitsService {
@@ -19,15 +20,19 @@ export class LimitsService {
   async validateWhatsAppLimit(tenantId: string): Promise<void> {
     const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found',
+      });
     }
 
     const activePhones = await this.phoneRepository.countActiveByTenantId(tenantId);
 
     if (activePhones >= settings.whatsappLimit) {
-      throw new ForbiddenException(
-        `WhatsApp limit reached. Current: ${activePhones}, Limit: ${settings.whatsappLimit}`,
-      );
+      throw new ForbiddenException({
+        code: LimitErrorCode.WHATSAPP_LIMIT_REACHED,
+        message: `WhatsApp limit reached. Current: ${activePhones}, Limit: ${settings.whatsappLimit}`,
+      });
     }
   }
 
@@ -37,21 +42,28 @@ export class LimitsService {
   ): Promise<void> {
     const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found',
+      });
     }
 
     await this.checkAndResetBillingPeriod(tenantId, settings.billingPeriodStart);
 
     const updatedSettings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!updatedSettings) {
-      throw new NotFoundException('Tenant settings not found after billing period check');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found after billing period check',
+      });
     }
 
     const projectedUsage = updatedSettings.creditsUsed + estimatedCredits;
     if (projectedUsage > updatedSettings.creditsLimit) {
-      throw new ForbiddenException(
-        `Credits limit reached. Current: ${updatedSettings.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedSettings.creditsLimit}`,
-      );
+      throw new ForbiddenException({
+        code: LimitErrorCode.CREDITS_LIMIT_REACHED,
+        message: `Credits limit reached. Current: ${updatedSettings.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedSettings.creditsLimit}`,
+      });
     }
   }
 

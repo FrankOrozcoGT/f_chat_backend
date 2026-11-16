@@ -178,7 +178,7 @@ export class WebhooksService {
     const { status } = this.parseConnectionStatus(webhookData);
 
     const lastConnected = status === 'connected' ? new Date() : undefined;
-    await this.phoneRepository.updateStatus(phoneId, status, lastConnected);
+    await this.phoneRepository.updateStatus(phoneId, status, { lastConnected });
 
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
