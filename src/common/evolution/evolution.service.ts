@@ -4,6 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { MessageType } from '@prisma/client';
 import {
+  ConnectInstanceResponseDto,
   CreateInstanceResponseDto,
   SendMessageResponseDto,
 } from './dto/evolution-response.dto';
@@ -176,6 +177,32 @@ export class EvolutionService {
         (error as Error).message,
       );
       throw new BadGatewayException('Failed to create WhatsApp instance');
+    }
+  }
+
+  async connectInstance(
+    instanceName: string,
+  ): Promise<ConnectInstanceResponseDto> {
+    try {
+      this.logger.log(`Connecting instance: ${instanceName}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<ConnectInstanceResponseDto>(
+          `${this.apiUrl}/instance/connect/${instanceName}`,
+          {
+            headers: this.getHeaders(),
+            timeout: 10000,
+          },
+        ),
+      );
+
+      return response.data;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to connect instance: ${instanceName}`,
+        (error as Error).message,
+      );
+      throw new BadGatewayException('Failed to connect WhatsApp instance');
     }
   }
 
