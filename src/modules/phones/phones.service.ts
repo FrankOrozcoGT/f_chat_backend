@@ -1,14 +1,16 @@
 import {
   BadRequestException,
   BadGatewayException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PhoneStatus, MessageDirection, MessageSenderType, MessageStatus, Phone } from '@prisma/client';
 import { CreatePhoneDto } from './dto/create-phone.dto';
-import { CreateInstanceResponseDto } from '@common/evolution/dto/evolution-response.dto';
+import {
+  ConnectInstanceResponseDto,
+  CreateInstanceResponseDto,
+} from '@common/evolution/dto/evolution-response.dto';
 import { PhoneRepository } from './repositories/phone.repository';
 import { PhoneResponseDto } from './dto/phone-response.dto';
 import { ContactResponseDto } from './dto/contact-response.dto';
@@ -103,16 +105,10 @@ export class PhonesService {
 
   private async assertOwnedPhone(phoneId: string, tenantId: string): Promise<Phone> {
     const phone = await this.phoneRepository.findById(phoneId);
-    if (!phone) {
+    if (!phone || phone.tenantId !== tenantId) {
       throw new NotFoundException({
         code: PhoneErrorCode.NOT_FOUND,
         message: 'Phone not found',
-      });
-    }
-    if (phone.tenantId !== tenantId) {
-      throw new ForbiddenException({
-        code: PhoneErrorCode.ACCESS_DENIED,
-        message: 'Access denied',
       });
     }
     return phone;
@@ -131,9 +127,20 @@ export class PhonesService {
       await this.limitsService.validateWhatsAppLimit(tenantId);
     }
 
-    const connection = await this.evolutionService.connectInstance(
-      phone.instanceName,
-    );
+    let connection: ConnectInstanceResponseDto;
+    try {
+      connection = await this.evolutionService.connectInstance(
+        phone.instanceName,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to reconnect instance in Evolution API: ${error.message}`,
+      );
+      throw new BadGatewayException({
+        code: PhoneErrorCode.RECONNECT_FAILED,
+        message: 'Failed to reconnect WhatsApp instance',
+      });
+    }
     if (!connection.code) {
       throw new BadGatewayException({
         code: PhoneErrorCode.QR_UNAVAILABLE,
