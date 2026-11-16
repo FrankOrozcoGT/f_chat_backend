@@ -20,7 +20,10 @@ export class LimitsService {
   async validateWhatsAppLimit(tenantId: string): Promise<void> {
     const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found',
+      });
     }
 
     const activePhones = await this.phoneRepository.countActiveByTenantId(tenantId);
@@ -39,21 +42,28 @@ export class LimitsService {
   ): Promise<void> {
     const settings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!settings) {
-      throw new NotFoundException('Tenant settings not found');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found',
+      });
     }
 
     await this.checkAndResetBillingPeriod(tenantId, settings.billingPeriodStart);
 
     const updatedSettings = await this.tenantSettingsRepository.findByTenantId(tenantId);
     if (!updatedSettings) {
-      throw new NotFoundException('Tenant settings not found after billing period check');
+      throw new NotFoundException({
+        code: LimitErrorCode.TENANT_SETTINGS_NOT_FOUND,
+        message: 'Tenant settings not found after billing period check',
+      });
     }
 
     const projectedUsage = updatedSettings.creditsUsed + estimatedCredits;
     if (projectedUsage > updatedSettings.creditsLimit) {
-      throw new ForbiddenException(
-        `Credits limit reached. Current: ${updatedSettings.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedSettings.creditsLimit}`,
-      );
+      throw new ForbiddenException({
+        code: LimitErrorCode.CREDITS_LIMIT_REACHED,
+        message: `Credits limit reached. Current: ${updatedSettings.creditsUsed}, Estimated: ${estimatedCredits}, Limit: ${updatedSettings.creditsLimit}`,
+      });
     }
   }
 
