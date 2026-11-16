@@ -19,6 +19,7 @@ import { phoneFromJid } from '@common/utils/whatsapp-jid';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
 import { FileStorageService } from '@common/file-storage/file-storage.service';
+import { PhoneErrorCode } from './phone-error-code';
 
 @Injectable()
 export class PhonesService {
@@ -36,13 +37,17 @@ export class PhonesService {
 
   validateInstanceName(name: string): void {
     if (!name || name.trim().length === 0) {
-      throw new BadRequestException('Instance name cannot be empty');
+      throw new BadRequestException({
+        code: PhoneErrorCode.INSTANCE_NAME_EMPTY,
+        message: 'Instance name cannot be empty',
+      });
     }
 
     if (name.length > 50) {
-      throw new BadRequestException(
-        'Instance name cannot exceed 50 characters',
-      );
+      throw new BadRequestException({
+        code: PhoneErrorCode.INSTANCE_NAME_TOO_LONG,
+        message: 'Instance name cannot exceed 50 characters',
+      });
     }
   }
 
@@ -82,7 +87,10 @@ export class PhonesService {
       this.logger.error(
         `Failed to create instance in Evolution API: ${error.message}`,
       );
-      throw new BadGatewayException('Failed to create WhatsApp instance');
+      throw new BadGatewayException({
+        code: PhoneErrorCode.CREATE_INSTANCE_FAILED,
+        message: 'Failed to create WhatsApp instance',
+      });
     }
 
     const phoneData = this.buildPhoneData(dto, evolutionData, tenantId);
@@ -96,10 +104,16 @@ export class PhonesService {
   private async assertOwnedPhone(phoneId: string, tenantId: string): Promise<Phone> {
     const phone = await this.phoneRepository.findById(phoneId);
     if (!phone) {
-      throw new NotFoundException('Phone not found');
+      throw new NotFoundException({
+        code: PhoneErrorCode.NOT_FOUND,
+        message: 'Phone not found',
+      });
     }
     if (phone.tenantId !== tenantId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException({
+        code: PhoneErrorCode.ACCESS_DENIED,
+        message: 'Access denied',
+      });
     }
     return phone;
   }
@@ -108,7 +122,10 @@ export class PhonesService {
     const phone = await this.assertOwnedPhone(phoneId, tenantId);
 
     if (phone.status === PhoneStatus.connected) {
-      throw new BadRequestException('Phone is already connected');
+      throw new BadRequestException({
+        code: PhoneErrorCode.ALREADY_CONNECTED,
+        message: 'Phone is already connected',
+      });
     }
     if (phone.status === PhoneStatus.disconnected) {
       await this.limitsService.validateWhatsAppLimit(tenantId);
@@ -117,12 +134,22 @@ export class PhonesService {
     const connection = await this.evolutionService.connectInstance(
       phone.instanceName,
     );
-    const qrCode = connection.code || null;
-    const updated = await this.phoneRepository.markPending(phone.id, qrCode);
+    if (!connection.code) {
+      throw new BadGatewayException({
+        code: PhoneErrorCode.QR_UNAVAILABLE,
+        message: 'WhatsApp did not return a QR code',
+      });
+    }
+
+    const updated = await this.phoneRepository.updateStatus(
+      phone.id,
+      PhoneStatus.pending,
+      { qrCode: connection.code },
+    );
 
     this.logger.log(`Phone reconnection started: ${phone.id}`);
 
-    return this.toPhoneQrResponse(updated, qrCode);
+    return this.toPhoneQrResponse(updated, connection.code);
   }
 
   private toPhoneQrResponse(phone: Phone, qrCode: string | null) {
@@ -139,7 +166,10 @@ export class PhonesService {
       this.logger.error(
         `Failed to get contacts for phone ${phoneId}: ${error.message}`,
       );
-      throw new BadGatewayException('Failed to retrieve contacts from WhatsApp');
+      throw new BadGatewayException({
+        code: PhoneErrorCode.CONTACTS_UNAVAILABLE,
+        message: 'Failed to retrieve contacts from WhatsApp',
+      });
     }
 
     const withPic = rawContacts.filter((c) => c.profilePicUrl).length;
@@ -173,7 +203,10 @@ export class PhonesService {
       this.logger.error(
         `Failed to get messages for phone ${phoneId}: ${error.message}`,
       );
-      throw new BadGatewayException('Failed to retrieve messages from WhatsApp');
+      throw new BadGatewayException({
+        code: PhoneErrorCode.MESSAGES_UNAVAILABLE,
+        message: 'Failed to retrieve messages from WhatsApp',
+      });
     }
 
     if (rawMessages.length === 0) {
@@ -302,13 +335,7 @@ export class PhonesService {
   }
 
   async delete(phoneId: string, tenantId: string) {
-    const phone = await this.phoneRepository.findById(phoneId);
-    if (!phone) {
-      throw new NotFoundException('Phone not found');
-    }
-    if (phone.tenantId !== tenantId) {
-      throw new NotFoundException('Phone not found');
-    }
+    const phone = await this.assertOwnedPhone(phoneId, tenantId);
 
     try {
       await this.evolutionService.deleteInstance(phone.instanceName);

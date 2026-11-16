@@ -28,17 +28,14 @@ export class PhoneRepository {
     return this.prisma.phone.findUnique({ where: { evolutionInstanceId } });
   }
 
-  async updateStatus(id: string, status: PhoneStatus, lastConnected?: Date): Promise<Phone> {
+  async updateStatus(
+    id: string,
+    status: PhoneStatus,
+    extra?: { lastConnected?: Date; qrCode?: string | null },
+  ): Promise<Phone> {
     return this.prisma.phone.update({
       where: { id },
-      data: { status, ...(lastConnected && { lastConnected }) },
-    });
-  }
-
-  async markPending(id: string, qrCode: string | null): Promise<Phone> {
-    return this.prisma.phone.update({
-      where: { id },
-      data: { status: PhoneStatus.pending, qrCode },
+      data: { status, ...extra },
     });
   }
 
