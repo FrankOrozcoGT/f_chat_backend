@@ -29,6 +29,8 @@ import { SendToInternalChannelFn } from './functions/implementations/send-to-int
 import { UpdateTodosFn } from './functions/implementations/update-todos.fn';
 import { OutOfPathFn } from './functions/implementations/out-of-path.fn';
 import { GetMemoriesFn } from './functions/implementations/get-memories.fn';
+import { AnalyzeImageFn } from './functions/implementations/analyze-image.fn';
+import { LimitsModule } from '@common/services/limits.module';
 import { TenantMemoryModule } from '@modules/tenant-memory/tenant-memory.module';
 import { FileStorageModule } from '@common/file-storage/file-storage.module';
 import { SecurityEventRepository } from './repositories/security-event.repository';
@@ -40,7 +42,7 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, PhonesModule, QueueSystemModule, TenantMemoryModule, FileStorageModule],
+  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, PhonesModule, QueueSystemModule, TenantMemoryModule, FileStorageModule, LimitsModule],
   controllers: [NodesController],
   providers: [
     NodesService,
@@ -70,6 +72,7 @@ import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
     UpdateTodosFn,
     OutOfPathFn,
     GetMemoriesFn,
+    AnalyzeImageFn,
     SecurityEventRepository,
     FlowVersionRepository,
     TemplateRepository,
