@@ -8,7 +8,11 @@ import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { NodeContext, LlmUsage } from '@modules/nodes/functions/node-function.context';
+import {
+  NodeContext,
+  LlmUsage,
+} from '@modules/nodes/functions/node-function.context';
+import { ensureError } from '@common/utils/ensure-error';
 
 const MAX_TRANSITIONS = 5;
 
@@ -239,7 +243,9 @@ export class CustomNode {
         apiCalls.push(this.buildLlmApiCall(messageId, 'chat', result));
         totalCost += result.costUsd;
         for (const toolCall of ctx.llmCalls) {
-          apiCalls.push(this.buildLlmApiCall(messageId, toolCall.operation, toolCall));
+          apiCalls.push(
+            this.buildLlmApiCall(messageId, toolCall.operation, toolCall),
+          );
           totalCost += toolCall.costUsd;
         }
         allSideEffects = [...allSideEffects, ...ctx.sideEffects];
@@ -288,7 +294,8 @@ export class CustomNode {
           sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
           nodeTransitions,
         };
-      } catch (error) {
+      } catch (e) {
+        const error = ensureError(e);
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
           error:

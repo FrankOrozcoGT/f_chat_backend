@@ -8,7 +8,10 @@ export interface TestSideEffect {
   args?: Record<string, unknown>;
 }
 
-export type LlmUsage = Pick<LlmResponse, 'tokensInput' | 'tokensOutput' | 'costUsd' | 'latencyMs'>;
+export type LlmUsage = Pick<
+  LlmResponse,
+  'tokensInput' | 'tokensOutput' | 'costUsd' | 'latencyMs'
+>;
 
 export type LlmCallUsage = LlmUsage & { operation: string };
 
