@@ -100,6 +100,16 @@ export class LimitsService {
     return weightedTokens / tokensPerCredit;
   }
 
+  async chargeLlmUsage(
+    tenantId: string,
+    tokensInput: number,
+    tokensOutput: number,
+  ): Promise<number> {
+    const credits = this.calculateCreditsFromLlm(tokensInput, tokensOutput);
+    await this.tenantSettingsRepository.incrementCreditsUsed(tenantId, credits);
+    return credits;
+  }
+
   calculateCreditsFromSeconds(seconds: number): number {
     const tokensPerSecond = this.configService.get<number>(
       'TOKENS_PER_AUDIO_SECOND',

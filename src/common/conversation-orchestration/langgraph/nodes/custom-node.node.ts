@@ -201,11 +201,11 @@ export class CustomNode {
           latencyMs: result.latencyMs,
         };
 
-        const actualCredits = this.limitsService.calculateCreditsFromLlm(
+        const actualCredits = await this.limitsService.chargeLlmUsage(
+          tenantId,
           result.tokensInput,
           result.tokensOutput,
         );
-        await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
         this.logger.log(
           `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${result.tokensInput}in+${result.tokensOutput}out)`,
         );

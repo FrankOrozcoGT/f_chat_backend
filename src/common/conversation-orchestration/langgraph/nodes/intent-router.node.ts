@@ -137,8 +137,7 @@ export class IntentRouterNode {
         latencyMs: result.latencyMs,
       };
 
-      const actualCredits = this.limitsService.calculateCreditsFromLlm(result.tokensInput, result.tokensOutput);
-      await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
+      const actualCredits = await this.limitsService.chargeLlmUsage(tenantId, result.tokensInput, result.tokensOutput);
 
       // Determine router action from termination tool
       let routerAction: 'responder' | 'closeSession' | 'findFlowForIntent' | null = null;

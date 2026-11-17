@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { LlmClient } from '@common/external-integrations/llm.client';
 import { LimitsService } from '@common/services/limits.service';
 import { NodeFunction } from '../node-function.decorator';
@@ -17,7 +16,6 @@ export class AnalyzeImageFn {
 
   constructor(
     private readonly llmClient: LlmClient,
-    private readonly internalApi: InternalApiClient,
     private readonly limitsService: LimitsService,
   ) {}
 
@@ -72,10 +70,7 @@ export class AnalyzeImageFn {
       300,
     );
 
-    await this.internalApi.incrementCreditsUsed(
-      ctx.tenantId,
-      this.limitsService.calculateCreditsFromLlm(result.tokensInput, result.tokensOutput),
-    );
+    await this.limitsService.chargeLlmUsage(ctx.tenantId, result.tokensInput, result.tokensOutput);
 
     if (ctx.isTest) {
       ctx.sideEffects.push({ action: 'analyzeImage', args: { kind, result: result.response } });
