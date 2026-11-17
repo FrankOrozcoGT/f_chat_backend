@@ -8,7 +8,7 @@ import { join } from 'path';
 const PROMPTS_DIR = join(__dirname, 'prompts');
 const CHAT_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'chat-system.md');
 
-export const DEFAULT_LLM_API_URL = 'https://api.deepseek.com/chat/completions';
+const DEFAULT_LLM_API_URL = 'https://api.deepseek.com/chat/completions';
 
 export class LlmApiError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -61,7 +61,7 @@ export interface ToolChatResult {
 export class LlmClient {
   private readonly logger = new Logger(LlmClient.name);
   private readonly apiKey: string;
-  private readonly apiUrl: string;
+  readonly apiUrl: string;
   private readonly model: string;
   private readonly costPerInputToken: number;
   private readonly costPerOutputToken: number;

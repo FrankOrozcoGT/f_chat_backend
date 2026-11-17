@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiName } from '@prisma/client';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
-import { DEFAULT_LLM_API_URL } from '@common/external-integrations/llm.client';
+import { LlmClient } from '@common/external-integrations/llm.client';
 
 @Injectable()
 export class HealthService {
@@ -11,13 +11,9 @@ export class HealthService {
   constructor(
     private readonly configService: ConfigService,
     private readonly websocketGateway: AppWebSocketGateway,
+    private readonly llmClient: LlmClient,
   ) {}
 
-  /**
-   * Hace un HTTP ping simple a la API externa para verificar si está UP
-   * @param apiName - Nombre de la API (qwen_stt, llm, qwen_tts)
-   * @returns { isUp: boolean, responseTimeMs?: number, error?: string }
-   */
   async pingAPI(apiName: ApiName): Promise<{
     isUp: boolean;
     responseTimeMs?: number;
@@ -102,10 +98,7 @@ export class HealthService {
           'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
         );
       case 'llm':
-        return this.configService.get<string>(
-          'LLM_API_URL',
-          DEFAULT_LLM_API_URL,
-        );
+        return this.llmClient.apiUrl;
       case 'qwen_tts':
         return this.configService.get<string>(
           'QWEN_TTS_API_URL',
