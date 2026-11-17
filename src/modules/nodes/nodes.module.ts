@@ -42,7 +42,17 @@ import { PhonesModule } from '@modules/phones/phones.module';
 import { QueueSystemModule } from '@modules/queue-system/queue-system.module';
 
 @Module({
-  imports: [DiscoveryModule, EvolutionModule, ExternalIntegrationsModule, ConversationSessionModule, PhonesModule, QueueSystemModule, TenantMemoryModule, FileStorageModule, LimitsModule],
+  imports: [
+    DiscoveryModule,
+    EvolutionModule,
+    ExternalIntegrationsModule,
+    ConversationSessionModule,
+    PhonesModule,
+    QueueSystemModule,
+    TenantMemoryModule,
+    FileStorageModule,
+    LimitsModule,
+  ],
   controllers: [NodesController],
   providers: [
     NodesService,

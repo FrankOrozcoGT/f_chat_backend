@@ -46,7 +46,9 @@ export class AnalyzeImageFn {
     },
   })
   async execute(ctx: NodeContext): Promise<string> {
-    const kind = getStringArg('analyzeImage', ctx.args, 'kind', { required: true });
+    const kind = getStringArg('analyzeImage', ctx.args, 'kind', {
+      required: true,
+    });
     if (!isImageAnalysisKind(kind)) {
       throw new Error(
         `analyzeImage: "kind" debe ser uno de ${IMAGE_ANALYSIS_KINDS.join(', ')} — recibido: ${JSON.stringify(kind)}`,
@@ -70,13 +72,22 @@ export class AnalyzeImageFn {
       300,
     );
 
-    await this.limitsService.chargeLlmUsage(ctx.tenantId, result.tokensInput, result.tokensOutput);
+    await this.limitsService.chargeLlmUsage(
+      ctx.tenantId,
+      result.tokensInput,
+      result.tokensOutput,
+    );
 
     if (ctx.isTest) {
-      ctx.sideEffects.push({ action: 'analyzeImage', args: { kind, result: result.response } });
+      ctx.sideEffects.push({
+        action: 'analyzeImage',
+        args: { kind, result: result.response },
+      });
     }
 
-    this.logger.log(`analyzeImage kind=${kind}: ${result.response.substring(0, 160)}`);
+    this.logger.log(
+      `analyzeImage kind=${kind}: ${result.response.substring(0, 160)}`,
+    );
     return result.response;
   }
 }
