@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Node } from '@prisma/client';
 import {
-  KimiClient,
+  LlmClient,
   ToolChatResult,
   ToolDefinition,
   ToolTermination,
-} from '@common/external-integrations/kimi.client';
+} from '@common/external-integrations/llm.client';
 import { NodeFunctionRegistry, RegisteredFunction } from '../functions/node-function.registry';
 import { NodeContext } from '../functions/node-function.context';
 import { PostCodeRetryError } from '../functions/node-function.errors';
@@ -41,7 +41,7 @@ export class NodeRunnerService {
   private readonly logger = new Logger(NodeRunnerService.name);
 
   constructor(
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
     private readonly fnRegistry: NodeFunctionRegistry,
     private readonly sessionLifecycle: SessionLifecycleService,
   ) {}
@@ -86,7 +86,7 @@ export class NodeRunnerService {
       { role: 'user', content: userContent },
     ];
 
-    const result = await this.kimiClient.chatWithTools({
+    const result = await this.llmClient.chatWithTools({
       messages,
       tools: toolDefinitions,
       onToolCall: this.buildOnToolCall(toolHandlers, terminationNames, ctx),
@@ -218,7 +218,7 @@ export class NodeRunnerService {
                 ...(result.toolResult.messagesAtTermination ?? []),
                 { role: 'tool', content: err.message, tool_call_id: result.toolResult.terminationCallId ?? undefined },
               ];
-              const retryResult = await this.kimiClient.chatWithTools({
+              const retryResult = await this.llmClient.chatWithTools({
                 messages: retryMessages,
                 tools: allDefinitions,
                 onToolCall: this.buildOnToolCall(toolHandlers, resolvedPostCode.terminationNames, ctx),

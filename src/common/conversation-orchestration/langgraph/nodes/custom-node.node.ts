@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiName, MessageType } from '@prisma/client';
-import { KimiApiError } from '@common/external-integrations/kimi.client';
+import { LlmApiError } from '@common/external-integrations/llm.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
@@ -281,7 +281,7 @@ export class CustomNode {
       } catch (error) {
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
-          error: error instanceof KimiApiError
+          error: error instanceof LlmApiError
             ? { apiName: ApiName.kimi_llm, message: error.message }
             : { message: error.message },
         };

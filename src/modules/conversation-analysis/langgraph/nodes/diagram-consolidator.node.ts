@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
+import { LlmClient, ToolDefinition, ToolTermination } from '@common/external-integrations/llm.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 import { ConversationRepository } from '@modules/conversations/repositories/conversation.repository';
 import { MessageRepository } from '@common/messaging/repositories/message.repository';
@@ -144,7 +144,7 @@ export class DiagramConsolidatorNode {
   private readonly logger = new Logger(DiagramConsolidatorNode.name);
 
   constructor(
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
     private readonly conversationRepo: ConversationRepository,
     private readonly messageRepo: MessageRepository,
   ) {}
@@ -192,7 +192,7 @@ export class DiagramConsolidatorNode {
       }
     }
 
-    const result = await this.kimiClient.chatWithTools({
+    const result = await this.llmClient.chatWithTools({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

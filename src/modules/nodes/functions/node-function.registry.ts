@@ -6,7 +6,7 @@ import {
   NodeFunctionType,
 } from './node-function.decorator';
 import { NodeContext } from './node-function.context';
-import { ToolDefinition } from '@common/external-integrations/kimi.client';
+import { ToolDefinition } from '@common/external-integrations/llm.client';
 
 export interface RegisteredFunction {
   meta: NodeFunctionMeta;

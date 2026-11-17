@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
+import { LlmClient, ToolDefinition, ToolTermination } from '@common/external-integrations/llm.client';
 import { TodoDefinition } from '@modules/nodes/functions/implementations/update-todos.fn';
 import { loadPrompt } from '@common/utils/load-prompt';
 
@@ -108,14 +108,14 @@ const SUBMIT_NODE_TOOL: ToolDefinition = {
 export class NodeContentGeneratorNode {
   private readonly logger = new Logger(NodeContentGeneratorNode.name);
 
-  constructor(private readonly kimiClient: KimiClient) {}
+  constructor(private readonly llmClient: LlmClient) {}
 
   async generate(input: NodeContentGeneratorInput): Promise<NodeContentGeneratorOutput> {
     const userPrompt = this.buildUserPrompt(input);
     const proposedTools: ProposedTool[] = [];
     let nodeArgs: Record<string, unknown> | null = null;
 
-    const result = await this.kimiClient.chatWithTools({
+    const result = await this.llmClient.chatWithTools({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

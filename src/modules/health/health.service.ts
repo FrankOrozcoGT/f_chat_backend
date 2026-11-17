@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiName } from '@prisma/client';
 import { AppWebSocketGateway } from '@common/websocket/websocket.gateway';
+import { DEFAULT_LLM_API_URL } from '@common/external-integrations/llm.client';
 
 @Injectable()
 export class HealthService {
@@ -102,8 +103,8 @@ export class HealthService {
         );
       case 'kimi_llm':
         return this.configService.get<string>(
-          'KIMI_API_URL',
-          'https://api.moonshot.ai/v1/chat/completions',
+          'LLM_API_URL',
+          DEFAULT_LLM_API_URL,
         );
       case 'qwen_tts':
         return this.configService.get<string>(
