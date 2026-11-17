@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { LlmClient, ToolDefinition, ToolTermination } from '@common/external-integrations/llm.client';
+import {
+  LlmClient,
+  ToolDefinition,
+  ToolTermination,
+} from '@common/external-integrations/llm.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');

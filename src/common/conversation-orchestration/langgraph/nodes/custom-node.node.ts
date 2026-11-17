@@ -281,9 +281,10 @@ export class CustomNode {
       } catch (error) {
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
-          error: error instanceof LlmApiError
-            ? { apiName: ApiName.llm, message: error.message }
-            : { message: error.message },
+          error:
+            error instanceof LlmApiError
+              ? { apiName: ApiName.llm, message: error.message }
+              : { message: error.message },
         };
       }
     }

@@ -146,7 +146,7 @@ describe('HealthMonitorService - checkAPIs', () => {
       await service.checkAPIs();
 
       // ASSERT: NO se marca como UP ni se notifica
-      expect(healthService.pingAPI).toHaveBeenCalledWith('llm');
+      expect(healthService.pingAPI.mock.calls).toContainEqual(['llm']);
       expect(apiHealthRepository.markAsUp).not.toHaveBeenCalled();
       expect(healthService.notifyAffectedClients).not.toHaveBeenCalled();
       expect(websocketGateway.emitApiUp).not.toHaveBeenCalled();

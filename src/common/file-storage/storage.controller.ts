@@ -13,13 +13,23 @@ export class StorageController {
   ) {
     if (
       [tenantId, conversationId, fileName].some(
-        (segment) => segment.includes('..') || segment.includes('/') || segment.includes('\\'),
+        (segment) =>
+          segment.includes('..') ||
+          segment.includes('/') ||
+          segment.includes('\\'),
       )
     ) {
       throw new NotFoundException('File not found');
     }
 
-    const filePath = join(process.cwd(), 'storage', 'conversations', tenantId, conversationId, fileName);
+    const filePath = join(
+      process.cwd(),
+      'storage',
+      'conversations',
+      tenantId,
+      conversationId,
+      fileName,
+    );
 
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) {

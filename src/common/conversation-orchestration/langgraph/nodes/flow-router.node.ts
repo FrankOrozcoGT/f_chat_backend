@@ -7,6 +7,7 @@ import { NodeFunctionRegistry } from '@modules/nodes/functions/node-function.reg
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { LlmClient } from '@common/external-integrations/llm.client';
+import { ensureError } from '@common/utils/ensure-error';
 
 // Post codes disponibles para el flow-router
 const FLOW_ROUTER_POST_CODE = ['transitionToNode', 'switchToHitl', 'exitFlow', 'reportHacking'];
@@ -149,7 +150,8 @@ export class FlowRouterNode {
         routerAction: finalRouterAction,
         sideEffects: [...(state.sideEffects ?? []), ...ctx.sideEffects],
       };
-    } catch (error) {
+    } catch (e) {
+      const error = ensureError(e);
       this.logger.error(`FlowRouter failed: ${error.message}`);
       return {
         error: { apiName: ApiName.llm, message: error.message },
