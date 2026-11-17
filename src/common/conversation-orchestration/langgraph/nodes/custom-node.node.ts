@@ -8,7 +8,7 @@ import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { NodeContext } from '@modules/nodes/functions/node-function.context';
+import { NodeContext, LlmUsage } from '@modules/nodes/functions/node-function.context';
 
 const MAX_TRANSITIONS = 5;
 
@@ -23,6 +23,22 @@ export class CustomNode {
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
   ) {}
+
+  private buildLlmApiCall(
+    messageId: string,
+    operation: string,
+    usage: LlmUsage,
+  ): CreateApiCallData {
+    return {
+      messageId,
+      apiType: 'llm',
+      operation,
+      tokensInput: usage.tokensInput,
+      tokensOutput: usage.tokensOutput,
+      costUsd: usage.costUsd,
+      latencyMs: usage.latencyMs,
+    };
+  }
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
     const {
@@ -191,16 +207,6 @@ export class CustomNode {
           traceMessages,
         );
 
-        const apiCall: CreateApiCallData = {
-          messageId,
-          apiType: 'llm',
-          operation: 'chat',
-          tokensInput: result.tokensInput,
-          tokensOutput: result.tokensOutput,
-          costUsd: result.costUsd,
-          latencyMs: result.latencyMs,
-        };
-
         const actualCredits = await this.limitsService.chargeLlmUsage(
           tenantId,
           result.tokensInput,
@@ -230,8 +236,12 @@ export class CustomNode {
           nodeTransitions.push({ from: activeNodeId, to: activeNodeId, reason: `responder: ${result.intent}` });
         }
 
-        apiCalls.push(apiCall);
+        apiCalls.push(this.buildLlmApiCall(messageId, 'chat', result));
         totalCost += result.costUsd;
+        for (const toolCall of ctx.llmCalls) {
+          apiCalls.push(this.buildLlmApiCall(messageId, toolCall.operation, toolCall));
+          totalCost += toolCall.costUsd;
+        }
         allSideEffects = [...allSideEffects, ...ctx.sideEffects];
         lastResponse = result.response;
         lastIntent = result.intent;

@@ -72,6 +72,14 @@ export class AnalyzeImageFn {
       300,
     );
 
+    ctx.llmCalls.push({
+      operation: 'analyzeImage',
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+      costUsd: result.costUsd,
+      latencyMs: result.latencyMs,
+    });
+
     await this.limitsService.chargeLlmUsage(
       ctx.tenantId,
       result.tokensInput,
