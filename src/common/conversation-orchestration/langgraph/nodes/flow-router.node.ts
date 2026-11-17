@@ -152,7 +152,7 @@ export class FlowRouterNode {
     } catch (error) {
       this.logger.error(`FlowRouter failed: ${error.message}`);
       return {
-        error: { apiName: ApiName.kimi_llm, message: error.message },
+        error: { apiName: ApiName.llm, message: error.message },
       };
     }
   }

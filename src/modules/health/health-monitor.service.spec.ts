@@ -123,7 +123,7 @@ describe('HealthMonitorService - checkAPIs', () => {
       // ARRANGE: API DOWN siendo monitoreada
       const mockApiDown = {
         id: 'test-id',
-        apiName: 'kimi_llm' as ApiName,
+        apiName: 'llm' as ApiName,
         status: 'down' as HealthStatus,
         monitoringActive: true,
         responseTimeMs: null,
@@ -146,7 +146,7 @@ describe('HealthMonitorService - checkAPIs', () => {
       await service.checkAPIs();
 
       // ASSERT: NO se marca como UP ni se notifica
-      expect(healthService.pingAPI).toHaveBeenCalledWith('kimi_llm');
+      expect(healthService.pingAPI).toHaveBeenCalledWith('llm');
       expect(apiHealthRepository.markAsUp).not.toHaveBeenCalled();
       expect(healthService.notifyAffectedClients).not.toHaveBeenCalled();
       expect(websocketGateway.emitApiUp).not.toHaveBeenCalled();

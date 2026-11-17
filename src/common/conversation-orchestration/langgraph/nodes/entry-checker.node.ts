@@ -130,7 +130,7 @@ Responde ÚNICAMENTE con el nombre exacto de la intención si la detectas claram
 
       apiCall = {
         messageId,
-        apiType: 'kimi_llm',
+        apiType: 'llm',
         operation: 'chat',
         tokensInput: result.tokensInput,
         tokensOutput: result.tokensOutput,

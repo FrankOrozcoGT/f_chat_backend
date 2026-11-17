@@ -15,7 +15,7 @@ export class HealthService {
 
   /**
    * Hace un HTTP ping simple a la API externa para verificar si está UP
-   * @param apiName - Nombre de la API (qwen_stt, kimi_llm, qwen_tts)
+   * @param apiName - Nombre de la API (qwen_stt, llm, qwen_tts)
    * @returns { isUp: boolean, responseTimeMs?: number, error?: string }
    */
   async pingAPI(apiName: ApiName): Promise<{
@@ -101,7 +101,7 @@ export class HealthService {
           'QWEN_STT_API_URL',
           'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
         );
-      case 'kimi_llm':
+      case 'llm':
         return this.configService.get<string>(
           'LLM_API_URL',
           DEFAULT_LLM_API_URL,

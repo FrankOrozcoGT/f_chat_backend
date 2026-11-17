@@ -129,7 +129,7 @@ export class IntentRouterNode {
 
       const apiCall: CreateApiCallData = {
         messageId,
-        apiType: 'kimi_llm',
+        apiType: 'llm',
         operation: 'chat',
         tokensInput: result.tokensInput,
         tokensOutput: result.tokensOutput,
@@ -183,7 +183,7 @@ export class IntentRouterNode {
     } catch (error) {
       this.logger.error(`IntentRouter failed: ${error.message}`);
       return {
-        error: { apiName: ApiName.kimi_llm, message: error.message },
+        error: { apiName: ApiName.llm, message: error.message },
       };
     }
   }

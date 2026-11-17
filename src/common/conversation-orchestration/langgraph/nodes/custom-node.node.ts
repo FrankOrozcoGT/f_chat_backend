@@ -193,7 +193,7 @@ export class CustomNode {
 
         const apiCall: CreateApiCallData = {
           messageId,
-          apiType: 'kimi_llm',
+          apiType: 'llm',
           operation: 'chat',
           tokensInput: result.tokensInput,
           tokensOutput: result.tokensOutput,
@@ -282,7 +282,7 @@ export class CustomNode {
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
           error: error instanceof LlmApiError
-            ? { apiName: ApiName.kimi_llm, message: error.message }
+            ? { apiName: ApiName.llm, message: error.message }
             : { message: error.message },
         };
       }
