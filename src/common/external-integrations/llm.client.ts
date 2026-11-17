@@ -73,10 +73,16 @@ export class LlmClient {
       DEFAULT_LLM_API_URL,
     );
     this.model = this.configService.get<string>('LLM_MODEL', 'deepseek-flash');
-    this.costPerInputToken =
-      Number(this.configService.get('LLM_PRICE_INPUT_PER_MILLION', 0.3)) / 1_000_000;
-    this.costPerOutputToken =
-      Number(this.configService.get('LLM_PRICE_OUTPUT_PER_MILLION', 1.2)) / 1_000_000;
+    this.costPerInputToken = this.readPricePerToken('LLM_PRICE_INPUT_PER_MILLION', 0.3);
+    this.costPerOutputToken = this.readPricePerToken('LLM_PRICE_OUTPUT_PER_MILLION', 1.2);
+  }
+
+  private readPricePerToken(key: string, defaultPerMillion: number): number {
+    const pricePerMillion = Number(this.configService.get(key, defaultPerMillion));
+    if (!Number.isFinite(pricePerMillion) || pricePerMillion < 0) {
+      throw new Error(`${key} must be a non-negative number, received: ${this.configService.get(key)}`);
+    }
+    return pricePerMillion / 1_000_000;
   }
 
   private costOf(tokensInput: number, tokensOutput: number): number {
