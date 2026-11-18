@@ -103,7 +103,7 @@ export class AdminService {
       // Agregar por tipo de API
       if (apiCall.apiType === 'qwen_stt') {
         totalSTT += cost;
-      } else if (apiCall.apiType === 'kimi_llm') {
+      } else if (apiCall.apiType === 'llm') {
         totalLLM += cost;
       } else if (apiCall.apiType === 'qwen_tts') {
         totalTTS += cost;
@@ -172,7 +172,7 @@ export class AdminService {
 
   getHealthStatus(dbRecords: ApiHealthRecord[]) {
     // Todas las APIs del sistema
-    const allApis: ApiName[] = ['qwen_stt', 'kimi_llm', 'qwen_tts'];
+    const allApis: ApiName[] = ['qwen_stt', 'llm', 'qwen_tts'];
 
     // Crear mapa de registros existentes para búsqueda rápida
     const dbMap = new Map<ApiName, ApiHealthRecord>();

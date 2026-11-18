@@ -6,7 +6,8 @@ import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeFunctionRegistry } from '@modules/nodes/functions/node-function.registry';
 import { NodeContext } from '@modules/nodes/functions/node-function.context';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { KimiClient } from '@common/external-integrations/kimi.client';
+import { LlmClient } from '@common/external-integrations/llm.client';
+import { ensureError } from '@common/utils/ensure-error';
 
 // Post codes disponibles para el flow-router
 const FLOW_ROUTER_POST_CODE = ['transitionToNode', 'switchToHitl', 'exitFlow', 'reportHacking'];
@@ -19,7 +20,7 @@ export class FlowRouterNode {
     private readonly nodeRunner: NodeRunnerService,
     private readonly fnRegistry: NodeFunctionRegistry,
     private readonly nodeRepo: NodeRepository,
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
     private readonly langSmithService: LangSmithService,
   ) {}
 
@@ -149,10 +150,11 @@ export class FlowRouterNode {
         routerAction: finalRouterAction,
         sideEffects: [...(state.sideEffects ?? []), ...ctx.sideEffects],
       };
-    } catch (error) {
+    } catch (e) {
+      const error = ensureError(e);
       this.logger.error(`FlowRouter failed: ${error.message}`);
       return {
-        error: { apiName: ApiName.kimi_llm, message: error.message },
+        error: { apiName: ApiName.llm, message: error.message },
       };
     }
   }

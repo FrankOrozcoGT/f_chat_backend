@@ -1,11 +1,19 @@
 import { Node, Flow, Prisma } from '@prisma/client';
-import { ToolChatResult } from '@common/external-integrations/kimi.client';
+import { ToolChatResult } from '@common/external-integrations/llm.client';
+import { LlmResponse } from '@common/external-integrations/interfaces/llm-response.interface';
 import { NodeSessionStore, SessionData } from '@common/conversation-session/stores/node-session-store.interface';
 
 export interface TestSideEffect {
   action: string;
   args?: Record<string, unknown>;
 }
+
+export type LlmUsage = Pick<
+  LlmResponse,
+  'tokensInput' | 'tokensOutput' | 'costUsd' | 'latencyMs'
+>;
+
+export type LlmCallUsage = LlmUsage & { operation: string };
 
 export type FlowWithNodesAndTransitions = Prisma.FlowGetPayload<{
   include: {
@@ -44,6 +52,8 @@ export class NodeContext {
 
   // Session store (DB in prod, Redis in test)
   sessionStore: NodeSessionStore;
+
+  llmCalls: LlmCallUsage[] = [];
 
   // Test mode
   isTest = false;

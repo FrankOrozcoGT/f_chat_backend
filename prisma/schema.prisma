@@ -562,7 +562,7 @@ model Template {
 
 enum ApiType {
   qwen_stt
-  kimi_llm
+  llm
   qwen_tts
   kimi_flow_analyzer
 }
@@ -576,7 +576,7 @@ enum MediaType {
 
 enum ApiName {
   qwen_stt
-  kimi_llm
+  llm
   qwen_tts
 }
 

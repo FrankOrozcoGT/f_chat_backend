@@ -6,7 +6,7 @@ import { ConversationAnalysisService } from '@modules/conversation-analysis/conv
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { NodeSessionRepository } from '@common/conversation-session/node-session.repository';
-import { KimiClient } from '@common/external-integrations/kimi.client';
+import { LlmClient } from '@common/external-integrations/llm.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
 
@@ -37,7 +37,7 @@ export class HitlReturnListener {
     private readonly intentRepo: IntentRepository,
     private readonly nodeRepo: NodeRepository,
     private readonly nodeSessionRepo: NodeSessionRepository,
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
     private readonly langSmith: LangSmithService,
     private readonly phoneRepo: PhoneRepository,
     private readonly eventEmitter: EventEmitter2,
@@ -107,7 +107,7 @@ Responde ÚNICAMENTE con el nombre exacto de la intención si la detectas claram
       ];
 
       const result = await this.langSmith.traceLLM(
-        () => this.kimiClient.rawChat(llmMessages, 100),
+        () => this.llmClient.rawChat(llmMessages, 100),
         history,
       );
 

@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { differenceInMonths } from 'date-fns';
 import { TenantSettingsRepository } from '@modules/tenant-settings/repositories/tenant-settings.repository';
 import { PhoneRepository } from '@modules/phones/repositories/phone.repository';
+import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { LimitErrorCode } from './limit-error-code';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class LimitsService {
     private readonly tenantSettingsRepository: TenantSettingsRepository,
     private readonly phoneRepository: PhoneRepository,
     private readonly configService: ConfigService,
+    private readonly internalApi: InternalApiClient,
   ) {}
 
   async validateWhatsAppLimit(tenantId: string): Promise<void> {
@@ -98,6 +100,16 @@ export class LimitsService {
     const weightedTokens =
       tokensInput * inputWeight + tokensOutput;
     return weightedTokens / tokensPerCredit;
+  }
+
+  async chargeLlmUsage(
+    tenantId: string,
+    tokensInput: number,
+    tokensOutput: number,
+  ): Promise<number> {
+    const credits = this.calculateCreditsFromLlm(tokensInput, tokensOutput);
+    await this.internalApi.incrementCreditsUsed(tenantId, credits);
+    return credits;
   }
 
   calculateCreditsFromSeconds(seconds: number): number {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiName, MessageType } from '@prisma/client';
-import { KimiApiError } from '@common/external-integrations/kimi.client';
+import { LlmApiError } from '@common/external-integrations/llm.client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
@@ -8,7 +8,11 @@ import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
-import { NodeContext } from '@modules/nodes/functions/node-function.context';
+import {
+  NodeContext,
+  LlmUsage,
+} from '@modules/nodes/functions/node-function.context';
+import { ensureError } from '@common/utils/ensure-error';
 
 const MAX_TRANSITIONS = 5;
 
@@ -23,6 +27,22 @@ export class CustomNode {
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
   ) {}
+
+  private buildLlmApiCall(
+    messageId: string,
+    operation: string,
+    usage: LlmUsage,
+  ): CreateApiCallData {
+    return {
+      messageId,
+      apiType: 'llm',
+      operation,
+      tokensInput: usage.tokensInput,
+      tokensOutput: usage.tokensOutput,
+      costUsd: usage.costUsd,
+      latencyMs: usage.latencyMs,
+    };
+  }
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
     const {
@@ -191,21 +211,11 @@ export class CustomNode {
           traceMessages,
         );
 
-        const apiCall: CreateApiCallData = {
-          messageId,
-          apiType: 'kimi_llm',
-          operation: 'chat',
-          tokensInput: result.tokensInput,
-          tokensOutput: result.tokensOutput,
-          costUsd: result.costUsd,
-          latencyMs: result.latencyMs,
-        };
-
-        const actualCredits = this.limitsService.calculateCreditsFromLlm(
+        const actualCredits = await this.limitsService.chargeLlmUsage(
+          tenantId,
           result.tokensInput,
           result.tokensOutput,
         );
-        await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
         this.logger.log(
           `CustomNode: incremented ${actualCredits.toFixed(3)} credits (${result.tokensInput}in+${result.tokensOutput}out)`,
         );
@@ -230,8 +240,14 @@ export class CustomNode {
           nodeTransitions.push({ from: activeNodeId, to: activeNodeId, reason: `responder: ${result.intent}` });
         }
 
-        apiCalls.push(apiCall);
+        apiCalls.push(this.buildLlmApiCall(messageId, 'chat', result));
         totalCost += result.costUsd;
+        for (const toolCall of ctx.llmCalls) {
+          apiCalls.push(
+            this.buildLlmApiCall(messageId, toolCall.operation, toolCall),
+          );
+          totalCost += toolCall.costUsd;
+        }
         allSideEffects = [...allSideEffects, ...ctx.sideEffects];
         lastResponse = result.response;
         lastIntent = result.intent;
@@ -278,12 +294,14 @@ export class CustomNode {
           sideEffects: allSideEffects, apiCalls, totalCost, preCodeContext: lastPreCodeContext,
           nodeTransitions,
         };
-      } catch (error) {
+      } catch (e) {
+        const error = ensureError(e);
         this.logger.error(`CustomNode: failed: ${error.message}`);
         return {
-          error: error instanceof KimiApiError
-            ? { apiName: ApiName.kimi_llm, message: error.message }
-            : { message: error.message },
+          error:
+            error instanceof LlmApiError
+              ? { apiName: ApiName.llm, message: error.message }
+              : { message: error.message },
         };
       }
     }

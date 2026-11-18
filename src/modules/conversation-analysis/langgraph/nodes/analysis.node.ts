@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { KimiClient } from '@common/external-integrations/kimi.client';
+import { LlmClient } from '@common/external-integrations/llm.client';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
 import { loadPrompt } from '@common/utils/load-prompt';
@@ -28,7 +28,7 @@ export class AnalysisNode {
   private readonly logger = new Logger(AnalysisNode.name);
 
   constructor(
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
     private readonly limitsService: LimitsService,
     private readonly internalApi: InternalApiClient,
   ) {}
@@ -81,7 +81,7 @@ export class AnalysisNode {
 
     const userPrompt = `Analiza la siguiente conversación de WhatsApp y divídela en sub-conversaciones:${intentsSection}\n${messagesText}`;
 
-    const result = await this.kimiClient.rawChat(
+    const result = await this.llmClient.rawChat(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },

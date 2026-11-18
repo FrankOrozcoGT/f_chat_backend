@@ -3,6 +3,7 @@ import { ApiName } from '@prisma/client';
 import { LangSmithService } from '@common/langsmith/langsmith.service';
 import { LimitsService } from '@common/services/limits.service';
 import { InternalApiClient } from '@common/external-integrations/internal-api.client';
+import { ensureError } from '@common/utils/ensure-error';
 import { WorkflowStateType } from '../state.interface';
 import { CreateApiCallData } from '../../repositories/ai.repository';
 import { NodeRunnerService } from '@modules/nodes/services/node-runner.service';
@@ -129,7 +130,7 @@ export class IntentRouterNode {
 
       const apiCall: CreateApiCallData = {
         messageId,
-        apiType: 'kimi_llm',
+        apiType: 'llm',
         operation: 'chat',
         tokensInput: result.tokensInput,
         tokensOutput: result.tokensOutput,
@@ -137,8 +138,11 @@ export class IntentRouterNode {
         latencyMs: result.latencyMs,
       };
 
-      const actualCredits = this.limitsService.calculateCreditsFromLlm(result.tokensInput, result.tokensOutput);
-      await this.internalApi.incrementCreditsUsed(tenantId, actualCredits);
+      await this.limitsService.chargeLlmUsage(
+        tenantId,
+        result.tokensInput,
+        result.tokensOutput,
+      );
 
       // Determine router action from termination tool
       let routerAction: 'responder' | 'closeSession' | 'findFlowForIntent' | null = null;
@@ -181,10 +185,11 @@ export class IntentRouterNode {
         totalCost: existingCost + result.costUsd,
         nodeTransitions,
       };
-    } catch (error) {
+    } catch (e) {
+      const error = ensureError(e);
       this.logger.error(`IntentRouter failed: ${error.message}`);
       return {
-        error: { apiName: ApiName.kimi_llm, message: error.message },
+        error: { apiName: ApiName.llm, message: error.message },
       };
     }
   }

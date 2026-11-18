@@ -30,9 +30,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Los archivos de /storage/conversations/* se sirven vía StorageController
-  // (requiere auth y valida tenantId), no como estáticos públicos.
-
   // Global Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({

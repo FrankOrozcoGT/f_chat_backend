@@ -8,10 +8,12 @@ import { join } from 'path';
 const PROMPTS_DIR = join(__dirname, 'prompts');
 const CHAT_SYSTEM_PROMPT = loadPrompt(PROMPTS_DIR, 'chat-system.md');
 
-export class KimiApiError extends Error {
+const DEFAULT_LLM_API_URL = 'https://api.deepseek.com/chat/completions';
+
+export class LlmApiError extends Error {
   constructor(message: string, cause?: unknown) {
     super(message);
-    this.name = 'KimiApiError';
+    this.name = 'LlmApiError';
     if (cause) this.cause = cause;
   }
 }
@@ -56,20 +58,37 @@ export interface ToolChatResult {
 }
 
 @Injectable()
-export class KimiClient {
-  private readonly logger = new Logger(KimiClient.name);
+export class LlmClient {
+  private readonly logger = new Logger(LlmClient.name);
   private readonly apiKey: string;
-  private readonly apiUrl: string;
-
-  // Pricing per 1M tokens: $0.95 input, $4.00 output
-  private static readonly COST_PER_INPUT_TOKEN = 0.95 / 1_000_000;
-  private static readonly COST_PER_OUTPUT_TOKEN = 4.0 / 1_000_000;
+  readonly apiUrl: string;
+  private readonly model: string;
+  private readonly costPerInputToken: number;
+  private readonly costPerOutputToken: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('KIMI_API_KEY', '');
+    this.apiKey = this.configService.get<string>('LLM_API_KEY', '');
     this.apiUrl = this.configService.get<string>(
-      'KIMI_API_URL',
-      'https://api.moonshot.ai/v1/chat/completions',
+      'LLM_API_URL',
+      DEFAULT_LLM_API_URL,
+    );
+    this.model = this.configService.get<string>('LLM_MODEL', 'deepseek-flash');
+    this.costPerInputToken = this.readPricePerToken('LLM_PRICE_INPUT_PER_MILLION', 0.3);
+    this.costPerOutputToken = this.readPricePerToken('LLM_PRICE_OUTPUT_PER_MILLION', 1.2);
+  }
+
+  private readPricePerToken(key: string, defaultPerMillion: number): number {
+    const pricePerMillion = Number(this.configService.get(key, defaultPerMillion));
+    if (!Number.isFinite(pricePerMillion) || pricePerMillion < 0) {
+      throw new Error(`${key} must be a non-negative number, received: ${this.configService.get(key)}`);
+    }
+    return pricePerMillion / 1_000_000;
+  }
+
+  private costOf(tokensInput: number, tokensOutput: number): number {
+    return (
+      tokensInput * this.costPerInputToken +
+      tokensOutput * this.costPerOutputToken
     );
   }
 
@@ -159,7 +178,7 @@ export class KimiClient {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'kimi-k2.6',
+            model: this.model,
             messages,
             max_tokens: maxTokens,
             thinking: { type: 'disabled' },
@@ -190,8 +209,8 @@ export class KimiClient {
         if (!response.ok) {
           const errorBody = await response.text();
           const errorHeaders = Object.fromEntries(response.headers.entries());
-          throw new KimiApiError(
-            `Kimi API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
+          throw new LlmApiError(
+            `LLM API error ${response.status} ${response.statusText} | Headers: ${JSON.stringify(errorHeaders)} | Body: ${errorBody}`,
           );
         }
 
@@ -202,9 +221,7 @@ export class KimiClient {
         const tokensInput = data.usage?.prompt_tokens || 0;
         const tokensOutput = data.usage?.completion_tokens || 0;
 
-        const costUsd =
-          tokensInput * KimiClient.COST_PER_INPUT_TOKEN +
-          tokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+        const costUsd = this.costOf(tokensInput, tokensOutput);
 
         this.logger.log(
           `LLM completed: ${tokensInput}+${tokensOutput} tokens, ${latencyMs}ms, $${costUsd.toFixed(6)}`,
@@ -218,7 +235,7 @@ export class KimiClient {
           latencyMs,
         };
       } catch (e) {
-        if (attempt === maxRetries || !(e instanceof KimiApiError)) {
+        if (attempt === maxRetries || !(e instanceof LlmApiError)) {
           const error = ensureError(e);
           const latencyMs = Date.now() - startTime;
           this.logger.error(`LLM failed after ${latencyMs}ms: ${error.message} | cause=${error.cause} | type=${error.constructor?.name}`);
@@ -227,7 +244,7 @@ export class KimiClient {
       }
     }
 
-    throw new KimiApiError('LLM failed: max retries exhausted');
+    throw new LlmApiError('LLM failed: max retries exhausted');
   }
 
   async chatWithTools(params: {
@@ -252,7 +269,7 @@ export class KimiClient {
 
     for (let i = 0; i < maxIterations; i++) {
       const body = JSON.stringify({
-        model: 'kimi-k2.6',
+        model: this.model,
         messages: conversationMessages,
         tools,
         tool_choice: 'required',
@@ -274,7 +291,7 @@ export class KimiClient {
       } catch (e) {
         const error = ensureError(e);
         this.logger.error(`chatWithTools fetch failed at iter=${i}:`, error);
-        throw new KimiApiError(error.message, error.cause);
+        throw new LlmApiError(error.message, error.cause);
       }
 
       if (response.status === 429) {
@@ -295,7 +312,7 @@ export class KimiClient {
         this.logger.error(
           `chatWithTools failed at iter=${i}, status=${response.status}, payload=${(body.length / 1024).toFixed(1)}KB, msgs=${conversationMessages.length}, toolCallsSoFar=${prevTools}, body=${errorBody}`,
         );
-        throw new KimiApiError(`Kimi API error ${response.status}: ${errorBody}`);
+        throw new LlmApiError(`LLM API error ${response.status}: ${errorBody}`);
       }
 
       const data = await response.json();
@@ -305,7 +322,7 @@ export class KimiClient {
       const choice = data.choices?.[0];
       const assistantMessage = choice?.message;
       if (!assistantMessage) {
-        throw new Error('No assistant message in Kimi response');
+        throw new Error('No assistant message in LLM response');
       }
 
       conversationMessages.push(assistantMessage);
@@ -315,9 +332,7 @@ export class KimiClient {
       // No tool calls → plain text response
       if (!toolCalls || toolCalls.length === 0) {
         const latencyMs = Date.now() - startTime;
-        const costUsd =
-          totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
-          totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+        const costUsd = this.costOf(totalTokensInput, totalTokensOutput);
 
         this.logger.log(
           `chatWithTools: text response at iteration ${i}. ${totalTokensInput}+${totalTokensOutput} tokens`,
@@ -352,9 +367,7 @@ export class KimiClient {
         } catch (e) {
           if (e instanceof ToolTermination) {
             const latencyMs = Date.now() - startTime;
-            const costUsd =
-              totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
-              totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+            const costUsd = this.costOf(totalTokensInput, totalTokensOutput);
 
             this.logger.log(
               `chatWithTools: terminated via "${e.toolName}" at iteration ${i}. ${totalTokensInput}+${totalTokensOutput} tokens`,
@@ -379,9 +392,7 @@ export class KimiClient {
     }
 
     const latencyMs = Date.now() - startTime;
-    const costUsd =
-      totalTokensInput * KimiClient.COST_PER_INPUT_TOKEN +
-      totalTokensOutput * KimiClient.COST_PER_OUTPUT_TOKEN;
+    const costUsd = this.costOf(totalTokensInput, totalTokensOutput);
 
     this.logger.warn(
       `chatWithTools: max iterations (${maxIterations}) reached. ${totalTokensInput}+${totalTokensOutput} tokens`,

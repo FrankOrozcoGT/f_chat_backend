@@ -5,7 +5,7 @@ import { WorkflowStateType } from '../state.interface';
 import { IntentRepository } from '@modules/nodes/repositories/intent.repository';
 import { NodeRepository } from '@modules/nodes/repositories/node.repository';
 import { CreateApiCallData } from '../../repositories/ai.repository';
-import { KimiClient } from '@common/external-integrations/kimi.client';
+import { LlmClient } from '@common/external-integrations/llm.client';
 
 interface TodoDefinition {
   id: string;
@@ -46,7 +46,7 @@ export class EntryCheckerNode {
     private readonly intentRepo: IntentRepository,
     private readonly nodeRepo: NodeRepository,
     private readonly langSmith: LangSmithService,
-    private readonly kimiClient: KimiClient,
+    private readonly llmClient: LlmClient,
   ) {}
 
   async execute(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
@@ -121,7 +121,7 @@ Responde ÚNICAMENTE con el nombre exacto de la intención si la detectas claram
       ];
 
       const result = await this.langSmith.traceLLM(
-        () => this.kimiClient.rawChat(llmMessages, 100),
+        () => this.llmClient.rawChat(llmMessages, 100),
         history,
       );
 
@@ -130,7 +130,7 @@ Responde ÚNICAMENTE con el nombre exacto de la intención si la detectas claram
 
       apiCall = {
         messageId,
-        apiType: 'kimi_llm',
+        apiType: 'llm',
         operation: 'chat',
         tokensInput: result.tokensInput,
         tokensOutput: result.tokensOutput,

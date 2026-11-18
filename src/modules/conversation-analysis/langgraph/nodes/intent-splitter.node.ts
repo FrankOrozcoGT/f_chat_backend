@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
-import { KimiClient, ToolDefinition, ToolTermination } from '@common/external-integrations/kimi.client';
+import {
+  LlmClient,
+  ToolDefinition,
+  ToolTermination,
+} from '@common/external-integrations/llm.client';
 import { loadPrompt } from '@common/utils/load-prompt';
 
 const PROMPTS_DIR = join(__dirname, '..', '..', 'prompts');
@@ -81,13 +85,13 @@ const SUBMIT_SPLITS_TOOL: ToolDefinition = {
 export class IntentSplitterNode {
   private readonly logger = new Logger(IntentSplitterNode.name);
 
-  constructor(private readonly kimiClient: KimiClient) {}
+  constructor(private readonly llmClient: LlmClient) {}
 
   async split(input: IntentSplitterInput): Promise<IntentSplitterOutput> {
     const userPrompt = this.buildPrompt(input);
     let splitsArgs: Record<string, unknown> | null = null;
 
-    const result = await this.kimiClient.chatWithTools({
+    const result = await this.llmClient.chatWithTools({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
